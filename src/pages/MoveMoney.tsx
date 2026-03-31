@@ -11,11 +11,9 @@ import {
   Plus,
   Globe,
   ChevronRight,
-  ArrowRight,
   Building2,
-  User,
 } from "lucide-react";
-import { accounts, recentRecipients } from "@/data/mockData";
+import { recentRecipients } from "@/data/mockData";
 
 const actions = [
   { label: "Transfer", desc: "Between my accounts", icon: ArrowLeftRight, id: "transfer" },
