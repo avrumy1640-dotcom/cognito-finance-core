@@ -50,7 +50,7 @@ const AccountDetail = () => {
           <GlassCard elevated>
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-muted-foreground">Available Balance</span>
-              {type === "savings" && (
+              {type === "savings" && account.type === "savings" && (
                 <span className="text-xs font-medium text-success bg-success/10 px-2 py-0.5 rounded-full">{account.apy}% APY</span>
               )}
             </div>
