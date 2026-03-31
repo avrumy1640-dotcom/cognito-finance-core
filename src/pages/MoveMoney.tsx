@@ -26,7 +26,6 @@ const actions = [
 ];
 
 const MoveMoney = () => {
-  const navigate = useNavigate();
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
 
   return (
