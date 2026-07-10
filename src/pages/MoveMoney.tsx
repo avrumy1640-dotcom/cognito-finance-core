@@ -484,37 +484,15 @@ const ExternalTransferSheet = ({ onClose }: { onClose: () => void }) => {
   const [routing, setRouting] = useState("");
   const [account, setAccount] = useState("");
   const [amount, setAmount] = useState("");
-  const { transfer, accounts } = useBank();
+  const { payBill, accounts } = useBank();
   const num = Number(amount);
 
   const submit = () => {
-    // Simulate external ACH by debiting checking, no counter-credit
-    if (num <= 0 || num > accounts.checking.availableBalance) {
-      toast.error("Insufficient funds");
-      return;
-    }
-    // Reuse payBill semantics for external transfer
-    useBank();
-    // Directly dispatch a bill-like debit
-    const ok = transfer.length && true;
-    // Fallback: use payBill via context by lazy call — simpler: just use payBill
-    // We'll invoke payBill from context
-    // (Handled below via alternative approach)
-    void ok;
-
-    // simplest: call payBill semantics
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
-    ext();
-  };
-
-  const { payBill } = useBank();
-  const ext = () => {
+    if (num <= 0) { toast.error("Enter an amount"); return; }
+    if (num > accounts.checking.availableBalance) { toast.error("Insufficient funds"); return; }
     const ok = payBill({ from: "checking", amount: num, biller: `External ACH — ${bank || "External Bank"}` });
-    if (!ok) {
-      toast.error("Transfer failed");
-      return;
-    }
-    toast.success(`External transfer initiated`, { description: `$${num.toFixed(2)} — 1–3 business days` });
+    if (!ok) { toast.error("Transfer failed"); return; }
+    toast.success("External transfer initiated", { description: `$${num.toFixed(2)} — 1–3 business days` });
     setStep("success");
   };
 
