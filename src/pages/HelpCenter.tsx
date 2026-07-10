@@ -23,15 +23,34 @@ const HelpCenter = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
+  const [topicFilter, setTopicFilter] = useState<string | null>(null);
 
   const supportTopics = [
-    { icon: HelpCircle, label: "Account Access" },
-    { icon: ArrowLeftRight, label: "Transfers & Payments" },
-    { icon: CreditCard, label: "Cards & Purchases" },
-    { icon: Shield, label: "Security & Fraud" },
-    { icon: FileText, label: "Statements & Tax" },
-    { icon: AlertTriangle, label: "Disputes & Issues" },
+    { icon: HelpCircle, label: "Account Access", match: ["Account", "Access"] },
+    { icon: ArrowLeftRight, label: "Transfers & Payments", match: ["Send", "Transfer"] },
+    { icon: CreditCard, label: "Cards & Purchases", match: ["Card"] },
+    { icon: Shield, label: "Security & Fraud", match: ["Security"] },
+    { icon: FileText, label: "Statements & Tax", match: ["Statement", "Tax"] },
+    { icon: AlertTriangle, label: "Disputes & Issues", match: ["Dispute"] },
   ];
+
+  const contact = {
+    Chat: () => toast.success("Starting secure chat with a specialist… avg wait 45s"),
+    Call: () => { window.location.href = "tel:+18005555555"; toast.info("Calling 1-800-555-5555"); },
+    Message: () => { window.location.href = "mailto:support@glassbank.com"; toast.info("Opening secure message"); },
+  } as const;
+
+  const filteredFaqs = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return faqData
+      .filter((s) => !topicFilter || supportTopics.find((t) => t.label === topicFilter)?.match.some((m) => s.category.toLowerCase().includes(m.toLowerCase())))
+      .map((s) => ({
+        ...s,
+        items: s.items.filter((it) => !q || it.q.toLowerCase().includes(q) || it.a.toLowerCase().includes(q)),
+      }))
+      .filter((s) => s.items.length > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, topicFilter]);
 
   return (
     <div className="min-h-screen bg-background">
