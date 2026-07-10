@@ -77,14 +77,16 @@ const HelpCenter = () => {
         {/* Contact */}
         <div className="grid grid-cols-3 gap-2">
           {[
-            { icon: MessageCircle, label: "Chat" },
-            { icon: Phone, label: "Call" },
-            { icon: Mail, label: "Message" },
+            { icon: MessageCircle, label: "Chat" as const },
+            { icon: Phone, label: "Call" as const },
+            { icon: Mail, label: "Message" as const },
           ].map((item) => (
-            <GlassCard key={item.label} className="text-center py-4">
-              <item.icon size={22} className="text-primary mx-auto mb-1.5" />
-              <span className="text-xs font-medium text-foreground">{item.label}</span>
-            </GlassCard>
+            <button key={item.label} onClick={contact[item.label]} className="text-left">
+              <GlassCard className="text-center py-4">
+                <item.icon size={22} className="text-primary mx-auto mb-1.5" />
+                <span className="text-xs font-medium text-foreground block">{item.label}</span>
+              </GlassCard>
+            </button>
           ))}
         </div>
 
@@ -92,19 +94,36 @@ const HelpCenter = () => {
         <div>
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Topics</h2>
           <div className="grid grid-cols-2 gap-2">
-            {supportTopics.map((topic) => (
-              <GlassCard key={topic.label} className="flex items-center gap-2 py-3">
-                <topic.icon size={18} className="text-muted-foreground" />
-                <span className="text-xs font-medium text-foreground">{topic.label}</span>
-              </GlassCard>
-            ))}
+            {supportTopics.map((topic) => {
+              const active = topicFilter === topic.label;
+              return (
+                <button
+                  key={topic.label}
+                  onClick={() => setTopicFilter(active ? null : topic.label)}
+                  className="text-left"
+                >
+                  <GlassCard className={`flex items-center gap-2 py-3 ${active ? "ring-2 ring-primary" : ""}`}>
+                    <topic.icon size={18} className={active ? "text-primary" : "text-muted-foreground"} />
+                    <span className="text-xs font-medium text-foreground">{topic.label}</span>
+                  </GlassCard>
+                </button>
+              );
+            })}
           </div>
+          {topicFilter && (
+            <button onClick={() => setTopicFilter(null)} className="text-xs text-primary mt-2 px-1">Clear filter</button>
+          )}
         </div>
 
         {/* FAQs */}
         <div>
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Frequently Asked Questions</h2>
-          {faqData.map((section) => (
+          {filteredFaqs.length === 0 && (
+            <GlassCard className="text-center text-sm text-muted-foreground py-6">
+              No matching articles. Try a different search or contact support.
+            </GlassCard>
+          )}
+          {filteredFaqs.map((section) => (
             <div key={section.category} className="mb-4">
               <h3 className="text-sm font-semibold text-foreground mb-2 px-1">{section.category}</h3>
               <GlassCard className="divide-y divide-border p-0 overflow-hidden">
