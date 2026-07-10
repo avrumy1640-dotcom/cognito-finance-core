@@ -52,8 +52,27 @@ const Documents = () => {
         </div>
 
         <GlassCard className="divide-y divide-border p-0 overflow-hidden">
+          {filtered.length === 0 && (
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground">No documents match your search.</div>
+          )}
           {filtered.map((doc) => (
-            <div key={doc.id} className="flex items-center justify-between px-4 py-3.5">
+            <button
+              key={doc.id}
+              onClick={() => {
+                const body = `Glass Bank\n${doc.name}\nAccount: ${doc.account}\nIssued: ${doc.date}\n\nThis is a sample document generated for demonstration.`;
+                const blob = new Blob([body], { type: "application/pdf" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${doc.name.replace(/[^\w]+/g, "_")}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                toast.success(`Downloaded ${doc.name}`);
+              }}
+              className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-secondary/40 transition-colors"
+            >
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <FileText size={20} className="text-muted-foreground shrink-0" />
                 <div className="min-w-0">
@@ -65,7 +84,7 @@ const Documents = () => {
                 </div>
               </div>
               <Download size={16} className="text-muted-foreground shrink-0 ml-2" />
-            </div>
+            </button>
           ))}
         </GlassCard>
       </div>
