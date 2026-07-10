@@ -54,21 +54,26 @@ const SpendingInsights = () => {
               </div>
             </GlassCard>
 
-            {/* Category breakdown */}
             <div className="space-y-2">
               {monthlySpending.categories.map((cat) => (
-                <GlassCard key={cat.name} className="flex items-center gap-3 py-3">
-                  <span className="text-lg w-8">{cat.icon}</span>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-sm font-medium text-foreground">{cat.name}</span>
-                      <span className="text-sm font-semibold text-foreground">${cat.amount.toFixed(2)}</span>
+                <button
+                  key={cat.name}
+                  onClick={() => toast.info(`${cat.name}: $${cat.amount.toFixed(2)} · ${cat.percentage}% of month`)}
+                  className="w-full text-left"
+                >
+                  <GlassCard className="flex items-center gap-3 py-3">
+                    <span className="text-lg w-8">{cat.icon}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm font-medium text-foreground">{cat.name}</span>
+                        <span className="text-sm font-semibold text-foreground">${cat.amount.toFixed(2)}</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
+                        <div className="h-full rounded-full gradient-hero" style={{ width: `${cat.percentage}%` }} />
+                      </div>
                     </div>
-                    <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
-                      <div className="h-full rounded-full gradient-hero" style={{ width: `${cat.percentage}%` }} />
-                    </div>
-                  </div>
-                </GlassCard>
+                  </GlassCard>
+                </button>
               ))}
             </div>
           </motion.div>
