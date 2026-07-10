@@ -39,9 +39,10 @@ const PersonalInfo = () => {
           ))}
         </GlassCard>
 
-        <button className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
-          Request Information Update
-        </button>
+        <button
+          onClick={() => toast.success("Update request submitted. A specialist will contact you within 1 business day.")}
+          className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+        >
         <p className="text-xs text-muted-foreground text-center">
           For security, some changes require identity verification.
         </p>
