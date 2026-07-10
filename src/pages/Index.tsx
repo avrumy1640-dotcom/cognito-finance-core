@@ -340,22 +340,28 @@ const HomePage = () => {
                 <h2 className="text-section-title text-sm text-foreground">Direct Deposit</h2>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <button
+                  onClick={() => copyToClipboard(accounts.checking.routingNumber, "Routing number")}
+                  className="flex items-center justify-between w-full active:opacity-70"
+                >
                   <span className="text-xs text-muted-foreground">Routing Number</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono font-medium text-foreground">021000089</span>
+                    <span className="text-sm font-mono font-medium text-foreground">{accounts.checking.routingNumber}</span>
                     <Copy size={14} className="text-muted-foreground" />
                   </div>
-                </div>
-                <div className="flex items-center justify-between">
+                </button>
+                <button
+                  onClick={() => copyToClipboard(`48292946${accounts.checking.accountNumber.slice(-4)}`, "Account number")}
+                  className="flex items-center justify-between w-full active:opacity-70"
+                >
                   <span className="text-xs text-muted-foreground">Account Number</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono font-medium text-foreground">****4821</span>
+                    <span className="text-sm font-mono font-medium text-foreground">{accounts.checking.accountNumber}</span>
                     <Copy size={14} className="text-muted-foreground" />
                   </div>
-                </div>
+                </button>
               </div>
-              <button className="mt-3 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2">
+              <button onClick={shareDirectDeposit} className="mt-3 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2">
                 <Share2 size={16} />
                 Share Direct Deposit Info
               </button>

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
-import { transactions } from "@/data/mockData";
+import { useBank } from "@/store/bankStore";
 import { Search, Download, ChevronRight, SlidersHorizontal } from "lucide-react";
 
 const filterChips = ["All", "Card", "Transfers", "Deposits", "Bills", "P2P", "Pending", "Income", "Fees"];
