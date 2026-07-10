@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
-import { ArrowLeft, FileText, Download, Search, ChevronRight } from "lucide-react";
+import { ArrowLeft, FileText, Download, Search } from "lucide-react";
 
 const categories = ["All", "Statements", "Tax Forms", "Notices", "Agreements"];
 
