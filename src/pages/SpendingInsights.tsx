@@ -151,7 +151,15 @@ const SpendingInsights = () => {
                 </GlassCard>
               );
             })}
-            <button className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2">
+            <button
+              onClick={() => {
+                const name = prompt("Goal name (e.g., Dream Vacation)");
+                if (!name) return;
+                const target = prompt("Target amount (USD)", "5000");
+                if (target && !isNaN(Number(target))) toast.success(`Created goal "${name}" — target $${Number(target).toLocaleString()}`);
+              }}
+              className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2"
+            >
               <Plus size={16} /> Create New Goal
             </button>
           </motion.div>
