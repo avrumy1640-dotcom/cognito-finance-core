@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import GlassCard from "@/components/glass/GlassCard";
-import { accounts, transactions } from "@/data/mockData";
+import { useBank } from "@/store/bankStore";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   Copy,
@@ -20,10 +21,16 @@ const AccountDetail = () => {
   const { type } = useParams<{ type: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"transactions" | "details" | "statements" | "settings">("transactions");
+  const [search, setSearch] = useState("");
+  const { accounts, transactions } = useBank();
   const account = type === "savings" ? accounts.savings : accounts.checking;
-  const acctTransactions = transactions.filter(
-    (t) => t.account === (type === "savings" ? "Savings" : "Checking")
-  );
+  const acctTransactions = transactions
+    .filter((t) => t.account === (type === "savings" ? "Savings" : "Checking"))
+    .filter((t) => !search || t.merchant.toLowerCase().includes(search.toLowerCase()));
+
+  const copy = async (text: string, label: string) => {
+    try { await navigator.clipboard.writeText(text); toast.success(`${label} copied`); } catch { toast.error("Copy failed"); }
+  };
 
   const formatCurrency = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -69,7 +76,7 @@ const AccountDetail = () => {
               {type === "savings" && "interestEarned" in account && (
                 <div>
                   <p className="text-xs text-muted-foreground">Interest Earned</p>
-                  <p className="text-sm font-semibold text-success">{formatCurrency(account.interestEarned)}</p>
+                  <p className="text-sm font-semibold text-success">{formatCurrency(account.interestEarned || 0)}</p>
                 </div>
               )}
             </div>
@@ -95,7 +102,7 @@ const AccountDetail = () => {
           <div>
             <div className="relative mb-3">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input placeholder="Search transactions..." className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search transactions..." className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none" />
             </div>
             <GlassCard className="divide-y divide-border p-0 overflow-hidden">
               {acctTransactions.length === 0 ? (
@@ -130,13 +137,17 @@ const AccountDetail = () => {
               { label: "Opened", value: account.openedDate },
               { label: "Account Type", value: account.type === "savings" ? "High Yield Savings" : "Checking" },
             ].map((row) => (
-              <div key={row.label} className="flex items-center justify-between">
+              <button
+                key={row.label}
+                onClick={() => row.label.includes("Number") ? copy(row.value, row.label) : undefined}
+                className="flex items-center justify-between w-full active:opacity-70"
+              >
                 <span className="text-sm text-muted-foreground">{row.label}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-foreground">{row.value}</span>
-                  {(row.label.includes("Number")) && <Copy size={14} className="text-muted-foreground" />}
+                  {row.label.includes("Number") && <Copy size={14} className="text-muted-foreground" />}
                 </div>
-              </div>
+              </button>
             ))}
           </GlassCard>
         )}
@@ -144,7 +155,11 @@ const AccountDetail = () => {
         {activeTab === "statements" && (
           <div className="space-y-2">
             {["March 2026", "February 2026", "January 2026", "December 2025", "November 2025"].map((month) => (
-              <GlassCard key={month} className="flex items-center justify-between py-3">
+              <GlassCard
+                key={month}
+                onClick={() => toast.info(`${month} statement`, { description: "PDF download starting…" })}
+                className="flex items-center justify-between py-3"
+              >
                 <div className="flex items-center gap-3">
                   <FileText size={18} className="text-muted-foreground" />
                   <span className="text-sm font-medium text-foreground">{month}</span>

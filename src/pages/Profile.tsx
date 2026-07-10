@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { user } from "@/data/mockData";
@@ -96,11 +97,17 @@ const ProfilePage = () => {
               {section.items.map((item) => (
                 <button
                   key={item.label}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => {
+                    if (item.path === "#") {
+                      toast.success("Thanks for the love ❤️", { description: "Redirecting to App Store review…" });
+                    } else {
+                      navigate(item.path);
+                    }
+                  }}
                   className="flex items-center justify-between w-full px-4 py-3.5 active:bg-secondary/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <item.icon size={20} className="text-muted-foreground" />
+                    <item.icon size={20} className="text-primary" />
                     <span className="text-sm font-medium text-foreground">{item.label}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -119,7 +126,10 @@ const ProfilePage = () => {
 
         {/* Sign Out */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
-          <button className="w-full py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-semibold flex items-center justify-center gap-2">
+          <button
+            onClick={() => { if (confirm("Sign out of Glass Bank?")) { toast.success("Signed out"); navigate("/login"); } }}
+            className="w-full py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-semibold flex items-center justify-center gap-2"
+          >
             <LogOut size={16} />
             Sign Out
           </button>

@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import GlassCard from "@/components/glass/GlassCard";
-import { transactions } from "@/data/mockData";
+import { useBank } from "@/store/bankStore";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   MapPin,
@@ -16,6 +17,7 @@ import {
 const TransactionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { transactions } = useBank();
   const tx = transactions.find((t) => t.id === id);
 
   if (!tx) {
@@ -82,18 +84,17 @@ const TransactionDetail = () => {
           <ChevronRight size={16} className="text-muted-foreground" />
         </GlassCard>
 
-        {/* Actions */}
         <div className="space-y-2">
           {[
-            { icon: Tag, label: "Categorize Transaction" },
-            { icon: MessageSquare, label: "Add Note" },
-            { icon: AlertTriangle, label: "Dispute Charge", destructive: true },
-            { icon: Download, label: "Download Receipt" },
+            { icon: Tag, label: "Categorize Transaction", action: () => toast.info("Categorize", { description: "Pick a new category" }) },
+            { icon: MessageSquare, label: "Add Note", action: () => { const n = prompt("Add a note"); if (n) toast.success("Note saved"); } },
+            { icon: AlertTriangle, label: "Dispute Charge", destructive: true, action: () => { if (confirm("Open a dispute for this charge?")) toast.success("Dispute opened", { description: "We'll review within 10 business days" }); } },
+            { icon: Download, label: "Download Receipt", action: () => toast.success("Receipt downloaded") },
           ].map((action) => (
-            <GlassCard key={action.label} className="flex items-center justify-between py-3">
+            <GlassCard key={action.label} onClick={action.action} className="flex items-center justify-between py-3">
               <div className="flex items-center gap-3">
-                <action.icon size={18} className={"destructive" in action ? "text-destructive" : "text-foreground"} />
-                <span className={`text-sm font-medium ${"destructive" in action ? "text-destructive" : "text-foreground"}`}>
+                <action.icon size={18} className={action.destructive ? "text-destructive" : "text-primary"} />
+                <span className={`text-sm font-medium ${action.destructive ? "text-destructive" : "text-foreground"}`}>
                   {action.label}
                 </span>
               </div>

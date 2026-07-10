@@ -2,13 +2,12 @@ import { Bell, Search, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
+import { useBank } from "@/store/bankStore";
 import {
   user,
-  accounts,
-  totalBalance,
-  transactions,
   cashFlow,
   insights,
   savingsGoals,
@@ -55,6 +54,8 @@ const fadeUp = {
 const HomePage = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const navigate = useNavigate();
+  const { accounts, totalBalance, transactions, notifications } = useBank();
+  const unread = notifications.filter((n) => !n.read).length;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
@@ -62,6 +63,26 @@ const HomePage = () => {
     balanceVisible
       ? n.toLocaleString("en-US", { style: "currency", currency: "USD" })
       : "••••••";
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+
+  const shareDirectDeposit = async () => {
+    const text = `Glass Bank Direct Deposit\nRouting: ${accounts.checking.routingNumber}\nAccount: 48292946${accounts.checking.accountNumber.slice(-4)}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Direct Deposit Info", text });
+        return;
+      } catch { /* canceled */ }
+    }
+    copyToClipboard(text, "Direct deposit info");
+  };
 
   return (
     <AppLayout>
@@ -90,7 +111,7 @@ const HomePage = () => {
               className="relative w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
             >
               <Bell size={18} className="text-muted-foreground" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
+              {unread > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent" />}
             </button>
           </div>
         </motion.div>
@@ -319,22 +340,28 @@ const HomePage = () => {
                 <h2 className="text-section-title text-sm text-foreground">Direct Deposit</h2>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <button
+                  onClick={() => copyToClipboard(accounts.checking.routingNumber, "Routing number")}
+                  className="flex items-center justify-between w-full active:opacity-70"
+                >
                   <span className="text-xs text-muted-foreground">Routing Number</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono font-medium text-foreground">021000089</span>
+                    <span className="text-sm font-mono font-medium text-foreground">{accounts.checking.routingNumber}</span>
                     <Copy size={14} className="text-muted-foreground" />
                   </div>
-                </div>
-                <div className="flex items-center justify-between">
+                </button>
+                <button
+                  onClick={() => copyToClipboard(`48292946${accounts.checking.accountNumber.slice(-4)}`, "Account number")}
+                  className="flex items-center justify-between w-full active:opacity-70"
+                >
                   <span className="text-xs text-muted-foreground">Account Number</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono font-medium text-foreground">****4821</span>
+                    <span className="text-sm font-mono font-medium text-foreground">{accounts.checking.accountNumber}</span>
                     <Copy size={14} className="text-muted-foreground" />
                   </div>
-                </div>
+                </button>
               </div>
-              <button className="mt-3 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2">
+              <button onClick={shareDirectDeposit} className="mt-3 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2">
                 <Share2 size={16} />
                 Share Direct Deposit Info
               </button>
