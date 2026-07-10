@@ -12,6 +12,7 @@ const ActivityPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const navigate = useNavigate();
+  const { transactions } = useBank();
 
   const filtered = transactions.filter((tx) => {
     const matchesSearch =
