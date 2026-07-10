@@ -1,6 +1,5 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
 import { user } from "@/data/mockData";
 import { ArrowLeft } from "lucide-react";
@@ -40,7 +39,10 @@ const PersonalInfo = () => {
           ))}
         </GlassCard>
 
-        <button className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
+        <button
+          onClick={() => toast.success("Update request submitted. A specialist will contact you within 1 business day.")}
+          className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+        >
           Request Information Update
         </button>
         <p className="text-xs text-muted-foreground text-center">

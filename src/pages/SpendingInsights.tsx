@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
 import { monthlySpending, savingsGoals } from "@/data/mockData";
 import {
@@ -53,21 +54,26 @@ const SpendingInsights = () => {
               </div>
             </GlassCard>
 
-            {/* Category breakdown */}
             <div className="space-y-2">
               {monthlySpending.categories.map((cat) => (
-                <GlassCard key={cat.name} className="flex items-center gap-3 py-3">
-                  <span className="text-lg w-8">{cat.icon}</span>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-sm font-medium text-foreground">{cat.name}</span>
-                      <span className="text-sm font-semibold text-foreground">${cat.amount.toFixed(2)}</span>
+                <button
+                  key={cat.name}
+                  onClick={() => toast.info(`${cat.name}: $${cat.amount.toFixed(2)} · ${cat.percentage}% of month`)}
+                  className="w-full text-left"
+                >
+                  <GlassCard className="flex items-center gap-3 py-3">
+                    <span className="text-lg w-8">{cat.icon}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm font-medium text-foreground">{cat.name}</span>
+                        <span className="text-sm font-semibold text-foreground">${cat.amount.toFixed(2)}</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
+                        <div className="h-full rounded-full gradient-hero" style={{ width: `${cat.percentage}%` }} />
+                      </div>
                     </div>
-                    <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
-                      <div className="h-full rounded-full gradient-hero" style={{ width: `${cat.percentage}%` }} />
-                    </div>
-                  </div>
-                </GlassCard>
+                  </GlassCard>
+                </button>
               ))}
             </div>
           </motion.div>
@@ -86,22 +92,37 @@ const SpendingInsights = () => {
             </GlassCard>
 
             {monthlySpending.categories.map((cat) => (
-              <GlassCard key={cat.name} className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">{cat.icon}</span>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{cat.name}</p>
-                    <p className="text-xs text-muted-foreground">${cat.amount.toFixed(2)} of $500</p>
+              <button
+                key={cat.name}
+                onClick={() => {
+                  const next = prompt(`Set monthly budget for ${cat.name} (USD)`, "500");
+                  if (next && !isNaN(Number(next))) toast.success(`${cat.name} budget set to $${Number(next).toFixed(2)}`);
+                }}
+                className="w-full text-left"
+              >
+                <GlassCard className="flex items-center justify-between py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">{cat.icon}</span>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{cat.name}</p>
+                      <p className="text-xs text-muted-foreground">${cat.amount.toFixed(2)} of $500</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {cat.amount > 450 && <Bell size={14} className="text-warning" />}
-                  <ChevronRight size={16} className="text-muted-foreground" />
-                </div>
-              </GlassCard>
+                  <div className="flex items-center gap-2">
+                    {cat.amount > 450 && <Bell size={14} className="text-warning" />}
+                    <ChevronRight size={16} className="text-muted-foreground" />
+                  </div>
+                </GlassCard>
+              </button>
             ))}
 
-            <button className="w-full py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-2">
+            <button
+              onClick={() => {
+                const name = prompt("New budget category name");
+                if (name) toast.success(`Budget added for ${name}`);
+              }}
+              className="w-full py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-2"
+            >
               <Plus size={16} /> Add Category Budget
             </button>
           </motion.div>
@@ -130,7 +151,15 @@ const SpendingInsights = () => {
                 </GlassCard>
               );
             })}
-            <button className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2">
+            <button
+              onClick={() => {
+                const name = prompt("Goal name (e.g., Dream Vacation)");
+                if (!name) return;
+                const target = prompt("Target amount (USD)", "5000");
+                if (target && !isNaN(Number(target))) toast.success(`Created goal "${name}" — target $${Number(target).toLocaleString()}`);
+              }}
+              className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2"
+            >
               <Plus size={16} /> Create New Goal
             </button>
           </motion.div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import GlassCard from "@/components/glass/GlassCard";
+import { toast } from "sonner";
 import {
   Eye,
   EyeOff,
@@ -13,12 +13,37 @@ import {
 const Login = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("alex.chen@email.com");
+  const [password, setPassword] = useState("demo1234");
+  const [loading, setLoading] = useState(false);
+
+  const submit = () => {
+    if (!email.trim() || !password.trim()) {
+      toast.error("Enter your email and password.");
+      return;
+    }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      toast.success("Welcome back, Alex");
+      navigate("/");
+    }, 600);
+  };
+
+  const faceId = () => {
+    toast.loading("Authenticating with Face ID…", { id: "faceid" });
+    setTimeout(() => {
+      toast.success("Face ID recognized", { id: "faceid" });
+      navigate("/");
+    }, 800);
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <div className="flex-1 flex flex-col items-center justify-center px-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -56,6 +81,7 @@ const Login = () => {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
                 placeholder="••••••••"
                 className="w-full p-3.5 pr-12 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none"
               />
@@ -70,27 +96,44 @@ const Login = () => {
 
           <div className="flex items-center justify-between">
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input type="checkbox" className="rounded" />
+              <input type="checkbox" className="rounded" defaultChecked />
               Remember device
             </label>
-            <button className="text-xs text-primary font-medium">Forgot password?</button>
+            <button
+              onClick={() => toast.success("Password reset link sent to your email.")}
+              className="text-xs text-primary font-medium"
+            >
+              Forgot password?
+            </button>
           </div>
 
           <button
-            onClick={() => navigate("/")}
-            className="w-full py-3.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2"
+            onClick={submit}
+            disabled={loading}
+            className="w-full py-3.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            Log In <ArrowRight size={16} />
+            {loading ? "Signing in…" : (<>Log In <ArrowRight size={16} /></>)}
           </button>
 
-          <button className="w-full py-3.5 rounded-xl bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-2">
+          <button
+            onClick={faceId}
+            className="w-full py-3.5 rounded-xl bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-2"
+          >
             <Fingerprint size={18} /> Use Face ID
           </button>
 
           <div className="flex items-center justify-center gap-4 pt-2">
-            <button className="text-xs text-muted-foreground">Forgot username</button>
+            <button
+              onClick={() => toast.info("We'll email you your username shortly.")}
+              className="text-xs text-muted-foreground"
+            >
+              Forgot username
+            </button>
             <span className="text-muted-foreground">·</span>
-            <button className="text-xs text-muted-foreground flex items-center gap-1">
+            <button
+              onClick={() => navigate("/help")}
+              className="text-xs text-muted-foreground flex items-center gap-1"
+            >
               <HelpCircle size={12} /> Need help?
             </button>
           </div>
@@ -99,7 +142,7 @@ const Login = () => {
 
       <div className="px-8 pb-10">
         <button
-          onClick={() => navigate("/")}
+          onClick={() => toast.info("Account opening flow coming soon.")}
           className="w-full py-3 rounded-xl border border-border text-foreground text-sm font-semibold"
         >
           Open an Account

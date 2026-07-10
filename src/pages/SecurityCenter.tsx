@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
 import {
   ArrowLeft,
@@ -19,16 +20,78 @@ import {
   Phone,
 } from "lucide-react";
 
+type ToggleKey =
+  | "biometric"
+  | "passcode"
+  | "unusualLogin"
+  | "suspiciousTx";
+
 const SecurityCenter = () => {
   const navigate = useNavigate();
+  const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
+    biometric: true,
+    passcode: true,
+    unusualLogin: true,
+    suspiciousTx: true,
+  });
 
-  const sections = [
+  const flip = (k: ToggleKey) => {
+    setToggles((t) => {
+      const next = { ...t, [k]: !t[k] };
+      toast.success(`${k === "biometric" ? "Biometric login" : k === "passcode" ? "App passcode" : k === "unusualLogin" ? "Unusual login alerts" : "Suspicious transaction alerts"} ${next[k] ? "enabled" : "disabled"}`);
+      return next;
+    });
+  };
+
+  const action = (label: string) => () => {
+    switch (label) {
+      case "Change Password":
+        toast.success("Verification link sent to your email.");
+        break;
+      case "Two-Factor Authentication":
+        toast.info("2FA is active via SMS to (415) •••-0142");
+        break;
+      case "Trusted Devices":
+        toast.info("iPhone 17 Pro · MacBook Pro 14\" trusted");
+        break;
+      case "Login History":
+        toast.info("Last login: Today, San Francisco, CA · iPhone 17 Pro");
+        break;
+      case "Active Sessions":
+        toast.info("1 active session on this device");
+        break;
+      case "Sign Out All Devices":
+        if (confirm("Sign out of all other devices?")) {
+          toast.success("All other sessions ended.");
+        }
+        break;
+      case "Fraud Center":
+        toast.info("No fraud alerts. You're all clear.");
+        break;
+      case "Identity Monitoring":
+        toast.info("No identity issues detected in the last 30 days.");
+        break;
+      case "Recovery Email":
+        toast.success("A verification email was sent to update your recovery email.");
+        break;
+      case "Backup Phone":
+        toast.success("SMS code sent to your backup phone.");
+        break;
+      default:
+        toast(label);
+    }
+  };
+
+  const sections: Array<{
+    title: string;
+    items: Array<{ icon: any; label: string; desc: string; toggle?: ToggleKey }>;
+  }> = [
     {
       title: "Login & Authentication",
       items: [
         { icon: Key, label: "Change Password", desc: "Last changed 45 days ago" },
-        { icon: Fingerprint, label: "Biometric Login", desc: "Face ID enabled", toggle: true, enabled: true },
-        { icon: Lock, label: "App Passcode", desc: "4-digit passcode enabled", toggle: true, enabled: true },
+        { icon: Fingerprint, label: "Biometric Login", desc: `Face ID ${toggles.biometric ? "enabled" : "disabled"}`, toggle: "biometric" },
+        { icon: Lock, label: "App Passcode", desc: `4-digit passcode ${toggles.passcode ? "enabled" : "disabled"}`, toggle: "passcode" },
         { icon: Shield, label: "Two-Factor Authentication", desc: "SMS verification active" },
         { icon: Smartphone, label: "Trusted Devices", desc: "2 devices trusted" },
         { icon: Clock, label: "Login History", desc: "View recent logins" },
@@ -39,8 +102,8 @@ const SecurityCenter = () => {
     {
       title: "Security Monitoring",
       items: [
-        { icon: AlertTriangle, label: "Unusual Login Alerts", desc: "Enabled", toggle: true, enabled: true },
-        { icon: Shield, label: "Suspicious Transaction Alerts", desc: "Enabled", toggle: true, enabled: true },
+        { icon: AlertTriangle, label: "Unusual Login Alerts", desc: toggles.unusualLogin ? "Enabled" : "Disabled", toggle: "unusualLogin" },
+        { icon: Shield, label: "Suspicious Transaction Alerts", desc: toggles.suspiciousTx ? "Enabled" : "Disabled", toggle: "suspiciousTx" },
         { icon: Eye, label: "Fraud Center", desc: "No alerts" },
         { icon: Shield, label: "Identity Monitoring", desc: "No issues detected" },
       ],
@@ -64,7 +127,6 @@ const SecurityCenter = () => {
           <h1 className="text-lg font-display font-bold text-foreground">Security Center</h1>
         </div>
 
-        {/* Security Score */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <GlassCard elevated className="text-center">
             <div className="w-20 h-20 rounded-full border-4 border-success mx-auto flex items-center justify-center mb-3">
@@ -79,24 +141,32 @@ const SecurityCenter = () => {
           <motion.div key={section.title} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + si * 0.05 }}>
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">{section.title}</h2>
             <GlassCard className="divide-y divide-border p-0 overflow-hidden">
-              {section.items.map((item) => (
-                <div key={item.label} className="flex items-center justify-between px-4 py-3.5">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <item.icon size={20} className="text-muted-foreground shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">{item.label}</p>
-                      <p className="text-xs text-muted-foreground truncate">{item.desc}</p>
+              {section.items.map((item) => {
+                const isToggle = !!item.toggle;
+                const enabled = isToggle ? toggles[item.toggle as ToggleKey] : false;
+                return (
+                  <button
+                    key={item.label}
+                    onClick={isToggle ? () => flip(item.toggle as ToggleKey) : action(item.label)}
+                    className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-secondary/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <item.icon size={20} className="text-muted-foreground shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{item.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">{item.desc}</p>
+                      </div>
                     </div>
-                  </div>
-                  {"toggle" in item ? (
-                    <div className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${item.enabled ? "bg-primary" : "bg-secondary"}`}>
-                      <div className={`w-5 h-5 rounded-full bg-primary-foreground shadow-sm transition-transform ${item.enabled ? "translate-x-5" : "translate-x-0"}`} />
-                    </div>
-                  ) : (
-                    <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-                  )}
-                </div>
-              ))}
+                    {isToggle ? (
+                      <div className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${enabled ? "bg-primary" : "bg-secondary"}`}>
+                        <div className={`w-5 h-5 rounded-full bg-primary-foreground shadow-sm transition-transform ${enabled ? "translate-x-5" : "translate-x-0"}`} />
+                      </div>
+                    ) : (
+                      <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
             </GlassCard>
           </motion.div>
         ))}
