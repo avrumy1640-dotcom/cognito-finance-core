@@ -54,6 +54,8 @@ const fadeUp = {
 const HomePage = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const navigate = useNavigate();
+  const { accounts, totalBalance, transactions, notifications } = useBank();
+  const unread = notifications.filter((n) => !n.read).length;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
@@ -61,6 +63,26 @@ const HomePage = () => {
     balanceVisible
       ? n.toLocaleString("en-US", { style: "currency", currency: "USD" })
       : "••••••";
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+
+  const shareDirectDeposit = async () => {
+    const text = `Glass Bank Direct Deposit\nRouting: ${accounts.checking.routingNumber}\nAccount: 48292946${accounts.checking.accountNumber.slice(-4)}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Direct Deposit Info", text });
+        return;
+      } catch { /* canceled */ }
+    }
+    copyToClipboard(text, "Direct deposit info");
+  };
 
   return (
     <AppLayout>
@@ -89,7 +111,7 @@ const HomePage = () => {
               className="relative w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
             >
               <Bell size={18} className="text-muted-foreground" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
+              {unread > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent" />}
             </button>
           </div>
         </motion.div>
