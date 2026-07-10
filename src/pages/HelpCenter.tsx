@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
 import { faqData } from "@/data/mockData";
 import {
@@ -10,7 +11,6 @@ import {
   Phone,
   Mail,
   ChevronDown,
-  ChevronRight,
   HelpCircle,
   Shield,
   CreditCard,
