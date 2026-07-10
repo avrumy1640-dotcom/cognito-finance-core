@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { BankProvider } from "@/store/bankStore";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import MoveMoney from "./pages/MoveMoney";
@@ -24,35 +25,37 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/move-money" element={<MoveMoney />} />
-          <Route path="/move-money/:action" element={<MoveMoney />} />
-          <Route path="/cards" element={<Cards />} />
-          <Route path="/activity" element={<Activity />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/profile/personal" element={<PersonalInfo />} />
-          <Route path="/profile/documents" element={<Documents />} />
-          <Route path="/profile/address" element={<PersonalInfo />} />
-          <Route path="/profile/identity" element={<PersonalInfo />} />
-          <Route path="/profile/employment" element={<PersonalInfo />} />
-          <Route path="/profile/linked" element={<PersonalInfo />} />
-          <Route path="/transaction/:id" element={<TransactionDetail />} />
-          <Route path="/account/:type" element={<AccountDetail />} />
-          <Route path="/security" element={<SecurityCenter />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/notifications/settings" element={<Notifications />} />
-          <Route path="/help" element={<HelpCenter />} />
-          <Route path="/help/contact" element={<HelpCenter />} />
-          <Route path="/insights" element={<SpendingInsights />} />
-          <Route path="/settings" element={<SecurityCenter />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <BankProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/move-money" element={<MoveMoney />} />
+            <Route path="/move-money/:action" element={<MoveMoney />} />
+            <Route path="/cards" element={<Cards />} />
+            <Route path="/activity" element={<Activity />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/profile/personal" element={<PersonalInfo />} />
+            <Route path="/profile/documents" element={<Documents />} />
+            <Route path="/profile/address" element={<PersonalInfo />} />
+            <Route path="/profile/identity" element={<PersonalInfo />} />
+            <Route path="/profile/employment" element={<PersonalInfo />} />
+            <Route path="/profile/linked" element={<PersonalInfo />} />
+            <Route path="/transaction/:id" element={<TransactionDetail />} />
+            <Route path="/account/:type" element={<AccountDetail />} />
+            <Route path="/security" element={<SecurityCenter />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/notifications/settings" element={<Notifications />} />
+            <Route path="/help" element={<HelpCenter />} />
+            <Route path="/help/contact" element={<HelpCenter />} />
+            <Route path="/insights" element={<SpendingInsights />} />
+            <Route path="/settings" element={<SecurityCenter />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </BankProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
