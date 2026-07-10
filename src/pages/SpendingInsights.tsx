@@ -92,22 +92,37 @@ const SpendingInsights = () => {
             </GlassCard>
 
             {monthlySpending.categories.map((cat) => (
-              <GlassCard key={cat.name} className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">{cat.icon}</span>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{cat.name}</p>
-                    <p className="text-xs text-muted-foreground">${cat.amount.toFixed(2)} of $500</p>
+              <button
+                key={cat.name}
+                onClick={() => {
+                  const next = prompt(`Set monthly budget for ${cat.name} (USD)`, "500");
+                  if (next && !isNaN(Number(next))) toast.success(`${cat.name} budget set to $${Number(next).toFixed(2)}`);
+                }}
+                className="w-full text-left"
+              >
+                <GlassCard className="flex items-center justify-between py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">{cat.icon}</span>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{cat.name}</p>
+                      <p className="text-xs text-muted-foreground">${cat.amount.toFixed(2)} of $500</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {cat.amount > 450 && <Bell size={14} className="text-warning" />}
-                  <ChevronRight size={16} className="text-muted-foreground" />
-                </div>
-              </GlassCard>
+                  <div className="flex items-center gap-2">
+                    {cat.amount > 450 && <Bell size={14} className="text-warning" />}
+                    <ChevronRight size={16} className="text-muted-foreground" />
+                  </div>
+                </GlassCard>
+              </button>
             ))}
 
-            <button className="w-full py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-2">
+            <button
+              onClick={() => {
+                const name = prompt("New budget category name");
+                if (name) toast.success(`Budget added for ${name}`);
+              }}
+              className="w-full py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-2"
+            >
               <Plus size={16} /> Add Category Budget
             </button>
           </motion.div>
