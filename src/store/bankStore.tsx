@@ -8,7 +8,20 @@ import {
   Transaction,
 } from "@/data/mockData";
 
-type Account = typeof seedAccounts.checking;
+type Account = {
+  id: string;
+  name: string;
+  type: "checking" | "savings";
+  accountNumber: string;
+  routingNumber: string;
+  availableBalance: number;
+  currentBalance: number;
+  pendingAmount: number;
+  status: string;
+  openedDate: string;
+  apy?: number;
+  interestEarned?: number;
+};
 
 interface CardControls {
   international: boolean;
