@@ -20,30 +20,30 @@ const BottomNav = () => {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass-card-elevated safe-bottom">
-      <div className="flex items-center justify-around px-2 pt-2 pb-1">
+    <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 glass-card-elevated rounded-full px-2 py-2 safe-bottom">
+      <div className="flex items-center justify-around gap-1 min-w-[320px] max-w-[90vw]">
         {tabs.map((tab) => {
           const active = isActive(tab.path);
           return (
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
-              className="relative flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-0 flex-1"
+              className="relative flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-0 flex-1 rounded-full"
             >
               {active && (
                 <motion.div
-                  layoutId="tab-indicator"
-                  className="absolute -top-1 left-1/2 -translate-x-1/2 w-5 h-[3px] rounded-full bg-primary"
+                  layoutId="tab-bg"
+                  className="absolute inset-0 rounded-full bg-primary/10"
                   transition={{ type: "spring", stiffness: 500, damping: 35 }}
                 />
               )}
               <tab.icon
                 size={22}
-                className={active ? "text-primary" : "text-muted-foreground"}
+                className={`relative z-10 ${active ? "text-primary" : "text-muted-foreground"}`}
                 strokeWidth={active ? 2.2 : 1.5}
               />
               <span
-                className={`text-[10px] font-medium ${
+                className={`relative z-10 text-[10px] font-medium ${
                   active ? "text-primary" : "text-muted-foreground"
                 }`}
               >
