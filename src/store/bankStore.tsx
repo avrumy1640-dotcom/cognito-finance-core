@@ -554,6 +554,8 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     send,
     depositCheck,
     payBill,
+    externalTransfer,
+    wireTransfer,
     toggleCardLock: () => dispatch({ type: "TOGGLE_CARD_LOCK" }),
     toggleCardControl: (key) => dispatch({ type: "TOGGLE_CARD_CONTROL", key }),
     replaceCard: () => dispatch({ type: "REPLACE_CARD" }),
