@@ -332,7 +332,9 @@ interface Ctx extends State {
   transfer: (args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => boolean;
   send: (args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => boolean;
   depositCheck: (args: { to: "checking" | "savings"; amount: number }) => boolean;
-  payBill: (args: { from: "checking" | "savings"; amount: number; biller: string }) => boolean;
+  payBill: (args: { from: "checking" | "savings"; amount: number; biller: string; routingNumber?: string; accountNumber?: string }) => boolean;
+  externalTransfer: (args: { from: "checking" | "savings"; amount: number; bank: string; routingNumber: string; accountNumber: string; memo?: string }) => boolean;
+  wireTransfer: (args: { from: "checking" | "savings"; amount: number; beneficiaryName: string; routingNumber: string; accountNumber: string; memo?: string; fee?: number }) => boolean;
   toggleCardLock: () => void;
   toggleCardControl: (key: keyof CardControls) => void;
   replaceCard: () => void;
