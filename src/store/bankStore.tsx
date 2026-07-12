@@ -332,7 +332,9 @@ interface Ctx extends State {
   transfer: (args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => boolean;
   send: (args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => boolean;
   depositCheck: (args: { to: "checking" | "savings"; amount: number }) => boolean;
-  payBill: (args: { from: "checking" | "savings"; amount: number; biller: string }) => boolean;
+  payBill: (args: { from: "checking" | "savings"; amount: number; biller: string; routingNumber?: string; accountNumber?: string }) => boolean;
+  externalTransfer: (args: { from: "checking" | "savings"; amount: number; bank: string; routingNumber: string; accountNumber: string; memo?: string }) => boolean;
+  wireTransfer: (args: { from: "checking" | "savings"; amount: number; beneficiaryName: string; routingNumber: string; accountNumber: string; memo?: string; fee?: number }) => boolean;
   toggleCardLock: () => void;
   toggleCardControl: (key: keyof CardControls) => void;
   replaceCard: () => void;
@@ -430,12 +432,117 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     return true;
   }, []);
 
-  const payBill = useCallback((args: { from: "checking" | "savings"; amount: number; biller: string }) => {
+  const payBill = useCallback((args: {
+    from: "checking" | "savings";
+    amount: number;
+    biller: string;
+    routingNumber?: string;
+    accountNumber?: string;
+  }) => {
     if (args.amount <= 0 || !args.biller.trim()) return false;
     if (state.accounts[args.from].availableBalance < args.amount) return false;
-    dispatch({ type: "PAY_BILL", ...args });
+    dispatch({ type: "PAY_BILL", from: args.from, amount: args.amount, biller: args.biller });
+    // When routing/account are provided and Column is live, post a real ACH credit.
+    if (columnLive && args.routingNumber && args.accountNumber) {
+      (async () => {
+        try {
+          const cp = await columnApi.createCounterparty({
+            routing_number: args.routingNumber!,
+            account_number: args.accountNumber!,
+            account_type: "checking",
+            description: args.biller,
+            name: args.biller,
+          });
+          await columnApi.createAchTransfer({
+            bank_account_id: state.accounts[args.from].id,
+            counterparty_id: cp.id,
+            amount: Math.round(args.amount * 100),
+            type: "credit",
+            description: args.biller.slice(0, 80),
+            company_entry_description: "BILLPAY",
+          });
+        } catch (e) {
+          console.warn("Column bill pay failed:", e);
+        }
+      })();
+    }
     return true;
-  }, [state.accounts]);
+  }, [state.accounts, columnLive]);
+
+  const externalTransfer = useCallback((args: {
+    from: "checking" | "savings";
+    amount: number;
+    bank: string;
+    routingNumber: string;
+    accountNumber: string;
+    memo?: string;
+  }) => {
+    if (args.amount <= 0) return false;
+    if (state.accounts[args.from].availableBalance < args.amount) return false;
+    dispatch({ type: "PAY_BILL", from: args.from, amount: args.amount, biller: `External ACH — ${args.bank}` });
+    if (columnLive) {
+      (async () => {
+        try {
+          const cp = await columnApi.createCounterparty({
+            routing_number: args.routingNumber,
+            account_number: args.accountNumber,
+            account_type: "checking",
+            description: args.bank,
+            name: args.bank,
+          });
+          await columnApi.createAchTransfer({
+            bank_account_id: state.accounts[args.from].id,
+            counterparty_id: cp.id,
+            amount: Math.round(args.amount * 100),
+            type: "credit",
+            description: (args.memo || args.bank).slice(0, 80),
+            company_entry_description: "TRANSFER",
+          });
+        } catch (e) {
+          console.warn("Column ACH transfer failed:", e);
+        }
+      })();
+    }
+    return true;
+  }, [state.accounts, columnLive]);
+
+  const wireTransfer = useCallback((args: {
+    from: "checking" | "savings";
+    amount: number;
+    beneficiaryName: string;
+    routingNumber: string;
+    accountNumber: string;
+    memo?: string;
+    fee?: number;
+  }) => {
+    const fee = args.fee ?? 25;
+    const total = args.amount + fee;
+    if (args.amount <= 0) return false;
+    if (state.accounts[args.from].availableBalance < total) return false;
+    dispatch({ type: "PAY_BILL", from: args.from, amount: total, biller: `Wire — ${args.beneficiaryName}` });
+    if (columnLive) {
+      (async () => {
+        try {
+          const cp = await columnApi.createCounterparty({
+            routing_number: args.routingNumber,
+            account_number: args.accountNumber,
+            account_type: "checking",
+            description: args.beneficiaryName,
+            name: args.beneficiaryName,
+          });
+          await columnApi.createWireTransfer({
+            bank_account_id: state.accounts[args.from].id,
+            counterparty_id: cp.id,
+            amount: Math.round(args.amount * 100),
+            description: (args.memo || args.beneficiaryName).slice(0, 80),
+          });
+        } catch (e) {
+          console.warn("Column wire transfer failed:", e);
+        }
+      })();
+    }
+    return true;
+  }, [state.accounts, columnLive]);
 
   const value: Ctx = {
     ...state,
@@ -447,6 +554,8 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     send,
     depositCheck,
     payBill,
+    externalTransfer,
+    wireTransfer,
     toggleCardLock: () => dispatch({ type: "TOGGLE_CARD_LOCK" }),
     toggleCardControl: (key) => dispatch({ type: "TOGGLE_CARD_CONTROL", key }),
     replaceCard: () => dispatch({ type: "REPLACE_CARD" }),

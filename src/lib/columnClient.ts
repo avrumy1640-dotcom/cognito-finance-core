@@ -60,12 +60,22 @@ export const columnApi = {
   listBankAccounts: () =>
     callColumn<{ bank_accounts: ColumnBankAccount[] }>({ path: "/bank-accounts" }),
   listTransactions: (bankAccountId?: string, limit = 25) =>
-    callColumn<{ transactions: ColumnTransaction[] }>({
-      path: "/transactions",
-      query: { bank_account_id: bankAccountId, limit },
-    }),
+    // Column's transaction history lives under /bank-accounts/:id/history.
+    bankAccountId
+      ? callColumn<{ transactions?: ColumnTransaction[] }>({
+          path: `/bank-accounts/${bankAccountId}/history`,
+          query: { limit },
+        }).then((d) => ({ transactions: d.transactions ?? [] }))
+      : Promise.resolve({ transactions: [] as ColumnTransaction[] }),
   createBookTransfer: (args: { sender_bank_account_id: string; receiver_bank_account_id: string; amount: number; description?: string }) =>
     callColumn<unknown>({ path: "/transfers/book", method: "POST", body: args }),
+  createCounterparty: (args: {
+    routing_number: string;
+    account_number: string;
+    account_type?: "checking" | "savings";
+    description?: string;
+    name?: string;
+  }) => callColumn<{ id: string }>({ path: "/counterparties", method: "POST", body: args }),
   createAchTransfer: (args: {
     bank_account_id: string;
     counterparty_id: string;
@@ -74,6 +84,13 @@ export const columnApi = {
     description?: string;
     company_entry_description?: string;
   }) => callColumn<unknown>({ path: "/transfers/ach", method: "POST", body: args }),
+  createWireTransfer: (args: {
+    bank_account_id: string;
+    counterparty_id: string;
+    amount: number;
+    description?: string;
+    beneficiary_message?: string;
+  }) => callColumn<unknown>({ path: "/transfers/wire", method: "POST", body: args }),
 };
 
 // --- Mapping helpers -------------------------------------------------------

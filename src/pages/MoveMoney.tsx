@@ -484,13 +484,15 @@ const ExternalTransferSheet = ({ onClose }: { onClose: () => void }) => {
   const [routing, setRouting] = useState("");
   const [account, setAccount] = useState("");
   const [amount, setAmount] = useState("");
-  const { payBill, accounts } = useBank();
+  const [memo, setMemo] = useState("");
+  const { externalTransfer, accounts } = useBank();
   const num = Number(amount);
 
   const submit = () => {
     if (num <= 0) { toast.error("Enter an amount"); return; }
     if (num > accounts.checking.availableBalance) { toast.error("Insufficient funds"); return; }
-    const ok = payBill({ from: "checking", amount: num, biller: `External ACH — ${bank || "External Bank"}` });
+    if (routing.replace(/\D/g, "").length !== 9) { toast.error("Routing number must be 9 digits"); return; }
+    const ok = externalTransfer({ from: "checking", amount: num, bank, routingNumber: routing, accountNumber: account, memo });
     if (!ok) { toast.error("Transfer failed"); return; }
     toast.success("External transfer initiated", { description: `$${num.toFixed(2)} — 1–3 business days` });
     setStep("success");
@@ -506,6 +508,7 @@ const ExternalTransferSheet = ({ onClose }: { onClose: () => void }) => {
             <Field label="Bank name" value={bank} onChange={setBank} placeholder="Chase, Bank of America…" />
             <Field label="Routing number" value={routing} onChange={setRouting} placeholder="9 digits" />
             <Field label="Account number" value={account} onChange={setAccount} placeholder="Account #" />
+            <Field label="Memo (optional)" value={memo} onChange={setMemo} placeholder="What's this for?" />
             <div>
               <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Amount</label>
               <div className="relative">
@@ -536,16 +539,20 @@ const ExternalTransferSheet = ({ onClose }: { onClose: () => void }) => {
 const WireSheet = ({ onClose }: { onClose: () => void }) => {
   const [step, setStep] = useState<"form" | "success">("form");
   const [name, setName] = useState("");
+  const [routing, setRouting] = useState("");
   const [account, setAccount] = useState("");
   const [amount, setAmount] = useState("");
-  const { payBill, accounts } = useBank();
+  const [memo, setMemo] = useState("");
+  const { wireTransfer, accounts } = useBank();
   const num = Number(amount);
   const fee = 25;
 
   const submit = () => {
     if (num <= 0) return toast.error("Enter amount");
     if (num + fee > accounts.checking.availableBalance) return toast.error("Insufficient funds (includes $25 fee)");
-    payBill({ from: "checking", amount: num + fee, biller: `Wire — ${name || "Beneficiary"}` });
+    if (routing.replace(/\D/g, "").length !== 9) return toast.error("Routing number must be 9 digits");
+    const ok = wireTransfer({ from: "checking", amount: num, beneficiaryName: name, routingNumber: routing, accountNumber: account, memo, fee });
+    if (!ok) return toast.error("Wire failed");
     toast.success("Wire initiated", { description: `$${num.toFixed(2)} + $${fee} fee` });
     setStep("success");
   };
@@ -558,7 +565,9 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
           <p className="text-sm text-muted-foreground mb-5">Same-day if sent before 4:00 PM ET. $25 fee.</p>
           <div className="space-y-3">
             <Field label="Beneficiary name" value={name} onChange={setName} placeholder="Full legal name" />
+            <Field label="Routing number" value={routing} onChange={setRouting} placeholder="9 digits" />
             <Field label="Beneficiary account" value={account} onChange={setAccount} placeholder="Account #" />
+            <Field label="Memo (optional)" value={memo} onChange={setMemo} placeholder="Wire reference" />
             <div>
               <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Amount</label>
               <div className="relative">
@@ -569,7 +578,7 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-              <button onClick={submit} disabled={!num || !name || !account} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send Wire</button>
+              <button onClick={submit} disabled={!num || !name || !routing || !account} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send Wire</button>
             </div>
           </div>
         </>
