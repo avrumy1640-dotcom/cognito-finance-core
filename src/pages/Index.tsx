@@ -54,7 +54,7 @@ const fadeUp = {
 const HomePage = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const navigate = useNavigate();
-  const { accounts, totalBalance, transactions, notifications } = useBank();
+  const { accounts, totalBalance, transactions, notifications, columnLive, columnError, refreshColumn } = useBank();
   const unread = notifications.filter((n) => !n.read).length;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
