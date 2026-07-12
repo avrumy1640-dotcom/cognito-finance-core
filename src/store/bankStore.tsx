@@ -430,12 +430,17 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     return true;
   }, []);
 
-  const payBill = useCallback((args: { from: "checking" | "savings"; amount: number; biller: string }) => {
+  const payBill = useCallback((args: {
+    from: "checking" | "savings";
+    amount: number;
+    biller: string;
+    routingNumber?: string;
+    accountNumber?: string;
+  }) => {
     if (args.amount <= 0 || !args.biller.trim()) return false;
     if (state.accounts[args.from].availableBalance < args.amount) return false;
-    dispatch({ type: "PAY_BILL", ...args });
-    // Bill pay through Column: create a counterparty on the fly (using the biller's
-    // bank routing/account if provided), then ACH debit from our account.
+    dispatch({ type: "PAY_BILL", from: args.from, amount: args.amount, biller: args.biller });
+    // When routing/account are provided and Column is live, post a real ACH credit.
     if (columnLive && args.routingNumber && args.accountNumber) {
       (async () => {
         try {
