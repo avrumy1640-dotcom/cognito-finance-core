@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, ReactNode, useCallback } from "react";
+import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState } from "react";
 import {
   accounts as seedAccounts,
   transactions as seedTransactions,
@@ -7,6 +7,7 @@ import {
   recentRecipients as seedRecipients,
   Transaction,
 } from "@/data/mockData";
+import { columnApi, mapColumnAccount, mapColumnTransaction } from "@/lib/columnClient";
 
 type Account = {
   id: string;
@@ -72,7 +73,8 @@ type Action =
   | { type: "REPORT_STOLEN" }
   | { type: "MARK_NOTIFICATION_READ"; id: string }
   | { type: "MARK_ALL_READ" }
-  | { type: "ADD_RECIPIENT"; name: string };
+  | { type: "ADD_RECIPIENT"; name: string }
+  | { type: "HYDRATE_COLUMN"; accounts?: Partial<State["accounts"]>; transactions?: Transaction[] };
 
 const initialState: State = {
   accounts: seedAccounts,
@@ -305,6 +307,18 @@ function reducer(state: State, action: Action): State {
     case "MARK_ALL_READ":
       return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) };
 
+    case "HYDRATE_COLUMN":
+      return {
+        ...state,
+        accounts: {
+          checking: { ...state.accounts.checking, ...(action.accounts?.checking ?? {}) },
+          savings: { ...state.accounts.savings, ...(action.accounts?.savings ?? {}) },
+        },
+        transactions: action.transactions && action.transactions.length > 0
+          ? [...action.transactions, ...state.transactions.filter((t) => !action.transactions!.some((n) => n.id === t.id))]
+          : state.transactions,
+      };
+
     default:
       return state;
   }
@@ -312,6 +326,9 @@ function reducer(state: State, action: Action): State {
 
 interface Ctx extends State {
   totalBalance: number;
+  columnLive: boolean;
+  columnError: string | null;
+  refreshColumn: () => Promise<void>;
   transfer: (args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => boolean;
   send: (args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => boolean;
   depositCheck: (args: { to: "checking" | "savings"; amount: number }) => boolean;
@@ -328,13 +345,77 @@ const BankContext = createContext<Ctx | null>(null);
 
 export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const [columnLive, setColumnLive] = useState(false);
+  const [columnError, setColumnError] = useState<string | null>(null);
+
+  const refreshColumn = useCallback(async () => {
+    try {
+      const { bank_accounts } = await columnApi.listBankAccounts();
+      if (!bank_accounts || bank_accounts.length === 0) {
+        setColumnLive(false);
+        setColumnError("No Column bank accounts found for this API key.");
+        return;
+      }
+      // Pick first checking-type + first savings-type; fall back to first two.
+      const checkingSrc =
+        bank_accounts.find((a) => (a.type || "").toLowerCase().includes("checking")) || bank_accounts[0];
+      const savingsSrc =
+        bank_accounts.find(
+          (a) => (a.type || "").toLowerCase().includes("saving") && a.id !== checkingSrc.id
+        ) || bank_accounts[1] || checkingSrc;
+
+      const mappedChecking = { ...state.accounts.checking, ...mapColumnAccount(checkingSrc), type: "checking" as const, name: state.accounts.checking.name };
+      const mappedSavings = { ...state.accounts.savings, ...mapColumnAccount(savingsSrc), type: "savings" as const, name: state.accounts.savings.name, apy: state.accounts.savings.apy };
+
+      const [chkTx, savTx] = await Promise.all([
+        columnApi.listTransactions(checkingSrc.id, 25).catch(() => ({ transactions: [] })),
+        savingsSrc.id !== checkingSrc.id
+          ? columnApi.listTransactions(savingsSrc.id, 25).catch(() => ({ transactions: [] }))
+          : Promise.resolve({ transactions: [] }),
+      ]);
+      const txs: Transaction[] = [
+        ...chkTx.transactions.map((t) => mapColumnTransaction(t, "Checking")),
+        ...savTx.transactions.map((t) => mapColumnTransaction(t, "Savings")),
+      ];
+
+      dispatch({
+        type: "HYDRATE_COLUMN",
+        accounts: { checking: mappedChecking, savings: mappedSavings },
+        transactions: txs,
+      });
+      setColumnLive(true);
+      setColumnError(null);
+    } catch (err) {
+      setColumnLive(false);
+      setColumnError(err instanceof Error ? err.message : "Column sync failed");
+      console.warn("Column sync failed — using mock data.", err);
+    }
+  }, [state.accounts.checking, state.accounts.savings]);
+
+  useEffect(() => {
+    // Fire once on mount; store already has mock seed as fallback.
+    refreshColumn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const transfer = useCallback((args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => {
     if (args.amount <= 0 || args.from === args.to) return false;
     if (state.accounts[args.from].availableBalance < args.amount) return false;
     dispatch({ type: "TRANSFER", ...args });
+    if (columnLive) {
+      const sender = state.accounts[args.from].id;
+      const receiver = state.accounts[args.to].id;
+      columnApi
+        .createBookTransfer({
+          sender_bank_account_id: sender,
+          receiver_bank_account_id: receiver,
+          amount: Math.round(args.amount * 100),
+          description: args.memo || "Internal transfer",
+        })
+        .catch((e) => console.warn("Column book transfer failed:", e));
+    }
     return true;
-  }, [state.accounts]);
+  }, [state.accounts, columnLive]);
 
   const send = useCallback((args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => {
     if (args.amount <= 0 || !args.recipient.trim()) return false;
@@ -359,6 +440,9 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const value: Ctx = {
     ...state,
     totalBalance: state.accounts.checking.availableBalance + state.accounts.savings.availableBalance,
+    columnLive,
+    columnError,
+    refreshColumn,
     transfer,
     send,
     depositCheck,

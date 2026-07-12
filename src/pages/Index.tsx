@@ -54,7 +54,7 @@ const fadeUp = {
 const HomePage = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const navigate = useNavigate();
-  const { accounts, totalBalance, transactions, notifications } = useBank();
+  const { accounts, totalBalance, transactions, notifications, columnLive, columnError, refreshColumn } = useBank();
   const unread = notifications.filter((n) => !n.read).length;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -115,6 +115,18 @@ const HomePage = () => {
             </button>
           </div>
         </motion.div>
+
+        {/* Column BaaS live-status pill */}
+        <button
+          onClick={() => refreshColumn()}
+          className="flex items-center gap-2 text-[11px] font-medium px-3 py-1.5 rounded-full bg-secondary/70 border border-border w-fit"
+          title={columnError || undefined}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${columnLive ? "bg-success animate-pulse" : "bg-warning"}`} />
+          <span className="text-muted-foreground">
+            {columnLive ? "Live · Column BaaS" : columnError ? "Column offline — using cache" : "Connecting to Column…"}
+          </span>
+        </button>
 
         {/* Total Balance Card */}
         <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible">
