@@ -565,7 +565,9 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
           <p className="text-sm text-muted-foreground mb-5">Same-day if sent before 4:00 PM ET. $25 fee.</p>
           <div className="space-y-3">
             <Field label="Beneficiary name" value={name} onChange={setName} placeholder="Full legal name" />
+            <Field label="Routing number" value={routing} onChange={setRouting} placeholder="9 digits" />
             <Field label="Beneficiary account" value={account} onChange={setAccount} placeholder="Account #" />
+            <Field label="Memo (optional)" value={memo} onChange={setMemo} placeholder="Wire reference" />
             <div>
               <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Amount</label>
               <div className="relative">
@@ -576,7 +578,7 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-              <button onClick={submit} disabled={!num || !name || !account} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send Wire</button>
+              <button onClick={submit} disabled={!num || !name || !routing || !account} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send Wire</button>
             </div>
           </div>
         </>
