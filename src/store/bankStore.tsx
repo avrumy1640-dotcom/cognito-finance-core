@@ -307,6 +307,18 @@ function reducer(state: State, action: Action): State {
     case "MARK_ALL_READ":
       return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) };
 
+    case "HYDRATE_COLUMN":
+      return {
+        ...state,
+        accounts: {
+          checking: { ...state.accounts.checking, ...(action.accounts?.checking ?? {}) },
+          savings: { ...state.accounts.savings, ...(action.accounts?.savings ?? {}) },
+        },
+        transactions: action.transactions && action.transactions.length > 0
+          ? [...action.transactions, ...state.transactions.filter((t) => !action.transactions!.some((n) => n.id === t.id))]
+          : state.transactions,
+      };
+
     default:
       return state;
   }
