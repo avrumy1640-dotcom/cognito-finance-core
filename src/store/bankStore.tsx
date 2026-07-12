@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, ReactNode, useCallback } from "react";
+import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState } from "react";
 import {
   accounts as seedAccounts,
   transactions as seedTransactions,
@@ -7,6 +7,7 @@ import {
   recentRecipients as seedRecipients,
   Transaction,
 } from "@/data/mockData";
+import { columnApi, mapColumnAccount, mapColumnTransaction } from "@/lib/columnClient";
 
 type Account = {
   id: string;
