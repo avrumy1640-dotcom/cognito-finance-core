@@ -1,4 +1,5 @@
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
@@ -13,10 +14,95 @@ const iconMap: Record<string, string> = {
   savings: "🎯",
 };
 
+const defaultPrefs = {
+  pushDeposits: true,
+  pushCard: true,
+  pushTransfers: true,
+  pushLowBalance: true,
+  emailStatements: true,
+  emailMarketing: false,
+  smsSecurity: true,
+};
+
+type Prefs = typeof defaultPrefs;
+
+const loadPrefs = (): Prefs => {
+  try {
+    const raw = localStorage.getItem("glassbank_notif_prefs");
+    return raw ? { ...defaultPrefs, ...JSON.parse(raw) } : defaultPrefs;
+  } catch {
+    return defaultPrefs;
+  }
+};
+
 const NotificationsPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isSettings = location.pathname.endsWith("/settings");
   const { notifications, markNotificationRead, markAllRead } = useBank();
   const unread = notifications.filter((n) => !n.read).length;
+  const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
+
+  const togglePref = (key: keyof Prefs) => {
+    setPrefs((p) => {
+      const next = { ...p, [key]: !p[key] };
+      try { localStorage.setItem("glassbank_notif_prefs", JSON.stringify(next)); } catch { /* ignore */ }
+      toast.success(`${next[key] ? "Enabled" : "Disabled"} ${labelFor(key)}`);
+      return next;
+    });
+  };
+
+  const labelFor = (k: keyof Prefs) => ({
+    pushDeposits: "deposit alerts",
+    pushCard: "card activity alerts",
+    pushTransfers: "transfer alerts",
+    pushLowBalance: "low balance alerts",
+    emailStatements: "monthly email statements",
+    emailMarketing: "marketing emails",
+    smsSecurity: "security SMS alerts",
+  }[k]);
+
+  if (isSettings) {
+    const rows: { key: keyof Prefs; label: string; desc: string }[] = [
+      { key: "pushDeposits", label: "Deposits", desc: "Push when money hits your account" },
+      { key: "pushCard", label: "Card activity", desc: "Every charge, decline, and refund" },
+      { key: "pushTransfers", label: "Transfers", desc: "Book, ACH, wire status changes" },
+      { key: "pushLowBalance", label: "Low balance", desc: "When available drops below $100" },
+      { key: "emailStatements", label: "Email statements", desc: "Monthly PDF to your inbox" },
+      { key: "emailMarketing", label: "Product updates", desc: "New features and offers" },
+      { key: "smsSecurity", label: "Security SMS", desc: "Login codes and unusual activity" },
+    ];
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="px-5 pt-14 space-y-5 pb-10">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+              <ArrowLeft size={20} className="text-foreground" />
+            </button>
+            <h1 className="text-lg font-display font-bold text-foreground">Notification Settings</h1>
+          </div>
+          <GlassCard className="divide-y divide-border p-0 overflow-hidden">
+            {rows.map((r) => (
+              <div key={r.key} className="flex items-start justify-between gap-4 px-4 py-3.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{r.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{r.desc}</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={prefs[r.key]}
+                  onClick={() => togglePref(r.key)}
+                  className={`shrink-0 w-11 h-6 rounded-full transition-colors ${prefs[r.key] ? "bg-primary" : "bg-secondary"}`}
+                >
+                  <span className={`block w-5 h-5 bg-background rounded-full shadow transform transition-transform ${prefs[r.key] ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+            ))}
+          </GlassCard>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -42,8 +128,9 @@ const NotificationsPage = () => {
               </button>
             )}
             <button
-              onClick={() => toast.info("Notification settings", { description: "Coming soon" })}
+              onClick={() => navigate("/notifications/settings")}
               className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
+              title="Notification settings"
             >
               <Settings size={18} className="text-muted-foreground" />
             </button>
