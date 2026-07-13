@@ -90,7 +90,50 @@ export const columnApi = {
     description?: string;
     beneficiary_message?: string;
   }) => callColumn<unknown>({ path: "/transfers/wire", method: "POST", body: args }),
+
+  // --- Cards ---------------------------------------------------------------
+  listCards: (bankAccountId?: string) =>
+    callColumn<{ cards?: ColumnCard[] }>({
+      path: "/cards",
+      query: bankAccountId ? { bank_account_id: bankAccountId } : undefined,
+    }).then((d) => ({ cards: d.cards ?? [] })),
+  issueCard: (args: {
+    bank_account_id: string;
+    type?: "physical" | "virtual";
+    program_id?: string;
+    cardholder?: { first_name?: string; last_name?: string; email?: string };
+    shipping_address?: Record<string, string>;
+  }) => callColumn<ColumnCard>({ path: "/cards", method: "POST", body: args }),
+  lockCard: (cardId: string) =>
+    callColumn<ColumnCard>({ path: `/cards/${cardId}/lock`, method: "POST" }),
+  unlockCard: (cardId: string) =>
+    callColumn<ColumnCard>({ path: `/cards/${cardId}/unlock`, method: "POST" }),
+  reissueCard: (cardId: string, reason: "damaged" | "lost" | "stolen" = "damaged") =>
+    callColumn<ColumnCard>({
+      path: `/cards/${cardId}/reissue`,
+      method: "POST",
+      body: { reason },
+    }),
+  updateCardControls: (cardId: string, controls: Record<string, unknown>) =>
+    callColumn<ColumnCard>({
+      path: `/cards/${cardId}`,
+      method: "PATCH",
+      body: { merchant_controls: controls },
+    }),
 };
+
+export interface ColumnCard {
+  id: string;
+  bank_account_id?: string;
+  state?: string; // active | locked | replaced | closed
+  type?: string; // physical | virtual
+  last_four?: string;
+  network?: string;
+  expiration_month?: string;
+  expiration_year?: string;
+  merchant_controls?: Record<string, unknown>;
+}
+
 
 // --- Mapping helpers -------------------------------------------------------
 
