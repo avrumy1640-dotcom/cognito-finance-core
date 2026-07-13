@@ -370,9 +370,9 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       const mappedSavings = { ...state.accounts.savings, ...mapColumnAccount(savingsSrc), type: "savings" as const, name: state.accounts.savings.name, apy: state.accounts.savings.apy };
 
       const [chkTx, savTx] = await Promise.all([
-        columnApi.listTransactions(checkingSrc.id, 25).catch(() => ({ transactions: [] })),
+        columnApi.listTransactions(checkingSrc.id).catch(() => ({ transactions: [] })),
         savingsSrc.id !== checkingSrc.id
-          ? columnApi.listTransactions(savingsSrc.id, 25).catch(() => ({ transactions: [] }))
+          ? columnApi.listTransactions(savingsSrc.id).catch(() => ({ transactions: [] }))
           : Promise.resolve({ transactions: [] }),
       ]);
       const txs: Transaction[] = [
