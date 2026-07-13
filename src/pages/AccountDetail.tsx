@@ -157,7 +157,19 @@ const AccountDetail = () => {
             {["March 2026", "February 2026", "January 2026", "December 2025", "November 2025"].map((month) => (
               <GlassCard
                 key={month}
-                onClick={() => toast.info(`${month} statement`, { description: "PDF download starting…" })}
+                onClick={() => {
+                  const body = `Glass Bank\n${account.name} — ${month} Statement\nAccount: ${account.accountNumber}\nRouting: ${account.routingNumber}\nAvailable Balance: ${formatCurrency(account.availableBalance)}\nCurrent Balance: ${formatCurrency(account.currentBalance)}\n\nGenerated ${new Date().toLocaleString()}\n`;
+                  const blob = new Blob([body], { type: "application/pdf" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${account.name.replace(/\s+/g, "_")}_${month.replace(/\s+/g, "_")}.pdf`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
+                  toast.success(`Downloaded ${month} statement`);
+                }}
                 className="flex items-center justify-between py-3"
               >
                 <div className="flex items-center gap-3">
