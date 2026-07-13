@@ -190,6 +190,13 @@ const CardsPage = () => {
               </div>
               <ChevronRight size={16} className="text-muted-foreground" />
             </GlassCard>
+            <GlassCard onClick={doIssueVirtual} className="flex items-center justify-between py-3">
+              <div className="flex items-center gap-3">
+                <CreditCard size={20} className="text-primary" />
+                <span className="text-sm font-medium text-foreground">Issue Virtual Card</span>
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground" />
+            </GlassCard>
             <GlassCard onClick={doReplace} className="flex items-center justify-between py-3">
               <div className="flex items-center gap-3">
                 <RefreshCw size={20} className="text-primary" />
