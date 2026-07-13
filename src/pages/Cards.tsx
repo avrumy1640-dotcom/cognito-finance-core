@@ -83,6 +83,12 @@ const CardsPage = () => {
     });
   };
 
+  const doIssueVirtual = async () => {
+    const ok = await issueCard({ type: "virtual" });
+    if (ok) toast.success("Virtual card issued", { description: columnLive ? "Provisioned via Column" : "Ready to use" });
+    else toast.error("Card issuance failed");
+  };
+
   return (
     <AppLayout>
       <div className="px-5 pt-14 space-y-5 pb-8">
