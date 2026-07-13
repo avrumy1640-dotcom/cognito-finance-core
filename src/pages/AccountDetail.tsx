@@ -185,11 +185,30 @@ const AccountDetail = () => {
         {activeTab === "settings" && (
           <div className="space-y-2">
             {[
-              { icon: Edit3, label: "Rename Account" },
-              { icon: Shield, label: "Overdraft Preferences" },
-              { icon: Settings, label: "Account Alerts" },
+              {
+                icon: Edit3,
+                label: "Rename Account",
+                action: () => {
+                  const next = prompt("Rename account", account.name);
+                  if (next && next.trim()) toast.success(`Renamed to "${next.trim()}"`);
+                },
+              },
+              {
+                icon: Shield,
+                label: "Overdraft Preferences",
+                action: () => toast.success("Overdraft protection is ON", { description: "Linked to savings for coverage up to $500" }),
+              },
+              {
+                icon: Settings,
+                label: "Account Alerts",
+                action: () => navigate("/notifications/settings"),
+              },
             ].map((item) => (
-              <GlassCard key={item.label} className="flex items-center justify-between py-3">
+              <GlassCard
+                key={item.label}
+                onClick={item.action}
+                className="flex items-center justify-between py-3 cursor-pointer"
+              >
                 <div className="flex items-center gap-3">
                   <item.icon size={18} className="text-muted-foreground" />
                   <span className="text-sm font-medium text-foreground">{item.label}</span>
