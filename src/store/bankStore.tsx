@@ -340,10 +340,11 @@ interface Ctx extends State {
   payBill: (args: { from: "checking" | "savings"; amount: number; biller: string; routingNumber?: string; accountNumber?: string }) => boolean;
   externalTransfer: (args: { from: "checking" | "savings"; amount: number; bank: string; routingNumber: string; accountNumber: string; memo?: string }) => boolean;
   wireTransfer: (args: { from: "checking" | "savings"; amount: number; beneficiaryName: string; routingNumber: string; accountNumber: string; memo?: string; fee?: number }) => boolean;
-  toggleCardLock: () => void;
-  toggleCardControl: (key: keyof CardControls) => void;
-  replaceCard: () => void;
-  reportStolen: () => void;
+  toggleCardLock: () => Promise<void> | void;
+  toggleCardControl: (key: keyof CardControls) => Promise<void> | void;
+  replaceCard: () => Promise<void> | void;
+  reportStolen: () => Promise<void> | void;
+  issueCard: (args?: { type?: "physical" | "virtual" }) => Promise<boolean>;
   markNotificationRead: (id: string) => void;
   markAllRead: () => void;
 }
