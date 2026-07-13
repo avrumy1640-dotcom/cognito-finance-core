@@ -59,12 +59,11 @@ async function callColumn<T>({ path, method = "GET", body, query }: CallArgs): P
 export const columnApi = {
   listBankAccounts: () =>
     callColumn<{ bank_accounts: ColumnBankAccount[] }>({ path: "/bank-accounts" }),
-  listTransactions: (bankAccountId?: string, limit = 25) =>
+  listTransactions: (bankAccountId?: string) =>
     // Column's transaction history lives under /bank-accounts/:id/history.
     bankAccountId
       ? callColumn<{ transactions?: ColumnTransaction[] }>({
           path: `/bank-accounts/${bankAccountId}/history`,
-          query: { limit },
         }).then((d) => ({ transactions: d.transactions ?? [] }))
       : Promise.resolve({ transactions: [] as ColumnTransaction[] }),
   createBookTransfer: (args: { sender_bank_account_id: string; receiver_bank_account_id: string; amount: number; description?: string }) =>
