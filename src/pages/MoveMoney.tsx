@@ -104,7 +104,7 @@ const MoveMoney = () => {
           {selected === "bills" && <BillPaySheet onClose={() => setSelected(null)} />}
           {selected === "external" && <ExternalTransferSheet onClose={() => setSelected(null)} />}
           {selected === "wire" && <WireSheet onClose={() => setSelected(null)} />}
-          {selected === "add" && <AddMoneySheet onClose={() => setSelected(null)} />}
+          {selected === "add" && <AddMoneySheet onClose={() => setSelected(null)} onPick={(id) => setSelected(id)} />}
         </AnimatePresence>
       </div>
     </AppLayout>
