@@ -43,6 +43,7 @@ interface CardState {
   isLocked: boolean;
   isVirtual: boolean;
   controls: CardControls;
+  columnCardId?: string;
 }
 
 interface NotificationItem {
