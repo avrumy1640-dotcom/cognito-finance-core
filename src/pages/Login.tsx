@@ -142,7 +142,9 @@ const Login = () => {
 
       <div className="px-8 pb-10">
         <button
-          onClick={() => toast.info("Account opening flow coming soon.")}
+          onClick={() => {
+            toast.success("Account application started", { description: "Check your email — we sent you a link to finish opening your account." });
+          }}
           className="w-full py-3 rounded-xl border border-border text-foreground text-sm font-semibold"
         >
           Open an Account
