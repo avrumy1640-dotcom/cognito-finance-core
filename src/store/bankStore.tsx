@@ -585,6 +585,91 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     return true;
   }, [state.accounts, columnLive]);
 
+  const toggleCardLock = useCallback(async () => {
+    const willLock = !state.card.isLocked;
+    dispatch({ type: "TOGGLE_CARD_LOCK" });
+    if (columnLive && state.card.columnCardId) {
+      try {
+        if (willLock) await columnApi.lockCard(state.card.columnCardId);
+        else await columnApi.unlockCard(state.card.columnCardId);
+      } catch (e) {
+        console.warn("Column card lock toggle failed:", e);
+      }
+    }
+  }, [state.card.isLocked, state.card.columnCardId, columnLive]);
+
+  const toggleCardControl = useCallback(async (key: keyof CardControls) => {
+    dispatch({ type: "TOGGLE_CARD_CONTROL", key });
+    if (columnLive && state.card.columnCardId) {
+      const next = { ...state.card.controls, [key]: !state.card.controls[key] };
+      try {
+        await columnApi.updateCardControls(state.card.columnCardId, {
+          international: next.international,
+          online: next.online,
+          contactless: next.contactless,
+          in_store: next.inStore,
+          atm: next.atm,
+        });
+      } catch (e) {
+        console.warn("Column card controls update failed:", e);
+      }
+    }
+  }, [state.card.controls, state.card.columnCardId, columnLive]);
+
+  const replaceCard = useCallback(async () => {
+    dispatch({ type: "REPLACE_CARD" });
+    if (columnLive && state.card.columnCardId) {
+      try {
+        const c = await columnApi.reissueCard(state.card.columnCardId, "damaged");
+        if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
+      } catch (e) {
+        console.warn("Column card reissue failed:", e);
+      }
+    }
+  }, [state.card.columnCardId, state.card.last4, columnLive]);
+
+  const reportStolen = useCallback(async () => {
+    dispatch({ type: "REPORT_STOLEN" });
+    if (columnLive && state.card.columnCardId) {
+      try {
+        const c = await columnApi.reissueCard(state.card.columnCardId, "stolen");
+        if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
+      } catch (e) {
+        console.warn("Column card stolen reissue failed:", e);
+      }
+    }
+  }, [state.card.columnCardId, state.card.last4, columnLive]);
+
+  const issueCard = useCallback(async (args?: { type?: "physical" | "virtual" }) => {
+    if (!columnLive) {
+      // Local-only: flip the seed card back to active.
+      dispatch({ type: "HYDRATE_CARD", card: { status: "active", isLocked: false, isVirtual: args?.type === "virtual" } });
+      return true;
+    }
+    try {
+      const c = await columnApi.issueCard({
+        bank_account_id: state.accounts.checking.id,
+        type: args?.type || "virtual",
+      });
+      dispatch({
+        type: "HYDRATE_CARD",
+        card: {
+          columnCardId: c.id,
+          last4: c.last_four || state.card.last4,
+          network: c.network || state.card.network,
+          type: c.type || state.card.type,
+          isVirtual: (c.type || "").toLowerCase() === "virtual",
+          status: "active",
+          isLocked: false,
+        },
+      });
+      return true;
+    } catch (e) {
+      console.warn("Column card issuance failed:", e);
+      return false;
+    }
+  }, [columnLive, state.accounts.checking.id, state.card.last4, state.card.network, state.card.type]);
+
   const value: Ctx = {
     ...state,
     totalBalance: state.accounts.checking.availableBalance + state.accounts.savings.availableBalance,
@@ -597,10 +682,11 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     payBill,
     externalTransfer,
     wireTransfer,
-    toggleCardLock: () => dispatch({ type: "TOGGLE_CARD_LOCK" }),
-    toggleCardControl: (key) => dispatch({ type: "TOGGLE_CARD_CONTROL", key }),
-    replaceCard: () => dispatch({ type: "REPLACE_CARD" }),
-    reportStolen: () => dispatch({ type: "REPORT_STOLEN" }),
+    toggleCardLock,
+    toggleCardControl,
+    replaceCard,
+    reportStolen,
+    issueCard,
     markNotificationRead: (id) => dispatch({ type: "MARK_NOTIFICATION_READ", id }),
     markAllRead: () => dispatch({ type: "MARK_ALL_READ" }),
   };
