@@ -391,6 +391,41 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         accounts: { checking: mappedChecking, savings: mappedSavings },
         transactions: txs,
       });
+
+      // Hydrate a card if one exists on the checking account.
+      try {
+        const { cards } = await columnApi.listCards(checkingSrc.id);
+        const c = cards[0];
+        if (c) {
+          const controlsIn = (c.merchant_controls || {}) as Record<string, boolean | undefined>;
+          dispatch({
+            type: "HYDRATE_CARD",
+            card: {
+              columnCardId: c.id,
+              last4: c.last_four || state.card.last4,
+              network: c.network || state.card.network,
+              type: c.type || state.card.type,
+              isVirtual: (c.type || "").toLowerCase() === "virtual",
+              expiresAt:
+                c.expiration_month && c.expiration_year
+                  ? `${c.expiration_month}/${String(c.expiration_year).slice(-2)}`
+                  : state.card.expiresAt,
+              status: c.state === "locked" ? "locked" : c.state === "closed" ? "replaced" : "active",
+              isLocked: c.state === "locked" || c.state === "closed",
+              controls: {
+                international: controlsIn.international ?? state.card.controls.international,
+                online: controlsIn.online ?? state.card.controls.online,
+                contactless: controlsIn.contactless ?? state.card.controls.contactless,
+                inStore: controlsIn.in_store ?? controlsIn.inStore ?? state.card.controls.inStore,
+                atm: controlsIn.atm ?? state.card.controls.atm,
+              },
+            },
+          });
+        }
+      } catch (e) {
+        console.warn("Column card hydrate failed:", e);
+      }
+
       setColumnLive(true);
       setColumnError(null);
     } catch (err) {
@@ -398,7 +433,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       setColumnError(err instanceof Error ? err.message : "Column sync failed");
       console.warn("Column sync failed — using mock data.", err);
     }
-  }, [state.accounts.checking, state.accounts.savings]);
+  }, [state.accounts.checking, state.accounts.savings, state.card]);
 
   useEffect(() => {
     // Fire once on mount; store already has mock seed as fallback.
