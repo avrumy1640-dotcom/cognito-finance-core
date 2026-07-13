@@ -321,6 +321,9 @@ function reducer(state: State, action: Action): State {
           : state.transactions,
       };
 
+    case "HYDRATE_CARD":
+      return { ...state, card: { ...state.card, ...action.card } };
+
     default:
       return state;
   }
