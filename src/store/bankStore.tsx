@@ -75,7 +75,8 @@ type Action =
   | { type: "MARK_NOTIFICATION_READ"; id: string }
   | { type: "MARK_ALL_READ" }
   | { type: "ADD_RECIPIENT"; name: string }
-  | { type: "HYDRATE_COLUMN"; accounts?: Partial<State["accounts"]>; transactions?: Transaction[] };
+  | { type: "HYDRATE_COLUMN"; accounts?: Partial<State["accounts"]>; transactions?: Transaction[] }
+  | { type: "HYDRATE_CARD"; card: Partial<CardState> };
 
 const initialState: State = {
   accounts: seedAccounts,
