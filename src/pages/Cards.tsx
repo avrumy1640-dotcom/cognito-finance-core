@@ -212,7 +212,12 @@ const CardsPage = () => {
               <ChevronRight size={16} className="text-muted-foreground" />
             </GlassCard>
             <GlassCard
-              onClick={() => toast.info("Apple Wallet", { description: "Provisioning card to Apple Wallet…" })}
+              onClick={() => {
+                toast.loading("Provisioning card to Apple Wallet…", { id: "wallet" });
+                setTimeout(() => {
+                  toast.success("Added to Apple Wallet", { id: "wallet", description: `${card.network} •••• ${card.last4}` });
+                }, 1200);
+              }}
               className="flex items-center justify-between py-3"
             >
               <div className="flex items-center gap-3">
@@ -231,7 +236,14 @@ const CardsPage = () => {
               <ChevronRight size={16} className="text-muted-foreground" />
             </GlassCard>
             <GlassCard
-              onClick={() => toast.info("Change PIN", { description: "You'll receive a secure link by SMS" })}
+              onClick={() => {
+                const pin = prompt("Enter a new 4-digit PIN");
+                if (!pin) return;
+                if (!/^\d{4}$/.test(pin)) { toast.error("PIN must be 4 digits"); return; }
+                const confirm2 = prompt("Confirm your new PIN");
+                if (confirm2 !== pin) { toast.error("PINs did not match"); return; }
+                toast.success("PIN updated", { description: "Effective on next card use" });
+              }}
               className="flex items-center justify-between py-3"
             >
               <div className="flex items-center gap-3">

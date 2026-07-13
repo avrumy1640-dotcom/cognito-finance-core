@@ -104,7 +104,7 @@ const MoveMoney = () => {
           {selected === "bills" && <BillPaySheet onClose={() => setSelected(null)} />}
           {selected === "external" && <ExternalTransferSheet onClose={() => setSelected(null)} />}
           {selected === "wire" && <WireSheet onClose={() => setSelected(null)} />}
-          {selected === "add" && <AddMoneySheet onClose={() => setSelected(null)} />}
+          {selected === "add" && <AddMoneySheet onClose={() => setSelected(null)} onPick={(id) => setSelected(id)} />}
         </AnimatePresence>
       </div>
     </AppLayout>
@@ -590,20 +590,24 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const AddMoneySheet = ({ onClose }: { onClose: () => void }) => (
+const AddMoneySheet = ({ onClose, onPick }: { onClose: () => void; onPick: (id: string) => void }) => (
   <Sheet onClose={onClose}>
     <h2 className="text-xl font-display font-bold text-foreground mb-2">Add Money</h2>
     <p className="text-sm text-muted-foreground mb-5">Fund your Glass Bank account.</p>
     <div className="space-y-2">
       {[
-        { label: "Direct Deposit", desc: "Set up recurring paycheck", icon: "💰" },
-        { label: "Link External Bank", desc: "ACH pull from another bank", icon: "🏦" },
-        { label: "Deposit a Check", desc: "Mobile check deposit", icon: "📸" },
-        { label: "Cash at Retail", desc: "Green Dot locations nationwide", icon: "🧾" },
+        { id: "direct", label: "Direct Deposit", desc: "Set up recurring paycheck", icon: "💰",
+          run: () => toast.success("Direct deposit form", { description: "Routing 121145307 · Account ending in your linked account" }) },
+        { id: "external", label: "Link External Bank", desc: "ACH pull from another bank", icon: "🏦",
+          run: () => onPick("external") },
+        { id: "deposit", label: "Deposit a Check", desc: "Mobile check deposit", icon: "📸",
+          run: () => onPick("deposit") },
+        { id: "cash", label: "Cash at Retail", desc: "Green Dot locations nationwide", icon: "🧾",
+          run: () => toast.success("Barcode ready", { description: "Show at any Green Dot register to deposit up to $500" }) },
       ].map((m) => (
         <GlassCard
           key={m.label}
-          onClick={() => toast.info(m.label, { description: m.desc })}
+          onClick={m.run}
           className="flex items-center justify-between py-3"
         >
           <div className="flex items-center gap-3">

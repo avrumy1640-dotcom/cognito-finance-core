@@ -86,10 +86,27 @@ const TransactionDetail = () => {
 
         <div className="space-y-2">
           {[
-            { icon: Tag, label: "Categorize Transaction", action: () => toast.info("Categorize", { description: "Pick a new category" }) },
+            { icon: Tag, label: "Categorize Transaction", action: () => {
+              const cats = ["Food", "Transport", "Shopping", "Bills", "Income", "Transfer", "Other"];
+              const pick = prompt(`Pick a category:\n${cats.map((c, i) => `${i + 1}. ${c}`).join("\n")}`);
+              const idx = pick ? parseInt(pick, 10) - 1 : -1;
+              if (idx >= 0 && cats[idx]) toast.success(`Categorized as ${cats[idx]}`);
+            } },
             { icon: MessageSquare, label: "Add Note", action: () => { const n = prompt("Add a note"); if (n) toast.success("Note saved"); } },
             { icon: AlertTriangle, label: "Dispute Charge", destructive: true, action: () => { if (confirm("Open a dispute for this charge?")) toast.success("Dispute opened", { description: "We'll review within 10 business days" }); } },
-            { icon: Download, label: "Download Receipt", action: () => toast.success("Receipt downloaded") },
+            { icon: Download, label: "Download Receipt", action: () => {
+              const body = `Glass Bank Receipt\nTransaction ID: demo\nGenerated ${new Date().toLocaleString()}\n`;
+              const blob = new Blob([body], { type: "application/pdf" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `receipt.pdf`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
+              toast.success("Receipt downloaded");
+            } },
           ].map((action) => (
             <GlassCard key={action.label} onClick={action.action} className="flex items-center justify-between py-3">
               <div className="flex items-center gap-3">
