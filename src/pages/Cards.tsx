@@ -40,7 +40,7 @@ const controlLabels = {
 } as const;
 
 const CardsPage = () => {
-  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen } = useBank();
+  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen, issueCard, columnLive } = useBank();
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState<"actions" | "controls" | "transactions">("actions");
   const [travelActive, setTravelActive] = useState(false);
@@ -81,6 +81,12 @@ const CardsPage = () => {
     toast.success(travelActive ? "Travel notice removed" : "Travel notice set", {
       description: travelActive ? undefined : "International transactions enabled for 30 days",
     });
+  };
+
+  const doIssueVirtual = async () => {
+    const ok = await issueCard({ type: "virtual" });
+    if (ok) toast.success("Virtual card issued", { description: columnLive ? "Provisioned via Column" : "Ready to use" });
+    else toast.error("Card issuance failed");
   };
 
   return (
@@ -181,6 +187,13 @@ const CardsPage = () => {
               <div className="flex items-center gap-3">
                 <Copy size={20} className="text-primary" />
                 <span className="text-sm font-medium text-foreground">Copy Card Number</span>
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground" />
+            </GlassCard>
+            <GlassCard onClick={doIssueVirtual} className="flex items-center justify-between py-3">
+              <div className="flex items-center gap-3">
+                <CreditCard size={20} className="text-primary" />
+                <span className="text-sm font-medium text-foreground">Issue Virtual Card</span>
               </div>
               <ChevronRight size={16} className="text-muted-foreground" />
             </GlassCard>

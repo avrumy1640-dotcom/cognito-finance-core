@@ -43,6 +43,7 @@ interface CardState {
   isLocked: boolean;
   isVirtual: boolean;
   controls: CardControls;
+  columnCardId?: string;
 }
 
 interface NotificationItem {
@@ -74,7 +75,8 @@ type Action =
   | { type: "MARK_NOTIFICATION_READ"; id: string }
   | { type: "MARK_ALL_READ" }
   | { type: "ADD_RECIPIENT"; name: string }
-  | { type: "HYDRATE_COLUMN"; accounts?: Partial<State["accounts"]>; transactions?: Transaction[] };
+  | { type: "HYDRATE_COLUMN"; accounts?: Partial<State["accounts"]>; transactions?: Transaction[] }
+  | { type: "HYDRATE_CARD"; card: Partial<CardState> };
 
 const initialState: State = {
   accounts: seedAccounts,
@@ -319,6 +321,9 @@ function reducer(state: State, action: Action): State {
           : state.transactions,
       };
 
+    case "HYDRATE_CARD":
+      return { ...state, card: { ...state.card, ...action.card } };
+
     default:
       return state;
   }
@@ -335,10 +340,11 @@ interface Ctx extends State {
   payBill: (args: { from: "checking" | "savings"; amount: number; biller: string; routingNumber?: string; accountNumber?: string }) => boolean;
   externalTransfer: (args: { from: "checking" | "savings"; amount: number; bank: string; routingNumber: string; accountNumber: string; memo?: string }) => boolean;
   wireTransfer: (args: { from: "checking" | "savings"; amount: number; beneficiaryName: string; routingNumber: string; accountNumber: string; memo?: string; fee?: number }) => boolean;
-  toggleCardLock: () => void;
-  toggleCardControl: (key: keyof CardControls) => void;
-  replaceCard: () => void;
-  reportStolen: () => void;
+  toggleCardLock: () => Promise<void> | void;
+  toggleCardControl: (key: keyof CardControls) => Promise<void> | void;
+  replaceCard: () => Promise<void> | void;
+  reportStolen: () => Promise<void> | void;
+  issueCard: (args?: { type?: "physical" | "virtual" }) => Promise<boolean>;
   markNotificationRead: (id: string) => void;
   markAllRead: () => void;
 }
@@ -370,9 +376,9 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       const mappedSavings = { ...state.accounts.savings, ...mapColumnAccount(savingsSrc), type: "savings" as const, name: state.accounts.savings.name, apy: state.accounts.savings.apy };
 
       const [chkTx, savTx] = await Promise.all([
-        columnApi.listTransactions(checkingSrc.id, 25).catch(() => ({ transactions: [] })),
+        columnApi.listTransactions(checkingSrc.id).catch(() => ({ transactions: [] })),
         savingsSrc.id !== checkingSrc.id
-          ? columnApi.listTransactions(savingsSrc.id, 25).catch(() => ({ transactions: [] }))
+          ? columnApi.listTransactions(savingsSrc.id).catch(() => ({ transactions: [] }))
           : Promise.resolve({ transactions: [] }),
       ]);
       const txs: Transaction[] = [
@@ -385,6 +391,41 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         accounts: { checking: mappedChecking, savings: mappedSavings },
         transactions: txs,
       });
+
+      // Hydrate a card if one exists on the checking account.
+      try {
+        const { cards } = await columnApi.listCards(checkingSrc.id);
+        const c = cards[0];
+        if (c) {
+          const controlsIn = (c.merchant_controls || {}) as Record<string, boolean | undefined>;
+          dispatch({
+            type: "HYDRATE_CARD",
+            card: {
+              columnCardId: c.id,
+              last4: c.last_four || state.card.last4,
+              network: c.network || state.card.network,
+              type: c.type || state.card.type,
+              isVirtual: (c.type || "").toLowerCase() === "virtual",
+              expiresAt:
+                c.expiration_month && c.expiration_year
+                  ? `${c.expiration_month}/${String(c.expiration_year).slice(-2)}`
+                  : state.card.expiresAt,
+              status: c.state === "locked" ? "locked" : c.state === "closed" ? "replaced" : "active",
+              isLocked: c.state === "locked" || c.state === "closed",
+              controls: {
+                international: controlsIn.international ?? state.card.controls.international,
+                online: controlsIn.online ?? state.card.controls.online,
+                contactless: controlsIn.contactless ?? state.card.controls.contactless,
+                inStore: controlsIn.in_store ?? controlsIn.inStore ?? state.card.controls.inStore,
+                atm: controlsIn.atm ?? state.card.controls.atm,
+              },
+            },
+          });
+        }
+      } catch (e) {
+        console.warn("Column card hydrate failed:", e);
+      }
+
       setColumnLive(true);
       setColumnError(null);
     } catch (err) {
@@ -392,7 +433,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       setColumnError(err instanceof Error ? err.message : "Column sync failed");
       console.warn("Column sync failed — using mock data.", err);
     }
-  }, [state.accounts.checking, state.accounts.savings]);
+  }, [state.accounts.checking, state.accounts.savings, state.card]);
 
   useEffect(() => {
     // Fire once on mount; store already has mock seed as fallback.
@@ -544,6 +585,91 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     return true;
   }, [state.accounts, columnLive]);
 
+  const toggleCardLock = useCallback(async () => {
+    const willLock = !state.card.isLocked;
+    dispatch({ type: "TOGGLE_CARD_LOCK" });
+    if (columnLive && state.card.columnCardId) {
+      try {
+        if (willLock) await columnApi.lockCard(state.card.columnCardId);
+        else await columnApi.unlockCard(state.card.columnCardId);
+      } catch (e) {
+        console.warn("Column card lock toggle failed:", e);
+      }
+    }
+  }, [state.card.isLocked, state.card.columnCardId, columnLive]);
+
+  const toggleCardControl = useCallback(async (key: keyof CardControls) => {
+    dispatch({ type: "TOGGLE_CARD_CONTROL", key });
+    if (columnLive && state.card.columnCardId) {
+      const next = { ...state.card.controls, [key]: !state.card.controls[key] };
+      try {
+        await columnApi.updateCardControls(state.card.columnCardId, {
+          international: next.international,
+          online: next.online,
+          contactless: next.contactless,
+          in_store: next.inStore,
+          atm: next.atm,
+        });
+      } catch (e) {
+        console.warn("Column card controls update failed:", e);
+      }
+    }
+  }, [state.card.controls, state.card.columnCardId, columnLive]);
+
+  const replaceCard = useCallback(async () => {
+    dispatch({ type: "REPLACE_CARD" });
+    if (columnLive && state.card.columnCardId) {
+      try {
+        const c = await columnApi.reissueCard(state.card.columnCardId, "damaged");
+        if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
+      } catch (e) {
+        console.warn("Column card reissue failed:", e);
+      }
+    }
+  }, [state.card.columnCardId, state.card.last4, columnLive]);
+
+  const reportStolen = useCallback(async () => {
+    dispatch({ type: "REPORT_STOLEN" });
+    if (columnLive && state.card.columnCardId) {
+      try {
+        const c = await columnApi.reissueCard(state.card.columnCardId, "stolen");
+        if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
+      } catch (e) {
+        console.warn("Column card stolen reissue failed:", e);
+      }
+    }
+  }, [state.card.columnCardId, state.card.last4, columnLive]);
+
+  const issueCard = useCallback(async (args?: { type?: "physical" | "virtual" }) => {
+    if (!columnLive) {
+      // Local-only: flip the seed card back to active.
+      dispatch({ type: "HYDRATE_CARD", card: { status: "active", isLocked: false, isVirtual: args?.type === "virtual" } });
+      return true;
+    }
+    try {
+      const c = await columnApi.issueCard({
+        bank_account_id: state.accounts.checking.id,
+        type: args?.type || "virtual",
+      });
+      dispatch({
+        type: "HYDRATE_CARD",
+        card: {
+          columnCardId: c.id,
+          last4: c.last_four || state.card.last4,
+          network: c.network || state.card.network,
+          type: c.type || state.card.type,
+          isVirtual: (c.type || "").toLowerCase() === "virtual",
+          status: "active",
+          isLocked: false,
+        },
+      });
+      return true;
+    } catch (e) {
+      console.warn("Column card issuance failed:", e);
+      return false;
+    }
+  }, [columnLive, state.accounts.checking.id, state.card.last4, state.card.network, state.card.type]);
+
   const value: Ctx = {
     ...state,
     totalBalance: state.accounts.checking.availableBalance + state.accounts.savings.availableBalance,
@@ -556,10 +682,11 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     payBill,
     externalTransfer,
     wireTransfer,
-    toggleCardLock: () => dispatch({ type: "TOGGLE_CARD_LOCK" }),
-    toggleCardControl: (key) => dispatch({ type: "TOGGLE_CARD_CONTROL", key }),
-    replaceCard: () => dispatch({ type: "REPLACE_CARD" }),
-    reportStolen: () => dispatch({ type: "REPORT_STOLEN" }),
+    toggleCardLock,
+    toggleCardControl,
+    replaceCard,
+    reportStolen,
+    issueCard,
     markNotificationRead: (id) => dispatch({ type: "MARK_NOTIFICATION_READ", id }),
     markAllRead: () => dispatch({ type: "MARK_ALL_READ" }),
   };
