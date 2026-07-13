@@ -40,7 +40,7 @@ const controlLabels = {
 } as const;
 
 const CardsPage = () => {
-  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen } = useBank();
+  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen, issueCard, columnLive } = useBank();
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState<"actions" | "controls" | "transactions">("actions");
   const [travelActive, setTravelActive] = useState(false);
