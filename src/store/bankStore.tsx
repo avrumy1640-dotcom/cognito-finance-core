@@ -694,6 +694,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     totalBalance: state.accounts.checking.availableBalance + state.accounts.savings.availableBalance,
     columnLive,
     columnError,
+    columnStatus,
     refreshColumn,
     transfer,
     send,
