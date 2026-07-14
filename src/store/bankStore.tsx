@@ -1,4 +1,5 @@
-import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState } from "react";
+import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState, useRef } from "react";
+import { toast } from "sonner";
 import {
   accounts as seedAccounts,
   transactions as seedTransactions,
@@ -8,6 +9,27 @@ import {
   Transaction,
 } from "@/data/mockData";
 import { columnApi, mapColumnAccount, mapColumnTransaction } from "@/lib/columnClient";
+
+// Wraps a Column API call so the user always sees loading, success, and error
+// state with a Retry action instead of a silent console warn.
+async function runColumn<T>(label: string, fn: () => Promise<T>, opts?: { silentSuccess?: boolean }): Promise<T | null> {
+  const id = `col-${label}-${Date.now()}`;
+  toast.loading(`${label}…`, { id });
+  try {
+    const result = await fn();
+    if (opts?.silentSuccess) toast.dismiss(id);
+    else toast.success(`${label} complete`, { id });
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Request failed";
+    toast.error(`${label} failed`, {
+      id,
+      description: message,
+      action: { label: "Retry", onClick: () => void runColumn(label, fn, opts) },
+    });
+    return null;
+  }
+}
 
 type Account = {
   id: string;
@@ -333,7 +355,8 @@ interface Ctx extends State {
   totalBalance: number;
   columnLive: boolean;
   columnError: string | null;
-  refreshColumn: () => Promise<void>;
+  columnStatus: "idle" | "loading" | "live" | "error";
+  refreshColumn: (opts?: { silent?: boolean }) => Promise<void>;
   transfer: (args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => boolean;
   send: (args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => boolean;
   depositCheck: (args: { to: "checking" | "savings"; amount: number }) => boolean;
@@ -355,16 +378,23 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [columnLive, setColumnLive] = useState(false);
   const [columnError, setColumnError] = useState<string | null>(null);
+  const [columnStatus, setColumnStatus] = useState<"idle" | "loading" | "live" | "error">("idle");
+  const notifiedErrorRef = useRef<string | null>(null);
 
-  const refreshColumn = useCallback(async () => {
+  const refreshColumn = useCallback(async (opts?: { silent?: boolean }) => {
+    setColumnStatus("loading");
+    const toastId = opts?.silent ? undefined : `col-sync`;
+    if (!opts?.silent) toast.loading("Syncing with Column…", { id: toastId });
     try {
       const { bank_accounts } = await columnApi.listBankAccounts();
       if (!bank_accounts || bank_accounts.length === 0) {
         setColumnLive(false);
-        setColumnError("No Column bank accounts found for this API key.");
+        const msg = "No Column bank accounts found for this API key.";
+        setColumnError(msg);
+        setColumnStatus("error");
+        if (!opts?.silent) toast.error("Column sync failed", { id: toastId, description: msg, action: { label: "Retry", onClick: () => void refreshColumn() } });
         return;
       }
-      // Pick first checking-type + first savings-type; fall back to first two.
       const checkingSrc =
         bank_accounts.find((a) => (a.type || "").toLowerCase().includes("checking")) || bank_accounts[0];
       const savingsSrc =
@@ -392,7 +422,6 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         transactions: txs,
       });
 
-      // Hydrate a card if one exists on the checking account.
       try {
         const { cards } = await columnApi.listCards(checkingSrc.id);
         const c = cards[0];
@@ -428,16 +457,29 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
       setColumnLive(true);
       setColumnError(null);
+      setColumnStatus("live");
+      notifiedErrorRef.current = null;
+      if (!opts?.silent) toast.success("Column live", { id: toastId, description: "Backend data synced." });
     } catch (err) {
+      const msg = err instanceof Error ? err.message : "Column sync failed";
       setColumnLive(false);
-      setColumnError(err instanceof Error ? err.message : "Column sync failed");
+      setColumnError(msg);
+      setColumnStatus("error");
       console.warn("Column sync failed — using mock data.", err);
+      if (!opts?.silent || notifiedErrorRef.current !== msg) {
+        notifiedErrorRef.current = msg;
+        toast.error("Column offline", {
+          id: toastId,
+          description: `${msg}. Using cached data.`,
+          action: { label: "Retry", onClick: () => void refreshColumn() },
+        });
+      }
     }
   }, [state.accounts.checking, state.accounts.savings, state.card]);
 
   useEffect(() => {
-    // Fire once on mount; store already has mock seed as fallback.
-    refreshColumn();
+    // Silent initial sync — fall back to seed data without a noisy toast.
+    refreshColumn({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -448,14 +490,14 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (columnLive) {
       const sender = state.accounts[args.from].id;
       const receiver = state.accounts[args.to].id;
-      columnApi
-        .createBookTransfer({
+      void runColumn("Internal transfer", () =>
+        columnApi.createBookTransfer({
           sender_bank_account_id: sender,
           receiver_bank_account_id: receiver,
           amount: Math.round(args.amount * 100),
           description: args.memo || "Internal transfer",
-        })
-        .catch((e) => console.warn("Column book transfer failed:", e));
+        }),
+      );
     }
     return true;
   }, [state.accounts, columnLive]);
@@ -483,29 +525,24 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0 || !args.biller.trim()) return false;
     if (state.accounts[args.from].availableBalance < args.amount) return false;
     dispatch({ type: "PAY_BILL", from: args.from, amount: args.amount, biller: args.biller });
-    // When routing/account are provided and Column is live, post a real ACH credit.
     if (columnLive && args.routingNumber && args.accountNumber) {
-      (async () => {
-        try {
-          const cp = await columnApi.createCounterparty({
-            routing_number: args.routingNumber!,
-            account_number: args.accountNumber!,
-            account_type: "checking",
-            description: args.biller,
-            name: args.biller,
-          });
-          await columnApi.createAchTransfer({
-            bank_account_id: state.accounts[args.from].id,
-            counterparty_id: cp.id,
-            amount: Math.round(args.amount * 100),
-            type: "credit",
-            description: args.biller.slice(0, 80),
-            company_entry_description: "BILLPAY",
-          });
-        } catch (e) {
-          console.warn("Column bill pay failed:", e);
-        }
-      })();
+      void runColumn(`Bill pay — ${args.biller}`, async () => {
+        const cp = await columnApi.createCounterparty({
+          routing_number: args.routingNumber!,
+          account_number: args.accountNumber!,
+          account_type: "checking",
+          description: args.biller,
+          name: args.biller,
+        });
+        return columnApi.createAchTransfer({
+          bank_account_id: state.accounts[args.from].id,
+          counterparty_id: cp.id,
+          amount: Math.round(args.amount * 100),
+          type: "credit",
+          description: args.biller.slice(0, 80),
+          company_entry_description: "BILLPAY",
+        });
+      });
     }
     return true;
   }, [state.accounts, columnLive]);
@@ -522,27 +559,23 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (state.accounts[args.from].availableBalance < args.amount) return false;
     dispatch({ type: "PAY_BILL", from: args.from, amount: args.amount, biller: `External ACH — ${args.bank}` });
     if (columnLive) {
-      (async () => {
-        try {
-          const cp = await columnApi.createCounterparty({
-            routing_number: args.routingNumber,
-            account_number: args.accountNumber,
-            account_type: "checking",
-            description: args.bank,
-            name: args.bank,
-          });
-          await columnApi.createAchTransfer({
-            bank_account_id: state.accounts[args.from].id,
-            counterparty_id: cp.id,
-            amount: Math.round(args.amount * 100),
-            type: "credit",
-            description: (args.memo || args.bank).slice(0, 80),
-            company_entry_description: "TRANSFER",
-          });
-        } catch (e) {
-          console.warn("Column ACH transfer failed:", e);
-        }
-      })();
+      void runColumn(`ACH transfer to ${args.bank}`, async () => {
+        const cp = await columnApi.createCounterparty({
+          routing_number: args.routingNumber,
+          account_number: args.accountNumber,
+          account_type: "checking",
+          description: args.bank,
+          name: args.bank,
+        });
+        return columnApi.createAchTransfer({
+          bank_account_id: state.accounts[args.from].id,
+          counterparty_id: cp.id,
+          amount: Math.round(args.amount * 100),
+          type: "credit",
+          description: (args.memo || args.bank).slice(0, 80),
+          company_entry_description: "TRANSFER",
+        });
+      });
     }
     return true;
   }, [state.accounts, columnLive]);
@@ -562,25 +595,21 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (state.accounts[args.from].availableBalance < total) return false;
     dispatch({ type: "PAY_BILL", from: args.from, amount: total, biller: `Wire — ${args.beneficiaryName}` });
     if (columnLive) {
-      (async () => {
-        try {
-          const cp = await columnApi.createCounterparty({
-            routing_number: args.routingNumber,
-            account_number: args.accountNumber,
-            account_type: "checking",
-            description: args.beneficiaryName,
-            name: args.beneficiaryName,
-          });
-          await columnApi.createWireTransfer({
-            bank_account_id: state.accounts[args.from].id,
-            counterparty_id: cp.id,
-            amount: Math.round(args.amount * 100),
-            description: (args.memo || args.beneficiaryName).slice(0, 80),
-          });
-        } catch (e) {
-          console.warn("Column wire transfer failed:", e);
-        }
-      })();
+      void runColumn(`Wire to ${args.beneficiaryName}`, async () => {
+        const cp = await columnApi.createCounterparty({
+          routing_number: args.routingNumber,
+          account_number: args.accountNumber,
+          account_type: "checking",
+          description: args.beneficiaryName,
+          name: args.beneficiaryName,
+        });
+        return columnApi.createWireTransfer({
+          bank_account_id: state.accounts[args.from].id,
+          counterparty_id: cp.id,
+          amount: Math.round(args.amount * 100),
+          description: (args.memo || args.beneficiaryName).slice(0, 80),
+        });
+      });
     }
     return true;
   }, [state.accounts, columnLive]);
@@ -589,12 +618,10 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     const willLock = !state.card.isLocked;
     dispatch({ type: "TOGGLE_CARD_LOCK" });
     if (columnLive && state.card.columnCardId) {
-      try {
-        if (willLock) await columnApi.lockCard(state.card.columnCardId);
-        else await columnApi.unlockCard(state.card.columnCardId);
-      } catch (e) {
-        console.warn("Column card lock toggle failed:", e);
-      }
+      await runColumn(willLock ? "Locking card" : "Unlocking card", () =>
+        willLock ? columnApi.lockCard(state.card.columnCardId!) : columnApi.unlockCard(state.card.columnCardId!),
+        { silentSuccess: true },
+      );
     }
   }, [state.card.isLocked, state.card.columnCardId, columnLive]);
 
@@ -602,72 +629,64 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     dispatch({ type: "TOGGLE_CARD_CONTROL", key });
     if (columnLive && state.card.columnCardId) {
       const next = { ...state.card.controls, [key]: !state.card.controls[key] };
-      try {
-        await columnApi.updateCardControls(state.card.columnCardId, {
+      await runColumn("Updating card controls", () =>
+        columnApi.updateCardControls(state.card.columnCardId!, {
           international: next.international,
           online: next.online,
           contactless: next.contactless,
           in_store: next.inStore,
           atm: next.atm,
-        });
-      } catch (e) {
-        console.warn("Column card controls update failed:", e);
-      }
+        }),
+        { silentSuccess: true },
+      );
     }
   }, [state.card.controls, state.card.columnCardId, columnLive]);
 
   const replaceCard = useCallback(async () => {
     dispatch({ type: "REPLACE_CARD" });
     if (columnLive && state.card.columnCardId) {
-      try {
-        const c = await columnApi.reissueCard(state.card.columnCardId, "damaged");
-        if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
-      } catch (e) {
-        console.warn("Column card reissue failed:", e);
-      }
+      const c = await runColumn("Reissuing card", () =>
+        columnApi.reissueCard(state.card.columnCardId!, "damaged"),
+      );
+      if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
     }
   }, [state.card.columnCardId, state.card.last4, columnLive]);
 
   const reportStolen = useCallback(async () => {
     dispatch({ type: "REPORT_STOLEN" });
     if (columnLive && state.card.columnCardId) {
-      try {
-        const c = await columnApi.reissueCard(state.card.columnCardId, "stolen");
-        if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
-      } catch (e) {
-        console.warn("Column card stolen reissue failed:", e);
-      }
+      const c = await runColumn("Reporting card stolen", () =>
+        columnApi.reissueCard(state.card.columnCardId!, "stolen"),
+      );
+      if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
     }
   }, [state.card.columnCardId, state.card.last4, columnLive]);
 
   const issueCard = useCallback(async (args?: { type?: "physical" | "virtual" }) => {
     if (!columnLive) {
-      // Local-only: flip the seed card back to active.
       dispatch({ type: "HYDRATE_CARD", card: { status: "active", isLocked: false, isVirtual: args?.type === "virtual" } });
       return true;
     }
-    try {
-      const c = await columnApi.issueCard({
+    const c = await runColumn("Issuing card", () =>
+      columnApi.issueCard({
         bank_account_id: state.accounts.checking.id,
         type: args?.type || "virtual",
-      });
-      dispatch({
-        type: "HYDRATE_CARD",
-        card: {
-          columnCardId: c.id,
-          last4: c.last_four || state.card.last4,
-          network: c.network || state.card.network,
-          type: c.type || state.card.type,
-          isVirtual: (c.type || "").toLowerCase() === "virtual",
-          status: "active",
-          isLocked: false,
-        },
-      });
-      return true;
-    } catch (e) {
-      console.warn("Column card issuance failed:", e);
-      return false;
-    }
+      }),
+    );
+    if (!c) return false;
+    dispatch({
+      type: "HYDRATE_CARD",
+      card: {
+        columnCardId: c.id,
+        last4: c.last_four || state.card.last4,
+        network: c.network || state.card.network,
+        type: c.type || state.card.type,
+        isVirtual: (c.type || "").toLowerCase() === "virtual",
+        status: "active",
+        isLocked: false,
+      },
+    });
+    return true;
   }, [columnLive, state.accounts.checking.id, state.card.last4, state.card.network, state.card.type]);
 
   const value: Ctx = {
@@ -675,6 +694,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     totalBalance: state.accounts.checking.availableBalance + state.accounts.savings.availableBalance,
     columnLive,
     columnError,
+    columnStatus,
     refreshColumn,
     transfer,
     send,
