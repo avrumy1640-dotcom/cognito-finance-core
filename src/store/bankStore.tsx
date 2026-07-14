@@ -478,8 +478,8 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   }, [state.accounts.checking, state.accounts.savings, state.card]);
 
   useEffect(() => {
-    // Fire once on mount; store already has mock seed as fallback.
-    refreshColumn();
+    // Silent initial sync — fall back to seed data without a noisy toast.
+    refreshColumn({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
