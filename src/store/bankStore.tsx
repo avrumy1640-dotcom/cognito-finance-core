@@ -490,14 +490,14 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (columnLive) {
       const sender = state.accounts[args.from].id;
       const receiver = state.accounts[args.to].id;
-      columnApi
-        .createBookTransfer({
+      void runColumn("Internal transfer", () =>
+        columnApi.createBookTransfer({
           sender_bank_account_id: sender,
           receiver_bank_account_id: receiver,
           amount: Math.round(args.amount * 100),
           description: args.memo || "Internal transfer",
-        })
-        .catch((e) => console.warn("Column book transfer failed:", e));
+        }),
+      );
     }
     return true;
   }, [state.accounts, columnLive]);
@@ -525,29 +525,24 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0 || !args.biller.trim()) return false;
     if (state.accounts[args.from].availableBalance < args.amount) return false;
     dispatch({ type: "PAY_BILL", from: args.from, amount: args.amount, biller: args.biller });
-    // When routing/account are provided and Column is live, post a real ACH credit.
     if (columnLive && args.routingNumber && args.accountNumber) {
-      (async () => {
-        try {
-          const cp = await columnApi.createCounterparty({
-            routing_number: args.routingNumber!,
-            account_number: args.accountNumber!,
-            account_type: "checking",
-            description: args.biller,
-            name: args.biller,
-          });
-          await columnApi.createAchTransfer({
-            bank_account_id: state.accounts[args.from].id,
-            counterparty_id: cp.id,
-            amount: Math.round(args.amount * 100),
-            type: "credit",
-            description: args.biller.slice(0, 80),
-            company_entry_description: "BILLPAY",
-          });
-        } catch (e) {
-          console.warn("Column bill pay failed:", e);
-        }
-      })();
+      void runColumn(`Bill pay — ${args.biller}`, async () => {
+        const cp = await columnApi.createCounterparty({
+          routing_number: args.routingNumber!,
+          account_number: args.accountNumber!,
+          account_type: "checking",
+          description: args.biller,
+          name: args.biller,
+        });
+        return columnApi.createAchTransfer({
+          bank_account_id: state.accounts[args.from].id,
+          counterparty_id: cp.id,
+          amount: Math.round(args.amount * 100),
+          type: "credit",
+          description: args.biller.slice(0, 80),
+          company_entry_description: "BILLPAY",
+        });
+      });
     }
     return true;
   }, [state.accounts, columnLive]);
@@ -564,27 +559,23 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (state.accounts[args.from].availableBalance < args.amount) return false;
     dispatch({ type: "PAY_BILL", from: args.from, amount: args.amount, biller: `External ACH — ${args.bank}` });
     if (columnLive) {
-      (async () => {
-        try {
-          const cp = await columnApi.createCounterparty({
-            routing_number: args.routingNumber,
-            account_number: args.accountNumber,
-            account_type: "checking",
-            description: args.bank,
-            name: args.bank,
-          });
-          await columnApi.createAchTransfer({
-            bank_account_id: state.accounts[args.from].id,
-            counterparty_id: cp.id,
-            amount: Math.round(args.amount * 100),
-            type: "credit",
-            description: (args.memo || args.bank).slice(0, 80),
-            company_entry_description: "TRANSFER",
-          });
-        } catch (e) {
-          console.warn("Column ACH transfer failed:", e);
-        }
-      })();
+      void runColumn(`ACH transfer to ${args.bank}`, async () => {
+        const cp = await columnApi.createCounterparty({
+          routing_number: args.routingNumber,
+          account_number: args.accountNumber,
+          account_type: "checking",
+          description: args.bank,
+          name: args.bank,
+        });
+        return columnApi.createAchTransfer({
+          bank_account_id: state.accounts[args.from].id,
+          counterparty_id: cp.id,
+          amount: Math.round(args.amount * 100),
+          type: "credit",
+          description: (args.memo || args.bank).slice(0, 80),
+          company_entry_description: "TRANSFER",
+        });
+      });
     }
     return true;
   }, [state.accounts, columnLive]);
@@ -604,25 +595,21 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (state.accounts[args.from].availableBalance < total) return false;
     dispatch({ type: "PAY_BILL", from: args.from, amount: total, biller: `Wire — ${args.beneficiaryName}` });
     if (columnLive) {
-      (async () => {
-        try {
-          const cp = await columnApi.createCounterparty({
-            routing_number: args.routingNumber,
-            account_number: args.accountNumber,
-            account_type: "checking",
-            description: args.beneficiaryName,
-            name: args.beneficiaryName,
-          });
-          await columnApi.createWireTransfer({
-            bank_account_id: state.accounts[args.from].id,
-            counterparty_id: cp.id,
-            amount: Math.round(args.amount * 100),
-            description: (args.memo || args.beneficiaryName).slice(0, 80),
-          });
-        } catch (e) {
-          console.warn("Column wire transfer failed:", e);
-        }
-      })();
+      void runColumn(`Wire to ${args.beneficiaryName}`, async () => {
+        const cp = await columnApi.createCounterparty({
+          routing_number: args.routingNumber,
+          account_number: args.accountNumber,
+          account_type: "checking",
+          description: args.beneficiaryName,
+          name: args.beneficiaryName,
+        });
+        return columnApi.createWireTransfer({
+          bank_account_id: state.accounts[args.from].id,
+          counterparty_id: cp.id,
+          amount: Math.round(args.amount * 100),
+          description: (args.memo || args.beneficiaryName).slice(0, 80),
+        });
+      });
     }
     return true;
   }, [state.accounts, columnLive]);
@@ -631,12 +618,10 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     const willLock = !state.card.isLocked;
     dispatch({ type: "TOGGLE_CARD_LOCK" });
     if (columnLive && state.card.columnCardId) {
-      try {
-        if (willLock) await columnApi.lockCard(state.card.columnCardId);
-        else await columnApi.unlockCard(state.card.columnCardId);
-      } catch (e) {
-        console.warn("Column card lock toggle failed:", e);
-      }
+      await runColumn(willLock ? "Locking card" : "Unlocking card", () =>
+        willLock ? columnApi.lockCard(state.card.columnCardId!) : columnApi.unlockCard(state.card.columnCardId!),
+        { silentSuccess: true },
+      );
     }
   }, [state.card.isLocked, state.card.columnCardId, columnLive]);
 
@@ -644,72 +629,64 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     dispatch({ type: "TOGGLE_CARD_CONTROL", key });
     if (columnLive && state.card.columnCardId) {
       const next = { ...state.card.controls, [key]: !state.card.controls[key] };
-      try {
-        await columnApi.updateCardControls(state.card.columnCardId, {
+      await runColumn("Updating card controls", () =>
+        columnApi.updateCardControls(state.card.columnCardId!, {
           international: next.international,
           online: next.online,
           contactless: next.contactless,
           in_store: next.inStore,
           atm: next.atm,
-        });
-      } catch (e) {
-        console.warn("Column card controls update failed:", e);
-      }
+        }),
+        { silentSuccess: true },
+      );
     }
   }, [state.card.controls, state.card.columnCardId, columnLive]);
 
   const replaceCard = useCallback(async () => {
     dispatch({ type: "REPLACE_CARD" });
     if (columnLive && state.card.columnCardId) {
-      try {
-        const c = await columnApi.reissueCard(state.card.columnCardId, "damaged");
-        if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
-      } catch (e) {
-        console.warn("Column card reissue failed:", e);
-      }
+      const c = await runColumn("Reissuing card", () =>
+        columnApi.reissueCard(state.card.columnCardId!, "damaged"),
+      );
+      if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
     }
   }, [state.card.columnCardId, state.card.last4, columnLive]);
 
   const reportStolen = useCallback(async () => {
     dispatch({ type: "REPORT_STOLEN" });
     if (columnLive && state.card.columnCardId) {
-      try {
-        const c = await columnApi.reissueCard(state.card.columnCardId, "stolen");
-        if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
-      } catch (e) {
-        console.warn("Column card stolen reissue failed:", e);
-      }
+      const c = await runColumn("Reporting card stolen", () =>
+        columnApi.reissueCard(state.card.columnCardId!, "stolen"),
+      );
+      if (c?.id) dispatch({ type: "HYDRATE_CARD", card: { columnCardId: c.id, last4: c.last_four || state.card.last4 } });
     }
   }, [state.card.columnCardId, state.card.last4, columnLive]);
 
   const issueCard = useCallback(async (args?: { type?: "physical" | "virtual" }) => {
     if (!columnLive) {
-      // Local-only: flip the seed card back to active.
       dispatch({ type: "HYDRATE_CARD", card: { status: "active", isLocked: false, isVirtual: args?.type === "virtual" } });
       return true;
     }
-    try {
-      const c = await columnApi.issueCard({
+    const c = await runColumn("Issuing card", () =>
+      columnApi.issueCard({
         bank_account_id: state.accounts.checking.id,
         type: args?.type || "virtual",
-      });
-      dispatch({
-        type: "HYDRATE_CARD",
-        card: {
-          columnCardId: c.id,
-          last4: c.last_four || state.card.last4,
-          network: c.network || state.card.network,
-          type: c.type || state.card.type,
-          isVirtual: (c.type || "").toLowerCase() === "virtual",
-          status: "active",
-          isLocked: false,
-        },
-      });
-      return true;
-    } catch (e) {
-      console.warn("Column card issuance failed:", e);
-      return false;
-    }
+      }),
+    );
+    if (!c) return false;
+    dispatch({
+      type: "HYDRATE_CARD",
+      card: {
+        columnCardId: c.id,
+        last4: c.last_four || state.card.last4,
+        network: c.network || state.card.network,
+        type: c.type || state.card.type,
+        isVirtual: (c.type || "").toLowerCase() === "virtual",
+        status: "active",
+        isLocked: false,
+      },
+    });
+    return true;
   }, [columnLive, state.accounts.checking.id, state.card.last4, state.card.network, state.card.type]);
 
   const value: Ctx = {
