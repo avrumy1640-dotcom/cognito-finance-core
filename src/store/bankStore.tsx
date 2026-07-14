@@ -1,4 +1,5 @@
-import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState } from "react";
+import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState, useRef } from "react";
+import { toast } from "sonner";
 import {
   accounts as seedAccounts,
   transactions as seedTransactions,
@@ -8,6 +9,27 @@ import {
   Transaction,
 } from "@/data/mockData";
 import { columnApi, mapColumnAccount, mapColumnTransaction } from "@/lib/columnClient";
+
+// Wraps a Column API call so the user always sees loading, success, and error
+// state with a Retry action instead of a silent console warn.
+async function runColumn<T>(label: string, fn: () => Promise<T>, opts?: { silentSuccess?: boolean }): Promise<T | null> {
+  const id = `col-${label}-${Date.now()}`;
+  toast.loading(`${label}…`, { id });
+  try {
+    const result = await fn();
+    if (opts?.silentSuccess) toast.dismiss(id);
+    else toast.success(`${label} complete`, { id });
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Request failed";
+    toast.error(`${label} failed`, {
+      id,
+      description: message,
+      action: { label: "Retry", onClick: () => void runColumn(label, fn, opts) },
+    });
+    return null;
+  }
+}
 
 type Account = {
   id: string;
