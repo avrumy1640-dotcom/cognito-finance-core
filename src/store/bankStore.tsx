@@ -378,6 +378,8 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [columnLive, setColumnLive] = useState(false);
   const [columnError, setColumnError] = useState<string | null>(null);
+  const [columnStatus, setColumnStatus] = useState<"idle" | "loading" | "live" | "error">("idle");
+  const notifiedErrorRef = useRef<string | null>(null);
 
   const refreshColumn = useCallback(async () => {
     try {
