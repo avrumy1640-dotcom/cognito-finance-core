@@ -355,7 +355,8 @@ interface Ctx extends State {
   totalBalance: number;
   columnLive: boolean;
   columnError: string | null;
-  refreshColumn: () => Promise<void>;
+  columnStatus: "idle" | "loading" | "live" | "error";
+  refreshColumn: (opts?: { silent?: boolean }) => Promise<void>;
   transfer: (args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => boolean;
   send: (args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => boolean;
   depositCheck: (args: { to: "checking" | "savings"; amount: number }) => boolean;
