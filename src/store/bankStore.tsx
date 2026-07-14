@@ -381,15 +381,20 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [columnStatus, setColumnStatus] = useState<"idle" | "loading" | "live" | "error">("idle");
   const notifiedErrorRef = useRef<string | null>(null);
 
-  const refreshColumn = useCallback(async () => {
+  const refreshColumn = useCallback(async (opts?: { silent?: boolean }) => {
+    setColumnStatus("loading");
+    const toastId = opts?.silent ? undefined : `col-sync`;
+    if (!opts?.silent) toast.loading("Syncing with Column…", { id: toastId });
     try {
       const { bank_accounts } = await columnApi.listBankAccounts();
       if (!bank_accounts || bank_accounts.length === 0) {
         setColumnLive(false);
-        setColumnError("No Column bank accounts found for this API key.");
+        const msg = "No Column bank accounts found for this API key.";
+        setColumnError(msg);
+        setColumnStatus("error");
+        if (!opts?.silent) toast.error("Column sync failed", { id: toastId, description: msg, action: { label: "Retry", onClick: () => void refreshColumn() } });
         return;
       }
-      // Pick first checking-type + first savings-type; fall back to first two.
       const checkingSrc =
         bank_accounts.find((a) => (a.type || "").toLowerCase().includes("checking")) || bank_accounts[0];
       const savingsSrc =
@@ -417,7 +422,6 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         transactions: txs,
       });
 
-      // Hydrate a card if one exists on the checking account.
       try {
         const { cards } = await columnApi.listCards(checkingSrc.id);
         const c = cards[0];
@@ -453,10 +457,23 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
       setColumnLive(true);
       setColumnError(null);
+      setColumnStatus("live");
+      notifiedErrorRef.current = null;
+      if (!opts?.silent) toast.success("Column live", { id: toastId, description: "Backend data synced." });
     } catch (err) {
+      const msg = err instanceof Error ? err.message : "Column sync failed";
       setColumnLive(false);
-      setColumnError(err instanceof Error ? err.message : "Column sync failed");
+      setColumnError(msg);
+      setColumnStatus("error");
       console.warn("Column sync failed — using mock data.", err);
+      if (!opts?.silent || notifiedErrorRef.current !== msg) {
+        notifiedErrorRef.current = msg;
+        toast.error("Column offline", {
+          id: toastId,
+          description: `${msg}. Using cached data.`,
+          action: { label: "Retry", onClick: () => void refreshColumn() },
+        });
+      }
     }
   }, [state.accounts.checking, state.accounts.savings, state.card]);
 
