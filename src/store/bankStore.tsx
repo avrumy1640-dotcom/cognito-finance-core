@@ -9,6 +9,7 @@ import {
   Transaction,
 } from "@/data/mockData";
 import { columnApi, mapColumnAccount, mapColumnTransaction } from "@/lib/columnClient";
+import { loadAlertPrefs } from "@/lib/alerts";
 
 // Wraps a Column API call so the user always sees loading, success, and error
 // state with a Retry action instead of a silent console warn.
