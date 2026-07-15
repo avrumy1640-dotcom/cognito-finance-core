@@ -553,6 +553,19 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Real-time alert poller: silently re-sync Column on an interval so new
+  // transactions/balance/card events surface as alerts.
+  useEffect(() => {
+    const prefs = loadAlertPrefs();
+    if (!prefs.enabled) return;
+    const ms = Math.max(10, prefs.pollSeconds) * 1000;
+    const id = window.setInterval(() => {
+      refreshColumn({ silent: true });
+    }, ms);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const transfer = useCallback((args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => {
     if (args.amount <= 0 || args.from === args.to) return false;
     if (state.accounts[args.from].availableBalance < args.amount) return false;
