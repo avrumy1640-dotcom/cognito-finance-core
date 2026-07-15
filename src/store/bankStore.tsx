@@ -398,6 +398,8 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     else if (kind === "success") toast.success(title, { description: body });
     else toast(title, { description: body });
   }, []);
+
+  const refreshColumn = useCallback(async (opts?: { silent?: boolean }) => {
     setColumnStatus("loading");
     const toastId = opts?.silent ? undefined : `col-sync`;
     if (!opts?.silent) toast.loading("Syncing with Column…", { id: toastId });
