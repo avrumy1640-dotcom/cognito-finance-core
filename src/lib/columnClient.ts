@@ -59,13 +59,17 @@ async function callColumn<T>({ path, method = "GET", body, query }: CallArgs): P
 export const columnApi = {
   listBankAccounts: () =>
     callColumn<{ bank_accounts: ColumnBankAccount[] }>({ path: "/bank-accounts" }),
-  listTransactions: (bankAccountId?: string) =>
-    // Column's transaction history lives under /bank-accounts/:id/history.
-    bankAccountId
-      ? callColumn<{ transactions?: ColumnTransaction[] }>({
-          path: `/bank-accounts/${bankAccountId}/history`,
-        }).then((d) => ({ transactions: d.transactions ?? [] }))
-      : Promise.resolve({ transactions: [] as ColumnTransaction[] }),
+  listTransactions: (bankAccountId?: string, fromDate?: string) => {
+    if (!bankAccountId) return Promise.resolve({ transactions: [] as ColumnTransaction[] });
+    // Column requires `from_date` (YYYY-MM-DD). Default to 90 days back.
+    const from =
+      fromDate ||
+      new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return callColumn<{ transactions?: ColumnTransaction[] }>({
+      path: `/bank-accounts/${bankAccountId}/history`,
+      query: { from_date: from },
+    }).then((d) => ({ transactions: d.transactions ?? [] }));
+  },
   createBookTransfer: (args: { sender_bank_account_id: string; receiver_bank_account_id: string; amount: number; description?: string }) =>
     callColumn<unknown>({ path: "/transfers/book", method: "POST", body: args }),
   createCounterparty: (args: {
@@ -96,7 +100,11 @@ export const columnApi = {
     callColumn<{ cards?: ColumnCard[] }>({
       path: "/cards",
       query: bankAccountId ? { bank_account_id: bankAccountId } : undefined,
-    }).then((d) => ({ cards: d.cards ?? [] })),
+    })
+      .then((d) => ({ cards: d.cards ?? [] }))
+      // Cards API requires a provisioned card program. On sandboxes without
+      // one Column returns 404 — treat as "no cards" rather than surfacing an error.
+      .catch(() => ({ cards: [] as ColumnCard[] })),
   issueCard: (args: {
     bank_account_id: string;
     type?: "physical" | "virtual";
