@@ -43,6 +43,15 @@ const NotificationsPage = () => {
   const { notifications, markNotificationRead, markAllRead } = useBank();
   const unread = notifications.filter((n) => !n.read).length;
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
+  const [alerts, setAlerts] = useState<AlertPrefs>(loadAlertPrefs);
+
+  const updateAlerts = (patch: Partial<AlertPrefs>) => {
+    setAlerts((a) => {
+      const next = { ...a, ...patch };
+      saveAlertPrefs(next);
+      return next;
+    });
+  };
 
   const togglePref = (key: keyof Prefs) => {
     setPrefs((p) => {
