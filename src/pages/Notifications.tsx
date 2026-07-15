@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
+import { loadAlertPrefs, saveAlertPrefs, AlertPrefs } from "@/lib/alerts";
 import { ArrowLeft, Settings, CheckCheck } from "lucide-react";
 
 const iconMap: Record<string, string> = {
