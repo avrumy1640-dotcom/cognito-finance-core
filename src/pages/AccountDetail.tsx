@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
 import { toast } from "sonner";
+import { generateMonthlyStatement } from "@/lib/pdfDocuments";
 import {
   ArrowLeft,
   Copy,
@@ -16,6 +17,14 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const parseTxDate = (raw: string): Date | null => {
+  if (!raw) return null;
+  if (/^today/i.test(raw)) return new Date();
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+};
 
 const AccountDetail = () => {
   const { type } = useParams<{ type: string }>();
@@ -154,31 +163,43 @@ const AccountDetail = () => {
 
         {activeTab === "statements" && (
           <div className="space-y-2">
-            {["March 2026", "February 2026", "January 2026", "December 2025", "November 2025"].map((month) => (
-              <GlassCard
-                key={month}
-                onClick={() => {
-                  const body = `Glass Bank\n${account.name} — ${month} Statement\nAccount: ${account.accountNumber}\nRouting: ${account.routingNumber}\nAvailable Balance: ${formatCurrency(account.availableBalance)}\nCurrent Balance: ${formatCurrency(account.currentBalance)}\n\nGenerated ${new Date().toLocaleString()}\n`;
-                  const blob = new Blob([body], { type: "application/pdf" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `${account.name.replace(/\s+/g, "_")}_${month.replace(/\s+/g, "_")}.pdf`;
-                  document.body.appendChild(a);
-                  a.click();
-                  a.remove();
-                  URL.revokeObjectURL(url);
-                  toast.success(`Downloaded ${month} statement`);
-                }}
-                className="flex items-center justify-between py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <FileText size={18} className="text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">{month}</span>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground" />
-              </GlassCard>
-            ))}
+            {Array.from({ length: 12 }).map((_, i) => {
+              const d = new Date();
+              d.setDate(1);
+              d.setMonth(d.getMonth() - i - 1);
+              const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+              const periodStart = new Date(d.getFullYear(), d.getMonth(), 1);
+              const periodEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+              return (
+                <GlassCard
+                  key={label}
+                  onClick={() => {
+                    const accountLabel = type === "savings" ? "Savings" : "Checking";
+                    const txs = transactions.filter((t) => {
+                      if (t.account !== accountLabel) return false;
+                      const dt = parseTxDate(t.date);
+                      if (!dt) return i === 0;
+                      return dt >= periodStart && dt <= periodEnd;
+                    });
+                    generateMonthlyStatement({
+                      account,
+                      transactions: txs,
+                      periodLabel: label,
+                      periodStart,
+                      periodEnd,
+                    });
+                    toast.success(`Downloaded ${label} statement`);
+                  }}
+                  className="flex items-center justify-between py-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <FileText size={18} className="text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">{label}</span>
+                  </div>
+                  <ChevronRight size={16} className="text-muted-foreground" />
+                </GlassCard>
+              );
+            })}
           </div>
         )}
 
