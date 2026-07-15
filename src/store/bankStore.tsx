@@ -385,8 +385,19 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [columnError, setColumnError] = useState<string | null>(null);
   const [columnStatus, setColumnStatus] = useState<"idle" | "loading" | "live" | "error">("idle");
   const notifiedErrorRef = useRef<string | null>(null);
+  const knownTxIdsRef = useRef<Set<string>>(new Set());
+  const lastCardStateRef = useRef<string | null>(null);
+  const lowBalanceFiredRef = useRef<Record<string, boolean>>({});
+  const firstSyncRef = useRef(true);
 
-  const refreshColumn = useCallback(async (opts?: { silent?: boolean }) => {
+  // Emits both a toast and an in-app notification row for real-time alerts.
+  const fireAlert = useCallback((title: string, body: string, type: string, kind: "info" | "warning" | "success" = "info") => {
+    const notif: NotificationItem = { id: uid("n"), title, body, time: "Just now", read: false, type };
+    dispatch({ type: "ADD_NOTIFICATION", notification: notif });
+    if (kind === "warning") toast.warning(title, { description: body });
+    else if (kind === "success") toast.success(title, { description: body });
+    else toast(title, { description: body });
+  }, []);
     setColumnStatus("loading");
     const toastId = opts?.silent ? undefined : `col-sync`;
     if (!opts?.silent) toast.loading("Syncing with Column…", { id: toastId });
