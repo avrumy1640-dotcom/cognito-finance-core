@@ -510,6 +510,16 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
               },
             },
           });
+          const nextCardState = c.state || "active";
+          if (lastCardStateRef.current && lastCardStateRef.current !== nextCardState && loadAlertPrefs().cardActivity) {
+            fireAlert(
+              `Card ${nextCardState}`,
+              `Your card •••• ${c.last_four || state.card.last4} is now ${nextCardState}.`,
+              "card",
+              nextCardState === "active" ? "success" : "warning",
+            );
+          }
+          lastCardStateRef.current = nextCardState;
         }
       } catch (e) {
         console.warn("Column card hydrate failed:", e);
