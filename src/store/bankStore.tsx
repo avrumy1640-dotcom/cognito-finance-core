@@ -333,6 +333,9 @@ function reducer(state: State, action: Action): State {
     case "MARK_ALL_READ":
       return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) };
 
+    case "ADD_NOTIFICATION":
+      return { ...state, notifications: [action.notification, ...state.notifications].slice(0, 100) };
+
     case "HYDRATE_COLUMN":
       return {
         ...state,
