@@ -100,7 +100,11 @@ export const columnApi = {
     callColumn<{ cards?: ColumnCard[] }>({
       path: "/cards",
       query: bankAccountId ? { bank_account_id: bankAccountId } : undefined,
-    }).then((d) => ({ cards: d.cards ?? [] })),
+    })
+      .then((d) => ({ cards: d.cards ?? [] }))
+      // Cards API requires a provisioned card program. On sandboxes without
+      // one Column returns 404 — treat as "no cards" rather than surfacing an error.
+      .catch(() => ({ cards: [] as ColumnCard[] })),
   issueCard: (args: {
     bank_account_id: string;
     type?: "physical" | "virtual";
