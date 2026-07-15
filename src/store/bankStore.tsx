@@ -566,6 +566,23 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Push path: subscribe to the `column-events` broadcast channel that the
+  // `column-webhook` edge function publishes to. When Column posts a webhook,
+  // we trigger an immediate silent refresh so alerts fire without waiting for
+  // the poll interval.
+  useEffect(() => {
+    const channel = supabase.channel("column-events");
+    channel
+      .on("broadcast", { event: "*" }, () => {
+        refreshColumn({ silent: true });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const transfer = useCallback((args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => {
     if (args.amount <= 0 || args.from === args.to) return false;
     if (state.accounts[args.from].availableBalance < args.amount) return false;
