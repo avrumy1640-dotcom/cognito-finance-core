@@ -10,6 +10,7 @@ import {
 } from "@/data/mockData";
 import { columnApi, mapColumnAccount, mapColumnTransaction } from "@/lib/columnClient";
 import { loadAlertPrefs } from "@/lib/alerts";
+import { supabase } from "@/integrations/supabase/client";
 
 // Wraps a Column API call so the user always sees loading, success, and error
 // state with a Retry action instead of a silent console warn.
