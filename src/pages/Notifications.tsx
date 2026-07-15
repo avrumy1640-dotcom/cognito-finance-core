@@ -109,6 +109,79 @@ const NotificationsPage = () => {
               </div>
             ))}
           </GlassCard>
+
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-2">Real-time alerts</p>
+            <GlassCard className="divide-y divide-border p-0 overflow-hidden">
+              <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Enable real-time alerts</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Poll Column every {alerts.pollSeconds}s for new activity</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={alerts.enabled}
+                  onClick={() => { updateAlerts({ enabled: !alerts.enabled }); toast.success(`Real-time alerts ${!alerts.enabled ? "on" : "off"}`); }}
+                  className={`shrink-0 w-11 h-6 rounded-full transition-colors ${alerts.enabled ? "bg-primary" : "bg-secondary"}`}
+                >
+                  <span className={`block w-5 h-5 bg-background rounded-full shadow transform transition-transform ${alerts.enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+              <div className="px-4 py-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-foreground">Large transaction threshold</label>
+                  <span className="text-xs text-muted-foreground">${alerts.largeTxnAmount}</span>
+                </div>
+                <input
+                  type="range" min={50} max={5000} step={50}
+                  value={alerts.largeTxnAmount}
+                  onChange={(e) => updateAlerts({ largeTxnAmount: Number(e.target.value) })}
+                  className="w-full accent-primary"
+                />
+                <p className="text-xs text-muted-foreground">Alert when a single transaction is at or above this amount.</p>
+              </div>
+              <div className="px-4 py-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-foreground">Low balance threshold</label>
+                  <span className="text-xs text-muted-foreground">${alerts.lowBalance}</span>
+                </div>
+                <input
+                  type="range" min={0} max={2000} step={25}
+                  value={alerts.lowBalance}
+                  onChange={(e) => updateAlerts({ lowBalance: Number(e.target.value) })}
+                  className="w-full accent-primary"
+                />
+                <p className="text-xs text-muted-foreground">Alert when available balance drops below this amount.</p>
+              </div>
+              <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Card activity alerts</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Every card charge, lock, or unlock</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={alerts.cardActivity}
+                  onClick={() => updateAlerts({ cardActivity: !alerts.cardActivity })}
+                  className={`shrink-0 w-11 h-6 rounded-full transition-colors ${alerts.cardActivity ? "bg-primary" : "bg-secondary"}`}
+                >
+                  <span className={`block w-5 h-5 bg-background rounded-full shadow transform transition-transform ${alerts.cardActivity ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+              <div className="px-4 py-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-foreground">Poll interval</label>
+                  <span className="text-xs text-muted-foreground">{alerts.pollSeconds}s</span>
+                </div>
+                <input
+                  type="range" min={15} max={300} step={15}
+                  value={alerts.pollSeconds}
+                  onChange={(e) => updateAlerts({ pollSeconds: Number(e.target.value) })}
+                  className="w-full accent-primary"
+                />
+                <p className="text-xs text-muted-foreground">Changes take effect on next page reload.</p>
+              </div>
+            </GlassCard>
+          </div>
         </div>
       </div>
     );
