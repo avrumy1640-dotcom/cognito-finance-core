@@ -434,6 +434,48 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         ...savTx.transactions.map((t) => mapColumnTransaction(t, "Savings")),
       ];
 
+      // ---- Real-time alert detection (Column-sourced) -----------------
+      const prefs = loadAlertPrefs();
+      const isFirstSync = firstSyncRef.current;
+      if (prefs.enabled && !isFirstSync) {
+        for (const t of txs) {
+          if (knownTxIdsRef.current.has(t.id)) continue;
+          const abs = Math.abs(t.amount);
+          const isCard = t.paymentMethod === "Debit Card" || (t.category || "").toLowerCase().includes("card");
+          if (abs >= prefs.largeTxnAmount) {
+            fireAlert(
+              `Large ${t.type === "credit" ? "deposit" : "charge"}: $${abs.toFixed(2)}`,
+              `${t.merchant} • ${t.account}`,
+              t.type === "credit" ? "deposit" : "card",
+              "warning",
+            );
+          } else if (isCard && prefs.cardActivity) {
+            fireAlert(`Card charged $${abs.toFixed(2)}`, `${t.merchant} • ${t.account}`, "card");
+          } else if (t.type === "credit" && prefs.pushDeposits && abs >= 1) {
+            fireAlert(`Deposit received: $${abs.toFixed(2)}`, `${t.merchant} • ${t.account}`, "deposit", "success");
+          } else if (t.type === "debit" && prefs.pushTransfers && abs >= 1) {
+            fireAlert(`Payment posted: $${abs.toFixed(2)}`, `${t.merchant} • ${t.account}`, "transfer");
+          }
+        }
+        // Low-balance alert (once per below-threshold period, per account)
+        for (const [key, acc] of Object.entries({ checking: mappedChecking, savings: mappedSavings })) {
+          const below = acc.availableBalance < prefs.lowBalance;
+          if (below && !lowBalanceFiredRef.current[key]) {
+            lowBalanceFiredRef.current[key] = true;
+            fireAlert(
+              `Low balance on ${acc.name}`,
+              `Available $${acc.availableBalance.toFixed(2)} is below your $${prefs.lowBalance} threshold.`,
+              "card",
+              "warning",
+            );
+          } else if (!below) {
+            lowBalanceFiredRef.current[key] = false;
+          }
+        }
+      }
+      for (const t of txs) knownTxIdsRef.current.add(t.id);
+      firstSyncRef.current = false;
+
       dispatch({
         type: "HYDRATE_COLUMN",
         accounts: { checking: mappedChecking, savings: mappedSavings },
