@@ -9,6 +9,8 @@ import {
   Transaction,
 } from "@/data/mockData";
 import { columnApi, mapColumnAccount, mapColumnTransaction } from "@/lib/columnClient";
+import { loadAlertPrefs } from "@/lib/alerts";
+import { supabase } from "@/integrations/supabase/client";
 
 // Wraps a Column API call so the user always sees loading, success, and error
 // state with a Retry action instead of a silent console warn.
@@ -96,6 +98,7 @@ type Action =
   | { type: "REPORT_STOLEN" }
   | { type: "MARK_NOTIFICATION_READ"; id: string }
   | { type: "MARK_ALL_READ" }
+  | { type: "ADD_NOTIFICATION"; notification: NotificationItem }
   | { type: "ADD_RECIPIENT"; name: string }
   | { type: "HYDRATE_COLUMN"; accounts?: Partial<State["accounts"]>; transactions?: Transaction[] }
   | { type: "HYDRATE_CARD"; card: Partial<CardState> };
@@ -331,6 +334,9 @@ function reducer(state: State, action: Action): State {
     case "MARK_ALL_READ":
       return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) };
 
+    case "ADD_NOTIFICATION":
+      return { ...state, notifications: [action.notification, ...state.notifications].slice(0, 100) };
+
     case "HYDRATE_COLUMN":
       return {
         ...state,
@@ -380,6 +386,19 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [columnError, setColumnError] = useState<string | null>(null);
   const [columnStatus, setColumnStatus] = useState<"idle" | "loading" | "live" | "error">("idle");
   const notifiedErrorRef = useRef<string | null>(null);
+  const knownTxIdsRef = useRef<Set<string>>(new Set());
+  const lastCardStateRef = useRef<string | null>(null);
+  const lowBalanceFiredRef = useRef<Record<string, boolean>>({});
+  const firstSyncRef = useRef(true);
+
+  // Emits both a toast and an in-app notification row for real-time alerts.
+  const fireAlert = useCallback((title: string, body: string, type: string, kind: "info" | "warning" | "success" = "info") => {
+    const notif: NotificationItem = { id: uid("n"), title, body, time: "Just now", read: false, type };
+    dispatch({ type: "ADD_NOTIFICATION", notification: notif });
+    if (kind === "warning") toast.warning(title, { description: body });
+    else if (kind === "success") toast.success(title, { description: body });
+    else toast(title, { description: body });
+  }, []);
 
   const refreshColumn = useCallback(async (opts?: { silent?: boolean }) => {
     setColumnStatus("loading");
@@ -416,6 +435,48 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         ...savTx.transactions.map((t) => mapColumnTransaction(t, "Savings")),
       ];
 
+      // ---- Real-time alert detection (Column-sourced) -----------------
+      const prefs = loadAlertPrefs();
+      const isFirstSync = firstSyncRef.current;
+      if (prefs.enabled && !isFirstSync) {
+        for (const t of txs) {
+          if (knownTxIdsRef.current.has(t.id)) continue;
+          const abs = Math.abs(t.amount);
+          const isCard = t.paymentMethod === "Debit Card" || (t.category || "").toLowerCase().includes("card");
+          if (abs >= prefs.largeTxnAmount) {
+            fireAlert(
+              `Large ${t.type === "credit" ? "deposit" : "charge"}: $${abs.toFixed(2)}`,
+              `${t.merchant} • ${t.account}`,
+              t.type === "credit" ? "deposit" : "card",
+              "warning",
+            );
+          } else if (isCard && prefs.cardActivity) {
+            fireAlert(`Card charged $${abs.toFixed(2)}`, `${t.merchant} • ${t.account}`, "card");
+          } else if (t.type === "credit" && prefs.pushDeposits && abs >= 1) {
+            fireAlert(`Deposit received: $${abs.toFixed(2)}`, `${t.merchant} • ${t.account}`, "deposit", "success");
+          } else if (t.type === "debit" && prefs.pushTransfers && abs >= 1) {
+            fireAlert(`Payment posted: $${abs.toFixed(2)}`, `${t.merchant} • ${t.account}`, "transfer");
+          }
+        }
+        // Low-balance alert (once per below-threshold period, per account)
+        for (const [key, acc] of Object.entries({ checking: mappedChecking, savings: mappedSavings })) {
+          const below = acc.availableBalance < prefs.lowBalance;
+          if (below && !lowBalanceFiredRef.current[key]) {
+            lowBalanceFiredRef.current[key] = true;
+            fireAlert(
+              `Low balance on ${acc.name}`,
+              `Available $${acc.availableBalance.toFixed(2)} is below your $${prefs.lowBalance} threshold.`,
+              "card",
+              "warning",
+            );
+          } else if (!below) {
+            lowBalanceFiredRef.current[key] = false;
+          }
+        }
+      }
+      for (const t of txs) knownTxIdsRef.current.add(t.id);
+      firstSyncRef.current = false;
+
       dispatch({
         type: "HYDRATE_COLUMN",
         accounts: { checking: mappedChecking, savings: mappedSavings },
@@ -450,6 +511,16 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
               },
             },
           });
+          const nextCardState = c.state || "active";
+          if (lastCardStateRef.current && lastCardStateRef.current !== nextCardState && loadAlertPrefs().cardActivity) {
+            fireAlert(
+              `Card ${nextCardState}`,
+              `Your card •••• ${c.last_four || state.card.last4} is now ${nextCardState}.`,
+              "card",
+              nextCardState === "active" ? "success" : "warning",
+            );
+          }
+          lastCardStateRef.current = nextCardState;
         }
       } catch (e) {
         console.warn("Column card hydrate failed:", e);
@@ -480,6 +551,36 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // Silent initial sync — fall back to seed data without a noisy toast.
     refreshColumn({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Real-time alert poller: silently re-sync Column on an interval so new
+  // transactions/balance/card events surface as alerts.
+  useEffect(() => {
+    const prefs = loadAlertPrefs();
+    if (!prefs.enabled) return;
+    const ms = Math.max(10, prefs.pollSeconds) * 1000;
+    const id = window.setInterval(() => {
+      refreshColumn({ silent: true });
+    }, ms);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Push path: subscribe to the `column-events` broadcast channel that the
+  // `column-webhook` edge function publishes to. When Column posts a webhook,
+  // we trigger an immediate silent refresh so alerts fire without waiting for
+  // the poll interval.
+  useEffect(() => {
+    const channel = supabase.channel("column-events");
+    channel
+      .on("broadcast", { event: "*" }, () => {
+        refreshColumn({ silent: true });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
