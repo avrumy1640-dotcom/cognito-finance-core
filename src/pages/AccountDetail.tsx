@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
 import { toast } from "sonner";
+import { generateMonthlyStatement } from "@/lib/pdfDocuments";
 import {
   ArrowLeft,
   Copy,
@@ -16,6 +17,14 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const parseTxDate = (raw: string): Date | null => {
+  if (!raw) return null;
+  if (/^today/i.test(raw)) return new Date();
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+};
 
 const AccountDetail = () => {
   const { type } = useParams<{ type: string }>();
