@@ -61,16 +61,21 @@ export const columnApi = {
     callColumn<{ bank_accounts: ColumnBankAccount[] }>({ path: "/bank-accounts" }),
   listTransactions: (bankAccountId?: string, fromDate?: string, toDate?: string) => {
     if (!bankAccountId) return Promise.resolve({ transactions: [] as ColumnTransaction[] });
-    // Column requires BOTH `from_date` and `to_date` (YYYY-MM-DD).
+    // Column exposes transaction history at
+    // `/transactions/bank-accounts/{bank_account_id}` and requires both
+    // `from_date` and `to_date` (YYYY-MM-DD).
     const today = new Date();
     const to = toDate || today.toISOString().slice(0, 10);
     const from =
       fromDate ||
       new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     return callColumn<{ transactions?: ColumnTransaction[] }>({
-      path: `/transactions`,
-      query: { bank_account_id: bankAccountId, from_date: from, to_date: to, limit: 100 },
-    }).then((d) => ({ transactions: d.transactions ?? [] }));
+      path: `/transactions/bank-accounts/${bankAccountId}`,
+      query: { from_date: from, to_date: to, limit: 100 },
+    })
+      .then((d) => ({ transactions: d.transactions ?? [] }))
+      // Sandbox / accounts without transaction history return 404 — treat as empty.
+      .catch(() => ({ transactions: [] as ColumnTransaction[] }));
   },
 
   createBookTransfer: (args: { sender_bank_account_id: string; receiver_bank_account_id: string; amount: number; description?: string }) =>
