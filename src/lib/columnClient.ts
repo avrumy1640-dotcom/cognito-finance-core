@@ -33,6 +33,22 @@ export interface ColumnTransaction {
   bank_account_id?: string;
 }
 
+interface ColumnTransfer {
+  id: string;
+  amount: number; // cents, always positive in Column transfer payloads
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+  completed_at?: string;
+  type?: string;
+  status?: string;
+  is_incoming?: boolean;
+  sender_internal_account?: { bank_account_id?: string; account_number_id?: string };
+  receiver_internal_account?: { bank_account_id?: string; account_number_id?: string };
+  external_source?: { bank_name?: string; sender_name?: string; counterparty_id?: string };
+  external_destination?: { counterparty_id?: string };
+}
+
 interface CallArgs {
   path: string;
   method?: "GET" | "POST" | "PATCH" | "DELETE";
@@ -61,20 +77,47 @@ export const columnApi = {
     callColumn<{ bank_accounts: ColumnBankAccount[] }>({ path: "/bank-accounts" }),
   listTransactions: (bankAccountId?: string, fromDate?: string, toDate?: string) => {
     if (!bankAccountId) return Promise.resolve({ transactions: [] as ColumnTransaction[] });
-    // Column exposes transaction history at
-    // `/transactions/bank-accounts/{bank_account_id}` and requires both
-    // `from_date` and `to_date` (YYYY-MM-DD).
+    // Column's current public API exposes activity through the unified
+    // `/transfers` endpoint. The previous `/transactions/...` paths return 404.
     const today = new Date();
     const to = toDate || today.toISOString().slice(0, 10);
     const from =
       fromDate ||
       new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    return callColumn<{ transactions?: ColumnTransaction[] }>({
-      path: `/transactions/bank-accounts/${bankAccountId}`,
-      query: { from_date: from, to_date: to, limit: 100 },
+    return callColumn<{ transfers?: ColumnTransfer[] }>({
+      path: "/transfers",
+      query: {
+        bank_account_id: bankAccountId,
+        created_at_gte: `${from}T00:00:00Z`,
+        created_at_lte: `${to}T23:59:59Z`,
+        limit: 100,
+        sort_by: "created_at",
+        sort_order: "desc",
+      },
     })
-      .then((d) => ({ transactions: d.transactions ?? [] }))
-      // Sandbox / accounts without transaction history return 404 — treat as empty.
+      .then((d) => ({
+        transactions: (d.transfers ?? []).map((transfer) => {
+          const isCredit =
+            transfer.is_incoming === true ||
+            transfer.receiver_internal_account?.bank_account_id === bankAccountId;
+          return {
+            id: transfer.id,
+            amount: (isCredit ? 1 : -1) * Math.abs(transfer.amount),
+            description:
+              transfer.description ||
+              transfer.external_source?.sender_name ||
+              transfer.external_source?.bank_name ||
+              transfer.type,
+            merchant_name: transfer.external_source?.sender_name || transfer.external_source?.bank_name,
+            posted_at: transfer.completed_at,
+            created_at: transfer.created_at || transfer.updated_at,
+            type: transfer.type,
+            status: transfer.status === "completed" ? "posted" : transfer.status,
+            bank_account_id: bankAccountId,
+          } satisfies ColumnTransaction;
+        }),
+      }))
+      // Accounts without transfer activity should render as an empty history.
       .catch(() => ({ transactions: [] as ColumnTransaction[] }));
   },
 
@@ -104,15 +147,10 @@ export const columnApi = {
   }) => callColumn<unknown>({ path: "/transfers/wire", method: "POST", body: args }),
 
   // --- Cards ---------------------------------------------------------------
-  listCards: (bankAccountId?: string) =>
-    callColumn<{ cards?: ColumnCard[] }>({
-      path: "/cards",
-      query: bankAccountId ? { bank_account_id: bankAccountId } : undefined,
-    })
-      .then((d) => ({ cards: d.cards ?? [] }))
-      // Cards API requires a provisioned card program. On sandboxes without
-      // one Column returns 404 — treat as "no cards" rather than surfacing an error.
-      .catch(() => ({ cards: [] as ColumnCard[] })),
+  listCards: (_bankAccountId?: string) =>
+    // The connected Column API does not expose a public `/cards` endpoint for
+    // this account, so initial sync must not call it and surface a 404 overlay.
+    Promise.resolve({ cards: [] as ColumnCard[] }),
   issueCard: (args: {
     bank_account_id: string;
     type?: "physical" | "virtual";
