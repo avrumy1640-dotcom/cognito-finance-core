@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
+import { useAuth } from "@/hooks/useAuth";
 import {
   ArrowLeft,
   Lock,
@@ -18,6 +19,7 @@ import {
   Clock,
   Mail,
   Phone,
+  X,
 } from "lucide-react";
 
 type ToggleKey =
@@ -28,12 +30,17 @@ type ToggleKey =
 
 const SecurityCenter = () => {
   const navigate = useNavigate();
+  const { user, signOutOthers, updatePassword, sendPasswordReset } = useAuth();
   const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
     biometric: true,
     passcode: true,
     unusualLogin: true,
     suspiciousTx: true,
   });
+  const [pwOpen, setPwOpen] = useState(false);
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
 
   const flip = (k: ToggleKey) => {
     setToggles((t) => {
@@ -46,7 +53,7 @@ const SecurityCenter = () => {
   const action = (label: string) => () => {
     switch (label) {
       case "Change Password":
-        toast.success("Verification link sent to your email.");
+        setPwOpen(true);
         break;
       case "Two-Factor Authentication":
         toast.info("2FA is active via SMS to (415) •••-0142");
@@ -58,12 +65,15 @@ const SecurityCenter = () => {
         toast.info("Last login: Today, San Francisco, CA · iPhone 17 Pro");
         break;
       case "Active Sessions":
-        toast.info("1 active session on this device");
+        toast.info(user?.email ? `Signed in as ${user.email}` : "1 active session on this device");
         break;
       case "Sign Out All Devices":
-        if (confirm("Sign out of all other devices?")) {
-          toast.success("All other sessions ended.");
-        }
+        if (!confirm("Sign out of all other devices?")) break;
+        toast.loading("Ending other sessions…", { id: "signout-others" });
+        signOutOthers().then(({ error }) => {
+          if (error) toast.error(error, { id: "signout-others" });
+          else toast.success("All other sessions ended.", { id: "signout-others" });
+        });
         break;
       case "Fraud Center":
         toast.info("No fraud alerts. You're all clear.");
@@ -72,7 +82,11 @@ const SecurityCenter = () => {
         toast.info("No identity issues detected in the last 30 days.");
         break;
       case "Recovery Email":
-        toast.success("A verification email was sent to update your recovery email.");
+        if (!user?.email) { toast.error("No account email on file."); break; }
+        sendPasswordReset(user.email).then(({ error }) => {
+          if (error) toast.error(error);
+          else toast.success("A verification email was sent to update your recovery email.");
+        });
         break;
       case "Backup Phone":
         toast.success("SMS code sent to your backup phone.");
@@ -80,6 +94,18 @@ const SecurityCenter = () => {
       default:
         toast(label);
     }
+  };
+
+  const submitPassword = async () => {
+    if (newPw.length < 8) { toast.error("Password must be at least 8 characters."); return; }
+    if (newPw !== confirmPw) { toast.error("Passwords do not match."); return; }
+    setPwLoading(true);
+    const { error } = await updatePassword(newPw);
+    setPwLoading(false);
+    if (error) { toast.error(error); return; }
+    toast.success("Password updated");
+    setPwOpen(false);
+    setNewPw(""); setConfirmPw("");
   };
 
   const sections: Array<{
@@ -171,6 +197,41 @@ const SecurityCenter = () => {
           </motion.div>
         ))}
       </div>
+
+      {pwOpen && (
+        <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => !pwLoading && setPwOpen(false)}>
+          <div className="w-full max-w-sm glass-card-elevated rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-display font-bold text-foreground">Change password</h3>
+              <button onClick={() => setPwOpen(false)} disabled={pwLoading}>
+                <X size={18} className="text-muted-foreground" />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">Choose a new password of at least 8 characters. You will stay signed in on this device.</p>
+            <input
+              type="password"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              placeholder="New password"
+              className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none"
+            />
+            <input
+              type="password"
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+              placeholder="Confirm new password"
+              className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none"
+            />
+            <button
+              onClick={submitPassword}
+              disabled={pwLoading}
+              className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60"
+            >
+              {pwLoading ? "Updating…" : "Update password"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

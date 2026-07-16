@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { user } from "@/data/mockData";
+import { useAuth } from "@/hooks/useAuth";
 import {
   User,
   MapPin,
@@ -60,6 +61,7 @@ const sections = [
 
 const ProfilePage = () => {
   const navigate = useNavigate();
+  const { signOut, user: authUser } = useAuth();
 
   return (
     <AppLayout>
@@ -76,7 +78,7 @@ const ProfilePage = () => {
               <h1 className="text-xl font-display font-bold text-foreground">
                 {user.firstName} {user.lastName}
               </h1>
-              <p className="text-sm text-muted-foreground">Member since {user.memberSince}</p>
+              <p className="text-sm text-muted-foreground">{authUser?.email ?? `Member since ${user.memberSince}`}</p>
               <p className="text-xs text-muted-foreground">{user.customerId}</p>
             </div>
           </div>
@@ -127,7 +129,12 @@ const ProfilePage = () => {
         {/* Sign Out */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
           <button
-            onClick={() => { if (confirm("Sign out of Glass Bank?")) { toast.success("Signed out"); navigate("/login"); } }}
+            onClick={async () => {
+              if (!confirm("Sign out of Glass Bank?")) return;
+              await signOut();
+              toast.success("Signed out");
+              navigate("/login", { replace: true });
+            }}
             className="w-full py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-semibold flex items-center justify-center gap-2"
           >
             <LogOut size={16} />
