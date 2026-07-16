@@ -59,17 +59,20 @@ async function callColumn<T>({ path, method = "GET", body, query }: CallArgs): P
 export const columnApi = {
   listBankAccounts: () =>
     callColumn<{ bank_accounts: ColumnBankAccount[] }>({ path: "/bank-accounts" }),
-  listTransactions: (bankAccountId?: string, fromDate?: string) => {
+  listTransactions: (bankAccountId?: string, fromDate?: string, toDate?: string) => {
     if (!bankAccountId) return Promise.resolve({ transactions: [] as ColumnTransaction[] });
-    // Column requires `from_date` (YYYY-MM-DD). Default to 90 days back.
+    // Column requires BOTH `from_date` and `to_date` (YYYY-MM-DD).
+    const today = new Date();
+    const to = toDate || today.toISOString().slice(0, 10);
     const from =
       fromDate ||
-      new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     return callColumn<{ transactions?: ColumnTransaction[] }>({
-      path: `/bank-accounts/${bankAccountId}/history`,
-      query: { from_date: from },
+      path: `/transactions`,
+      query: { bank_account_id: bankAccountId, from_date: from, to_date: to, limit: 100 },
     }).then((d) => ({ transactions: d.transactions ?? [] }));
   },
+
   createBookTransfer: (args: { sender_bank_account_id: string; receiver_bank_account_id: string; amount: number; description?: string }) =>
     callColumn<unknown>({ path: "/transfers/book", method: "POST", body: args }),
   createCounterparty: (args: {
