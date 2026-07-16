@@ -17,6 +17,7 @@ export type Database = {
       kyc_profiles: {
         Row: {
           city: string
+          column_person_id: string | null
           country: string
           created_at: string
           date_of_birth: string
@@ -36,9 +37,11 @@ export type Database = {
           submitted_at: string
           updated_at: string
           user_id: string
+          verification_tags: string[] | null
         }
         Insert: {
           city: string
+          column_person_id?: string | null
           country?: string
           created_at?: string
           date_of_birth: string
@@ -58,9 +61,11 @@ export type Database = {
           submitted_at?: string
           updated_at?: string
           user_id: string
+          verification_tags?: string[] | null
         }
         Update: {
           city?: string
+          column_person_id?: string | null
           country?: string
           created_at?: string
           date_of_birth?: string
@@ -80,6 +85,7 @@ export type Database = {
           submitted_at?: string
           updated_at?: string
           user_id?: string
+          verification_tags?: string[] | null
         }
         Relationships: []
       }
