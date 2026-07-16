@@ -4,7 +4,7 @@ import { ShieldAlert, ShieldCheck, Clock } from "lucide-react";
 import { useKyc } from "@/hooks/useKyc";
 
 interface Props {
-  children: ReactNode;
+  children?: ReactNode;
   /** Message shown above the CTA when unverified. */
   reason?: string;
 }
