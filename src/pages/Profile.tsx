@@ -29,7 +29,7 @@ const sections = [
     items: [
       { icon: User, label: "Personal Information", path: "/profile/personal" },
       { icon: MapPin, label: "Address", path: "/profile/address" },
-      { icon: BadgeCheck, label: "Identity & Verification", path: "/profile/identity", badge: "Verified" },
+      { icon: BadgeCheck, label: "Identity & Verification", path: "/profile/verify" },
       { icon: Briefcase, label: "Employment & Income", path: "/profile/employment" },
     ],
   },
