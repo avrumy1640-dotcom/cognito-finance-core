@@ -84,6 +84,11 @@ const CardsPage = () => {
   };
 
   const doIssueVirtual = async () => {
+    if (!canMoveMoney) {
+      toast.error("Verify your identity to issue a new card.");
+      navigate("/profile/verify");
+      return;
+    }
     const ok = await issueCard({ type: "virtual" });
     if (ok) toast.success("Virtual card issued", { description: columnLive ? "Provisioned via Column" : "Ready to use" });
     else toast.error("Card issuance failed");
