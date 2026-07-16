@@ -197,6 +197,41 @@ const SecurityCenter = () => {
           </motion.div>
         ))}
       </div>
+
+      {pwOpen && (
+        <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => !pwLoading && setPwOpen(false)}>
+          <div className="w-full max-w-sm glass-card-elevated rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-display font-bold text-foreground">Change password</h3>
+              <button onClick={() => setPwOpen(false)} disabled={pwLoading}>
+                <X size={18} className="text-muted-foreground" />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">Choose a new password of at least 8 characters. You will stay signed in on this device.</p>
+            <input
+              type="password"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              placeholder="New password"
+              className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none"
+            />
+            <input
+              type="password"
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+              placeholder="Confirm new password"
+              className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none"
+            />
+            <button
+              onClick={submitPassword}
+              disabled={pwLoading}
+              className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60"
+            >
+              {pwLoading ? "Updating…" : "Update password"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
