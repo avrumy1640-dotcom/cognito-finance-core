@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
+import { useKyc } from "@/hooks/useKyc";
 import {
   Lock,
   Unlock,
@@ -40,7 +42,9 @@ const controlLabels = {
 } as const;
 
 const CardsPage = () => {
+  const navigate = useNavigate();
   const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen, issueCard, columnLive } = useBank();
+  const { canMoveMoney } = useKyc();
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState<"actions" | "controls" | "transactions">("actions");
   const [travelActive, setTravelActive] = useState(false);
@@ -84,6 +88,11 @@ const CardsPage = () => {
   };
 
   const doIssueVirtual = async () => {
+    if (!canMoveMoney) {
+      toast.error("Verify your identity to issue a new card.");
+      navigate("/profile/verify");
+      return;
+    }
     const ok = await issueCard({ type: "virtual" });
     if (ok) toast.success("Virtual card issued", { description: columnLive ? "Provisioned via Column" : "Ready to use" });
     else toast.error("Card issuance failed");

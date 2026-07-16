@@ -22,6 +22,7 @@ import Documents from "./pages/Documents";
 import SpendingInsights from "./pages/SpendingInsights";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
+import VerifyIdentity from "./pages/VerifyIdentity";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/activity" element={<Guarded><Activity /></Guarded>} />
               <Route path="/profile" element={<Guarded><Profile /></Guarded>} />
               <Route path="/profile/personal" element={<Guarded><PersonalInfo /></Guarded>} />
+              <Route path="/profile/verify" element={<Guarded><VerifyIdentity /></Guarded>} />
               <Route path="/profile/documents" element={<Guarded><Documents /></Guarded>} />
               <Route path="/profile/address" element={<Guarded><PersonalInfo /></Guarded>} />
               <Route path="/profile/identity" element={<Guarded><PersonalInfo /></Guarded>} />

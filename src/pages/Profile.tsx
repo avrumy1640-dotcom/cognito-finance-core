@@ -29,7 +29,7 @@ const sections = [
     items: [
       { icon: User, label: "Personal Information", path: "/profile/personal" },
       { icon: MapPin, label: "Address", path: "/profile/address" },
-      { icon: BadgeCheck, label: "Identity & Verification", path: "/profile/identity", badge: "Verified" },
+      { icon: BadgeCheck, label: "Identity & Verification", path: "/profile/verify" },
       { icon: Briefcase, label: "Employment & Income", path: "/profile/employment" },
     ],
   },
@@ -115,7 +115,7 @@ const ProfilePage = () => {
                   <div className="flex items-center gap-2">
                     {"badge" in item && item.badge && (
                       <span className="text-[10px] font-medium text-success bg-success/10 px-2 py-0.5 rounded-full">
-                        {item.badge}
+                        {String(item.badge)}
                       </span>
                     )}
                     <ChevronRight size={16} className="text-muted-foreground" />

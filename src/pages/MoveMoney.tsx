@@ -16,6 +16,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useBank } from "@/store/bankStore";
+import { useKyc } from "@/hooks/useKyc";
+import RequireKyc from "@/components/RequireKyc";
 
 const actions = [
   { label: "Transfer", desc: "Between my accounts", icon: ArrowLeftRight, id: "transfer" },
@@ -30,9 +32,18 @@ const actions = [
 const MoveMoney = () => {
   const { action: routeAction } = useParams();
   const { recipients } = useBank();
+  const { canMoveMoney } = useKyc();
   const [selected, setSelected] = useState<string | null>(
     routeAction && actions.some((a) => a.id === routeAction) ? routeAction : null
   );
+
+  if (!canMoveMoney) {
+    return (
+      <AppLayout>
+        <RequireKyc reason="Verify your identity before moving money in or out of your accounts." />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
