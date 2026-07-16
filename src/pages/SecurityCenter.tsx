@@ -53,7 +53,7 @@ const SecurityCenter = () => {
   const action = (label: string) => () => {
     switch (label) {
       case "Change Password":
-        toast.success("Verification link sent to your email.");
+        setPwOpen(true);
         break;
       case "Two-Factor Authentication":
         toast.info("2FA is active via SMS to (415) •••-0142");
@@ -65,12 +65,15 @@ const SecurityCenter = () => {
         toast.info("Last login: Today, San Francisco, CA · iPhone 17 Pro");
         break;
       case "Active Sessions":
-        toast.info("1 active session on this device");
+        toast.info(user?.email ? `Signed in as ${user.email}` : "1 active session on this device");
         break;
       case "Sign Out All Devices":
-        if (confirm("Sign out of all other devices?")) {
-          toast.success("All other sessions ended.");
-        }
+        if (!confirm("Sign out of all other devices?")) break;
+        toast.loading("Ending other sessions…", { id: "signout-others" });
+        signOutOthers().then(({ error }) => {
+          if (error) toast.error(error, { id: "signout-others" });
+          else toast.success("All other sessions ended.", { id: "signout-others" });
+        });
         break;
       case "Fraud Center":
         toast.info("No fraud alerts. You're all clear.");
@@ -79,7 +82,11 @@ const SecurityCenter = () => {
         toast.info("No identity issues detected in the last 30 days.");
         break;
       case "Recovery Email":
-        toast.success("A verification email was sent to update your recovery email.");
+        if (!user?.email) { toast.error("No account email on file."); break; }
+        sendPasswordReset(user.email).then(({ error }) => {
+          if (error) toast.error(error);
+          else toast.success("A verification email was sent to update your recovery email.");
+        });
         break;
       case "Backup Phone":
         toast.success("SMS code sent to your backup phone.");
@@ -87,6 +94,18 @@ const SecurityCenter = () => {
       default:
         toast(label);
     }
+  };
+
+  const submitPassword = async () => {
+    if (newPw.length < 8) { toast.error("Password must be at least 8 characters."); return; }
+    if (newPw !== confirmPw) { toast.error("Passwords do not match."); return; }
+    setPwLoading(true);
+    const { error } = await updatePassword(newPw);
+    setPwLoading(false);
+    if (error) { toast.error(error); return; }
+    toast.success("Password updated");
+    setPwOpen(false);
+    setNewPw(""); setConfirmPw("");
   };
 
   const sections: Array<{
