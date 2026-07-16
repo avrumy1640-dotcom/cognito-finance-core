@@ -78,7 +78,7 @@ const ProfilePage = () => {
               <h1 className="text-xl font-display font-bold text-foreground">
                 {user.firstName} {user.lastName}
               </h1>
-              <p className="text-sm text-muted-foreground">Member since {user.memberSince}</p>
+              <p className="text-sm text-muted-foreground">{authUser?.email ?? `Member since ${user.memberSince}`}</p>
               <p className="text-xs text-muted-foreground">{user.customerId}</p>
             </div>
           </div>
