@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      kyc_profiles: {
+        Row: {
+          city: string
+          country: string
+          created_at: string
+          date_of_birth: string
+          employment_status: string | null
+          id: string
+          id_number_last4: string
+          id_type: string
+          legal_first_name: string
+          legal_last_name: string
+          postal_code: string
+          region: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          ssn_last4: string
+          status: Database["public"]["Enums"]["kyc_status"]
+          street: string
+          submitted_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          city: string
+          country?: string
+          created_at?: string
+          date_of_birth: string
+          employment_status?: string | null
+          id?: string
+          id_number_last4: string
+          id_type: string
+          legal_first_name: string
+          legal_last_name: string
+          postal_code: string
+          region: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          ssn_last4: string
+          status?: Database["public"]["Enums"]["kyc_status"]
+          street: string
+          submitted_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          city?: string
+          country?: string
+          created_at?: string
+          date_of_birth?: string
+          employment_status?: string | null
+          id?: string
+          id_number_last4?: string
+          id_type?: string
+          legal_first_name?: string
+          legal_last_name?: string
+          postal_code?: string
+          region?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          ssn_last4?: string
+          status?: Database["public"]["Enums"]["kyc_status"]
+          street?: string
+          submitted_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       login_history: {
         Row: {
           created_at: string
@@ -79,7 +148,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      kyc_status: "unverified" | "pending" | "verified" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -206,6 +275,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      kyc_status: ["unverified", "pending", "verified", "rejected"],
+    },
   },
 } as const
