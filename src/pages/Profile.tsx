@@ -115,7 +115,7 @@ const ProfilePage = () => {
                   <div className="flex items-center gap-2">
                     {"badge" in item && item.badge && (
                       <span className="text-[10px] font-medium text-success bg-success/10 px-2 py-0.5 rounded-full">
-                        {item.badge}
+                        {String(item.badge)}
                       </span>
                     )}
                     <ChevronRight size={16} className="text-muted-foreground" />
