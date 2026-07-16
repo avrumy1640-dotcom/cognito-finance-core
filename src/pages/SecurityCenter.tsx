@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
+import { useAuth } from "@/hooks/useAuth";
 import {
   ArrowLeft,
   Lock,
@@ -18,6 +19,7 @@ import {
   Clock,
   Mail,
   Phone,
+  X,
 } from "lucide-react";
 
 type ToggleKey =
@@ -28,12 +30,17 @@ type ToggleKey =
 
 const SecurityCenter = () => {
   const navigate = useNavigate();
+  const { user, signOutOthers, updatePassword, sendPasswordReset } = useAuth();
   const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
     biometric: true,
     passcode: true,
     unusualLogin: true,
     suspiciousTx: true,
   });
+  const [pwOpen, setPwOpen] = useState(false);
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
 
   const flip = (k: ToggleKey) => {
     setToggles((t) => {
