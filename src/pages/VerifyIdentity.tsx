@@ -82,7 +82,10 @@ const VerifyIdentity = () => {
     setSubmitting(true);
     const d = parsed.data;
     const ssnDigits = d.ssn_full.replace(/-/g, "");
-    const payload = {
+
+    // Persist redacted profile row first so the pending state exists even if the
+    // provider call is slow or errors mid-flight.
+    const insertPayload = {
       user_id: user.id,
       legal_first_name: d.legal_first_name,
       legal_last_name: d.legal_last_name,
@@ -100,32 +103,58 @@ const VerifyIdentity = () => {
       submitted_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
+    const { error: upsertErr } = await supabase
       .from("kyc_profiles")
-      .upsert(payload, { onConflict: "user_id" });
+      .upsert(insertPayload, { onConflict: "user_id" });
 
-    if (error) {
+    if (upsertErr) {
       setSubmitting(false);
-      toast.error(error.message);
+      toast.error(upsertErr.message);
       return;
     }
 
-    // Simulated review: auto-verify after a short delay (demo BaaS behavior).
-    toast.loading("Reviewing your information…", { id: "kyc" });
-    await new Promise((r) => setTimeout(r, 1600));
-    const { error: reviewErr } = await supabase
-      .from("kyc_profiles")
-      .update({ status: "verified", reviewed_at: new Date().toISOString() })
-      .eq("user_id", user.id);
+    toast.loading("Verifying your identity…", { id: "kyc" });
+
+    // Call the server-side verification function. Full SSN + ID stay in the
+    // request body only — never persisted client-side or in the DB.
+    const { data: result, error: fnErr } = await supabase.functions.invoke("kyc-verify", {
+      body: {
+        legal_first_name: d.legal_first_name,
+        legal_last_name: d.legal_last_name,
+        date_of_birth: d.date_of_birth,
+        ssn_full: ssnDigits,
+        id_type: d.id_type,
+        id_number: d.id_number,
+        street: d.street,
+        city: d.city,
+        region: d.region.toUpperCase(),
+        postal_code: d.postal_code,
+        country: d.country,
+        employment_status: d.employment_status,
+      },
+    });
     setSubmitting(false);
 
-    if (reviewErr) {
-      toast.error(reviewErr.message, { id: "kyc" });
+    if (fnErr) {
+      toast.error(fnErr.message ?? "Verification service unavailable", { id: "kyc" });
+      await refresh();
       return;
     }
-    toast.success("Identity verified — your account is now active.", { id: "kyc" });
+
+    const outcome = (result as { status?: string; reason?: string } | null)?.status ?? "pending";
+    if (outcome === "verified") {
+      toast.success("Identity verified — your account is now active.", { id: "kyc" });
+    } else if (outcome === "rejected") {
+      toast.error(
+        (result as { reason?: string })?.reason ?? "Verification was denied. Please review your details and try again.",
+        { id: "kyc" },
+      );
+    } else {
+      toast("Additional review required — we'll notify you when a decision is made.", { id: "kyc" });
+    }
     await refresh();
   };
+
 
   // If already verified/pending, prefill display
   useEffect(() => {
