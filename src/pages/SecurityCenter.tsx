@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { getDeviceId } from "@/lib/deviceTracking";
 import {
   ArrowLeft,
   Lock,
@@ -20,49 +22,168 @@ import {
   Mail,
   Phone,
   X,
+  Trash2,
 } from "lucide-react";
 
-type ToggleKey =
-  | "biometric"
-  | "passcode"
-  | "unusualLogin"
-  | "suspiciousTx";
+type ToggleKey = "biometric" | "passcode" | "unusualLogin" | "suspiciousTx";
+type ModalKind = "password" | "2fa" | "devices" | "history" | null;
+
+interface LoginRow { id: string; created_at: string; device_label: string | null; user_agent: string | null; }
+interface DeviceRow { id: string; device_id: string; label: string; user_agent: string | null; last_seen_at: string; created_at: string; }
+interface MfaFactor { id: string; friendly_name?: string; factor_type: string; status: string; }
 
 const SecurityCenter = () => {
   const navigate = useNavigate();
   const { user, signOutOthers, updatePassword, sendPasswordReset } = useAuth();
+
   const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
     biometric: true,
     passcode: true,
     unusualLogin: true,
     suspiciousTx: true,
   });
-  const [pwOpen, setPwOpen] = useState(false);
+
+  const [modal, setModal] = useState<ModalKind>(null);
+
+  // Password change
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
 
+  // MFA
+  const [factors, setFactors] = useState<MfaFactor[]>([]);
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [enrollQr, setEnrollQr] = useState<string | null>(null);
+  const [enrollSecret, setEnrollSecret] = useState<string | null>(null);
+  const [enrollFactorId, setEnrollFactorId] = useState<string | null>(null);
+  const [otp, setOtp] = useState("");
+
+  // History + devices
+  const [history, setHistory] = useState<LoginRow[]>([]);
+  const [devices, setDevices] = useState<DeviceRow[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+
+  const currentDeviceId = getDeviceId();
+  const verifiedFactor = factors.find((f) => f.status === "verified" && f.factor_type === "totp");
+
+  const loadFactors = useCallback(async () => {
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error) return;
+    const all = [...(data?.totp ?? []), ...(data?.phone ?? [])] as MfaFactor[];
+    setFactors(all);
+  }, []);
+
+  useEffect(() => { void loadFactors(); }, [loadFactors]);
+
+  const loadHistory = async () => {
+    if (!user) return;
+    setListLoading(true);
+    const { data } = await supabase
+      .from("login_history")
+      .select("id, created_at, device_label, user_agent")
+      .order("created_at", { ascending: false })
+      .limit(25);
+    setHistory((data as LoginRow[]) ?? []);
+    setListLoading(false);
+  };
+
+  const loadDevices = async () => {
+    if (!user) return;
+    setListLoading(true);
+    const { data } = await supabase
+      .from("trusted_devices")
+      .select("id, device_id, label, user_agent, last_seen_at, created_at")
+      .order("last_seen_at", { ascending: false });
+    setDevices((data as DeviceRow[]) ?? []);
+    setListLoading(false);
+  };
+
   const flip = (k: ToggleKey) => {
     setToggles((t) => {
       const next = { ...t, [k]: !t[k] };
-      toast.success(`${k === "biometric" ? "Biometric login" : k === "passcode" ? "App passcode" : k === "unusualLogin" ? "Unusual login alerts" : "Suspicious transaction alerts"} ${next[k] ? "enabled" : "disabled"}`);
+      toast.success(
+        `${k === "biometric" ? "Biometric login" : k === "passcode" ? "App passcode" : k === "unusualLogin" ? "Unusual login alerts" : "Suspicious transaction alerts"} ${next[k] ? "enabled" : "disabled"}`
+      );
       return next;
     });
+  };
+
+  const submitPassword = async () => {
+    if (newPw.length < 8) { toast.error("Password must be at least 8 characters."); return; }
+    if (newPw !== confirmPw) { toast.error("Passwords do not match."); return; }
+    setPwLoading(true);
+    const { error } = await updatePassword(newPw);
+    setPwLoading(false);
+    if (error) { toast.error(error); return; }
+    toast.success("Password updated");
+    setModal(null); setNewPw(""); setConfirmPw("");
+  };
+
+  const openMfa = async () => {
+    setModal("2fa");
+    await loadFactors();
+  };
+
+  const startEnroll = async () => {
+    setMfaLoading(true);
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: `Authenticator (${new Date().toLocaleDateString()})` });
+    setMfaLoading(false);
+    if (error) { toast.error(error.message); return; }
+    setEnrollFactorId(data.id);
+    setEnrollQr(data.totp.qr_code);
+    setEnrollSecret(data.totp.secret);
+  };
+
+  const verifyEnroll = async () => {
+    if (!enrollFactorId || otp.length < 6) { toast.error("Enter the 6-digit code from your app."); return; }
+    setMfaLoading(true);
+    const challenge = await supabase.auth.mfa.challenge({ factorId: enrollFactorId });
+    if (challenge.error) { setMfaLoading(false); toast.error(challenge.error.message); return; }
+    const verify = await supabase.auth.mfa.verify({ factorId: enrollFactorId, challengeId: challenge.data.id, code: otp });
+    setMfaLoading(false);
+    if (verify.error) { toast.error(verify.error.message); return; }
+    toast.success("Two-factor authentication enabled");
+    setEnrollFactorId(null); setEnrollQr(null); setEnrollSecret(null); setOtp("");
+    await loadFactors();
+  };
+
+  const disableFactor = async (factorId: string) => {
+    if (!confirm("Turn off two-factor authentication?")) return;
+    setMfaLoading(true);
+    const { error } = await supabase.auth.mfa.unenroll({ factorId });
+    setMfaLoading(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Two-factor authentication removed");
+    await loadFactors();
+  };
+
+  const removeDevice = async (row: DeviceRow) => {
+    if (row.device_id === currentDeviceId) {
+      toast.error("This is the device you're using. Sign out from Profile instead.");
+      return;
+    }
+    if (!confirm(`Remove ${row.label} from trusted devices?`)) return;
+    const { error } = await supabase.from("trusted_devices").delete().eq("id", row.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Device removed");
+    setDevices((d) => d.filter((x) => x.id !== row.id));
   };
 
   const action = (label: string) => () => {
     switch (label) {
       case "Change Password":
-        setPwOpen(true);
+        setModal("password");
         break;
       case "Two-Factor Authentication":
-        toast.info("2FA is active via SMS to (415) •••-0142");
+        void openMfa();
         break;
       case "Trusted Devices":
-        toast.info("iPhone 17 Pro · MacBook Pro 14\" trusted");
+        setModal("devices");
+        void loadDevices();
         break;
       case "Login History":
-        toast.info("Last login: Today, San Francisco, CA · iPhone 17 Pro");
+        setModal("history");
+        void loadHistory();
         break;
       case "Active Sessions":
         toast.info(user?.email ? `Signed in as ${user.email}` : "1 active session on this device");
@@ -85,7 +206,7 @@ const SecurityCenter = () => {
         if (!user?.email) { toast.error("No account email on file."); break; }
         sendPasswordReset(user.email).then(({ error }) => {
           if (error) toast.error(error);
-          else toast.success("A verification email was sent to update your recovery email.");
+          else toast.success("A verification email was sent.");
         });
         break;
       case "Backup Phone":
@@ -96,32 +217,17 @@ const SecurityCenter = () => {
     }
   };
 
-  const submitPassword = async () => {
-    if (newPw.length < 8) { toast.error("Password must be at least 8 characters."); return; }
-    if (newPw !== confirmPw) { toast.error("Passwords do not match."); return; }
-    setPwLoading(true);
-    const { error } = await updatePassword(newPw);
-    setPwLoading(false);
-    if (error) { toast.error(error); return; }
-    toast.success("Password updated");
-    setPwOpen(false);
-    setNewPw(""); setConfirmPw("");
-  };
-
-  const sections: Array<{
-    title: string;
-    items: Array<{ icon: any; label: string; desc: string; toggle?: ToggleKey }>;
-  }> = [
+  const sections: Array<{ title: string; items: Array<{ icon: any; label: string; desc: string; toggle?: ToggleKey }>; }> = [
     {
       title: "Login & Authentication",
       items: [
-        { icon: Key, label: "Change Password", desc: "Last changed 45 days ago" },
+        { icon: Key, label: "Change Password", desc: "Set a new password" },
         { icon: Fingerprint, label: "Biometric Login", desc: `Face ID ${toggles.biometric ? "enabled" : "disabled"}`, toggle: "biometric" },
         { icon: Lock, label: "App Passcode", desc: `4-digit passcode ${toggles.passcode ? "enabled" : "disabled"}`, toggle: "passcode" },
-        { icon: Shield, label: "Two-Factor Authentication", desc: "SMS verification active" },
-        { icon: Smartphone, label: "Trusted Devices", desc: "2 devices trusted" },
+        { icon: Shield, label: "Two-Factor Authentication", desc: verifiedFactor ? "Authenticator app enabled" : "Not enabled" },
+        { icon: Smartphone, label: "Trusted Devices", desc: `${devices.length || "—"} device${devices.length === 1 ? "" : "s"}` },
         { icon: Clock, label: "Login History", desc: "View recent logins" },
-        { icon: Monitor, label: "Active Sessions", desc: "1 active session" },
+        { icon: Monitor, label: "Active Sessions", desc: "This device" },
         { icon: LogOut, label: "Sign Out All Devices", desc: "End all other sessions" },
       ],
     },
@@ -137,11 +243,21 @@ const SecurityCenter = () => {
     {
       title: "Recovery & Verification",
       items: [
-        { icon: Mail, label: "Recovery Email", desc: "ale***@email.com" },
+        { icon: Mail, label: "Recovery Email", desc: user?.email ?? "Not set" },
         { icon: Phone, label: "Backup Phone", desc: "(415) ***-0142" },
       ],
     },
   ];
+
+  const closeModal = () => {
+    setModal(null);
+    setEnrollFactorId(null); setEnrollQr(null); setEnrollSecret(null); setOtp("");
+  };
+
+  useEffect(() => {
+    if (user) void loadDevices();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -156,10 +272,12 @@ const SecurityCenter = () => {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <GlassCard elevated className="text-center">
             <div className="w-20 h-20 rounded-full border-4 border-success mx-auto flex items-center justify-center mb-3">
-              <span className="text-2xl font-display font-bold text-success">A+</span>
+              <span className="text-2xl font-display font-bold text-success">{verifiedFactor ? "A+" : "B"}</span>
             </div>
-            <h2 className="text-lg font-display font-bold text-foreground">Security Score: Excellent</h2>
-            <p className="text-sm text-muted-foreground mt-1">All security features are properly configured</p>
+            <h2 className="text-lg font-display font-bold text-foreground">Security Score: {verifiedFactor ? "Excellent" : "Good"}</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {verifiedFactor ? "Two-factor authentication is on." : "Turn on two-factor authentication to strengthen your account."}
+            </p>
           </GlassCard>
         </motion.div>
 
@@ -198,37 +316,123 @@ const SecurityCenter = () => {
         ))}
       </div>
 
-      {pwOpen && (
-        <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => !pwLoading && setPwOpen(false)}>
-          <div className="w-full max-w-sm glass-card-elevated rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+      {modal && (
+        <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => !pwLoading && !mfaLoading && closeModal()}>
+          <div className="w-full max-w-md glass-card-elevated rounded-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-display font-bold text-foreground">Change password</h3>
-              <button onClick={() => setPwOpen(false)} disabled={pwLoading}>
+              <h3 className="text-base font-display font-bold text-foreground">
+                {modal === "password" && "Change password"}
+                {modal === "2fa" && "Two-factor authentication"}
+                {modal === "devices" && "Trusted devices"}
+                {modal === "history" && "Login history"}
+              </h3>
+              <button onClick={closeModal} disabled={pwLoading || mfaLoading}>
                 <X size={18} className="text-muted-foreground" />
               </button>
             </div>
-            <p className="text-xs text-muted-foreground">Choose a new password of at least 8 characters. You will stay signed in on this device.</p>
-            <input
-              type="password"
-              value={newPw}
-              onChange={(e) => setNewPw(e.target.value)}
-              placeholder="New password"
-              className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none"
-            />
-            <input
-              type="password"
-              value={confirmPw}
-              onChange={(e) => setConfirmPw(e.target.value)}
-              placeholder="Confirm new password"
-              className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none"
-            />
-            <button
-              onClick={submitPassword}
-              disabled={pwLoading}
-              className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60"
-            >
-              {pwLoading ? "Updating…" : "Update password"}
-            </button>
+
+            {modal === "password" && (
+              <>
+                <p className="text-xs text-muted-foreground">Choose a new password of at least 8 characters. You'll stay signed in on this device.</p>
+                <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="New password"
+                  className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none" />
+                <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Confirm new password"
+                  className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none" />
+                <button onClick={submitPassword} disabled={pwLoading}
+                  className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60">
+                  {pwLoading ? "Updating…" : "Update password"}
+                </button>
+              </>
+            )}
+
+            {modal === "2fa" && (
+              <>
+                {verifiedFactor ? (
+                  <>
+                    <div className="p-3 rounded-xl bg-success/10 text-success text-sm">
+                      Authenticator app is active on your account.
+                    </div>
+                    <button onClick={() => disableFactor(verifiedFactor.id)} disabled={mfaLoading}
+                      className="w-full py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-semibold disabled:opacity-60">
+                      {mfaLoading ? "Removing…" : "Turn off two-factor"}
+                    </button>
+                  </>
+                ) : enrollQr ? (
+                  <>
+                    <p className="text-xs text-muted-foreground">Scan this QR code with an authenticator app (Google Authenticator, 1Password, Authy), then enter the 6-digit code below.</p>
+                    <div className="bg-white p-4 rounded-xl flex items-center justify-center">
+                      <img src={enrollQr} alt="TOTP QR code" className="w-48 h-48" />
+                    </div>
+                    {enrollSecret && (
+                      <p className="text-[11px] text-muted-foreground text-center break-all">Or enter this key: <span className="font-mono">{enrollSecret}</span></p>
+                    )}
+                    <input
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="123456"
+                      inputMode="numeric"
+                      className="w-full p-3 rounded-xl bg-secondary text-foreground text-center text-lg tracking-widest border-0 outline-none"
+                    />
+                    <button onClick={verifyEnroll} disabled={mfaLoading || otp.length < 6}
+                      className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60">
+                      {mfaLoading ? "Verifying…" : "Verify & enable"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">Add a second factor with an authenticator app. Required for sensitive actions.</p>
+                    {factors.filter((f) => f.status !== "verified").length > 0 && (
+                      <p className="text-[11px] text-muted-foreground">You have an unverified factor pending. Starting a new enrollment will replace it.</p>
+                    )}
+                    <button onClick={startEnroll} disabled={mfaLoading}
+                      className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60">
+                      {mfaLoading ? "Preparing…" : "Set up authenticator app"}
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+
+            {modal === "devices" && (
+              <>
+                {listLoading && <p className="text-xs text-muted-foreground text-center py-4">Loading…</p>}
+                {!listLoading && devices.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">No trusted devices yet. This device will be added on your next sign-in.</p>
+                )}
+                <div className="space-y-2">
+                  {devices.map((d) => (
+                    <div key={d.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {d.label}{d.device_id === currentDeviceId && <span className="ml-2 text-[10px] text-success">This device</span>}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">Last seen {new Date(d.last_seen_at).toLocaleString()}</p>
+                      </div>
+                      <button onClick={() => removeDevice(d)} className="p-2 rounded-lg hover:bg-destructive/10">
+                        <Trash2 size={16} className="text-destructive" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {modal === "history" && (
+              <>
+                {listLoading && <p className="text-xs text-muted-foreground text-center py-4">Loading…</p>}
+                {!listLoading && history.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">No sign-ins recorded yet.</p>
+                )}
+                <div className="space-y-2">
+                  {history.map((h) => (
+                    <div key={h.id} className="p-3 rounded-xl bg-secondary/50">
+                      <p className="text-sm font-medium text-foreground">{h.device_label ?? "Unknown device"}</p>
+                      <p className="text-[11px] text-muted-foreground">{new Date(h.created_at).toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
