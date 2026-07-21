@@ -41,7 +41,7 @@ const schema = z.object({
   confirm: z.literal(true, { errorMap: () => ({ message: "You must confirm the information is accurate" }) }),
 });
 
-type FormState = z.infer<typeof schema> & { confirm: boolean };
+type FormState = Omit<z.infer<typeof schema>, "confirm"> & { confirm: boolean };
 
 const emptyForm: FormState = {
   legal_first_name: "",
