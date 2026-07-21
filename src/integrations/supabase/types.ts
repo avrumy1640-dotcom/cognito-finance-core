@@ -122,6 +122,48 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          annual_income: string | null
+          citizenship: string | null
+          created_at: string
+          email: string | null
+          employer: string | null
+          id: string
+          occupation: string | null
+          phone: string | null
+          preferred_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          annual_income?: string | null
+          citizenship?: string | null
+          created_at?: string
+          email?: string | null
+          employer?: string | null
+          id?: string
+          occupation?: string | null
+          phone?: string | null
+          preferred_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          annual_income?: string | null
+          citizenship?: string | null
+          created_at?: string
+          email?: string | null
+          employer?: string | null
+          id?: string
+          occupation?: string | null
+          phone?: string | null
+          preferred_name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       trusted_devices: {
         Row: {
           created_at: string
