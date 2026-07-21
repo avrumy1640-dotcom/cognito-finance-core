@@ -116,7 +116,7 @@ const HomePage = () => {
           </div>
         </motion.div>
 
-        {/* Column BaaS live-status pill */}
+        {/* Iberbanco BaaS live-status pill */}
         <button
           onClick={() => refreshColumn()}
           disabled={columnStatus === "loading"}
@@ -136,12 +136,12 @@ const HomePage = () => {
           />
           <span className="text-muted-foreground">
             {columnStatus === "loading"
-              ? "Syncing with Column…"
+              ? "Syncing with Iberbanco…"
               : columnLive
-              ? "Live · Column BaaS"
+              ? "Live · Iberbanco BaaS"
               : columnStatus === "error"
-              ? "Column offline — tap to retry"
-              : "Connecting to Column…"}
+              ? "Iberbanco offline — tap to retry"
+              : "Connecting to Iberbanco…"}
           </span>
         </button>
 

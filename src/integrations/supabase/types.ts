@@ -22,6 +22,8 @@ export type Database = {
           created_at: string
           date_of_birth: string
           employment_status: string | null
+          iberbanco_status_raw: string | null
+          iberbanco_user_number: string | null
           id: string
           id_number_last4: string
           id_type: string
@@ -46,6 +48,8 @@ export type Database = {
           created_at?: string
           date_of_birth: string
           employment_status?: string | null
+          iberbanco_status_raw?: string | null
+          iberbanco_user_number?: string | null
           id?: string
           id_number_last4: string
           id_type: string
@@ -70,6 +74,8 @@ export type Database = {
           created_at?: string
           date_of_birth?: string
           employment_status?: string | null
+          iberbanco_status_raw?: string | null
+          iberbanco_user_number?: string | null
           id?: string
           id_number_last4?: string
           id_type?: string
