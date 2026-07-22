@@ -44,6 +44,7 @@ const AccountDetail = () => {
   const [activeTab, setActiveTab] = useState<"transactions" | "details" | "limits" | "statements" | "settings">("transactions");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TxFilter>("all");
+  const [limitsExport, setLimitsExport] = useState<ExportResult | null>(null);
   const { accounts, transactions } = useBank(); const loading = false;
   const { status: kycStatus } = useKyc();
   const account = type === "savings" ? accounts.savings : accounts.checking;
