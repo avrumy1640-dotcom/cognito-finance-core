@@ -522,11 +522,11 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
             type: "HYDRATE_CARD",
             card: {
               columnCardId: c.remote_id,
-              last4: (c.cardNumber || "").slice(-4) || state.card.last4,
-              network: state.card.network,
+              last4: (c.cardNumber || "").slice(-4) || stateRef.current.card.last4,
+              network: stateRef.current.card.network,
               type: c.type === 1 ? "virtual" : "physical",
               isVirtual: c.type === 1,
-              expiresAt: c.expire_date || state.card.expiresAt,
+              expiresAt: c.expire_date || stateRef.current.card.expiresAt,
               status: c.status === 1 ? "active" : c.status === 2 ? "locked" : c.status === 6 || c.status === 7 ? "stolen" : "active",
               isLocked: c.status !== 1,
             },
@@ -566,7 +566,8 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         });
       }
     }
-  }, [state.accounts.checking, state.accounts.savings, state.card, fireAlert]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fireAlert]);
 
   useEffect(() => {
     refreshColumn({ silent: true });
