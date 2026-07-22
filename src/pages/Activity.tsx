@@ -45,6 +45,36 @@ const ActivityPage = () => {
     groups[key].push(tx);
   });
 
+  const exportCsv = () => {
+    const rows = [
+      ["date", "merchant", "category", "account", "amount", "status", "type"],
+      ...filtered.map((tx) => [
+        tx.date,
+        tx.merchant,
+        tx.category,
+        tx.account,
+        tx.amount.toFixed(2),
+        tx.status,
+        tx.type,
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `activity-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const insightShortcuts = [
+    { label: "Subscriptions", emoji: "📱", filter: null as string | null },
+    { label: "Top Merchants", emoji: "🏪", filter: null },
+    { label: "Recurring", emoji: "🔄", filter: null },
+    { label: "Refunds", emoji: "💸", filter: "Income" },
+  ];
+
   return (
     <AppLayout>
       <div className="px-5 pt-14 space-y-5">
@@ -54,7 +84,11 @@ const ActivityPage = () => {
               <h1 className="text-2xl font-display font-bold text-foreground">Activity</h1>
               <p className="text-sm text-muted-foreground mt-1">All transactions & history</p>
             </div>
-            <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+            <button
+              onClick={exportCsv}
+              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
+              title="Export as CSV"
+            >
               <Download size={18} className="text-muted-foreground" />
             </button>
           </div>
@@ -70,7 +104,11 @@ const ActivityPage = () => {
             placeholder="Search transactions..."
             className="w-full pl-10 pr-10 py-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none placeholder:text-muted-foreground"
           />
-          <button className="absolute right-3 top-1/2 -translate-y-1/2">
+          <button
+            onClick={() => navigate("/insights")}
+            className="absolute right-3 top-1/2 -translate-y-1/2"
+            title="Spending insights"
+          >
             <SlidersHorizontal size={16} className="text-muted-foreground" />
           </button>
         </div>
@@ -94,21 +132,45 @@ const ActivityPage = () => {
 
         {/* Insights Shortcuts */}
         <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
-          {[
-            { label: "Subscriptions", emoji: "📱" },
-            { label: "Top Merchants", emoji: "🏪" },
-            { label: "Recurring", emoji: "🔄" },
-            { label: "Refunds", emoji: "💸" },
-          ].map((item) => (
-            <GlassCard key={item.label} className="flex items-center gap-2 py-2 px-3 min-w-fit">
-              <span>{item.emoji}</span>
-              <span className="text-xs font-medium text-foreground whitespace-nowrap">{item.label}</span>
-            </GlassCard>
+          {insightShortcuts.map((item) => (
+            <button
+              key={item.label}
+              onClick={() => (item.filter ? setActiveFilter(item.filter) : navigate("/insights"))}
+              className="min-w-fit"
+            >
+              <GlassCard className="flex items-center gap-2 py-2 px-3">
+                <span>{item.emoji}</span>
+                <span className="text-xs font-medium text-foreground whitespace-nowrap">{item.label}</span>
+              </GlassCard>
+            </button>
           ))}
         </div>
 
         {/* Transaction Groups */}
         <div className="space-y-4 pb-4">
+          {filtered.length === 0 && (
+            <GlassCard className="text-center py-10">
+              <div className="text-4xl mb-2">🔍</div>
+              <p className="text-sm font-medium text-foreground">No transactions match</p>
+              <p className="text-xs text-muted-foreground mt-1 mb-4">
+                Try clearing filters or start a new transaction.
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => { setSearchQuery(""); setActiveFilter("All"); }}
+                  className="px-3 py-2 rounded-xl bg-secondary text-foreground text-xs font-semibold"
+                >
+                  Clear filters
+                </button>
+                <button
+                  onClick={() => navigate("/move-money")}
+                  className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold"
+                >
+                  Move money
+                </button>
+              </div>
+            </GlassCard>
+          )}
           {Object.entries(groups).map(([group, txs]) => (
             <div key={group}>
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
