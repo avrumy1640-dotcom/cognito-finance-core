@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
       return json({ status: "error", message: "path must start with '/'" }, 400);
     }
     // Allowlist Iberbanco API paths only
-    const allowed = ["/accounts", "/transactions", "/cards", "/users", "/currencies", "/crypto"];
+    const allowed = ["/accounts", "/transactions", "/cards", "/users", "/currencies", "/crypto", "/exchange", "/gateway"];
     if (!allowed.some((p) => path === p || path.startsWith(p + "/") || path.startsWith(p + "?"))) {
       return json({ status: "error", message: `Path not allowed: ${path}` }, 400);
     }
