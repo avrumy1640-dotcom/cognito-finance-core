@@ -81,10 +81,11 @@ const SupportTicket = () => {
       body,
     });
     if (error) { toast.error(error.message); setSending(false); return; }
-    const nextStatus = ticket.status === "waiting_customer" ? "in_progress" : ticket.status;
+    const nextStatus = (ticket.status === "waiting_customer" ? "in_progress" : ticket.status) as
+      "closed" | "in_progress" | "open" | "resolved" | "waiting_customer";
     await supabase
       .from("support_tickets")
-      .update({ last_customer_reply_at: new Date().toISOString(), status: nextStatus as Ticket["status"] })
+      .update({ last_customer_reply_at: new Date().toISOString(), status: nextStatus })
       .eq("id", ticket.id);
     setDraft("");
     setSending(false);
