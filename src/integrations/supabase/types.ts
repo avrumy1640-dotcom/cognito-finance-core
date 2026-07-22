@@ -206,6 +206,86 @@ export type Database = {
         }
         Relationships: []
       }
+      support_messages: {
+        Row: {
+          author: Database["public"]["Enums"]["support_message_author"]
+          body: string
+          created_at: string
+          id: string
+          ticket_id: string
+          user_id: string
+        }
+        Insert: {
+          author?: Database["public"]["Enums"]["support_message_author"]
+          body: string
+          created_at?: string
+          id?: string
+          ticket_id: string
+          user_id: string
+        }
+        Update: {
+          author?: Database["public"]["Enums"]["support_message_author"]
+          body?: string
+          created_at?: string
+          id?: string
+          ticket_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          body: string
+          category: Database["public"]["Enums"]["support_ticket_category"]
+          created_at: string
+          id: string
+          last_agent_reply_at: string | null
+          last_customer_reply_at: string | null
+          priority: Database["public"]["Enums"]["support_ticket_priority"]
+          related_transaction_id: string | null
+          status: Database["public"]["Enums"]["support_ticket_status"]
+          subject: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          category?: Database["public"]["Enums"]["support_ticket_category"]
+          created_at?: string
+          id?: string
+          last_agent_reply_at?: string | null
+          last_customer_reply_at?: string | null
+          priority?: Database["public"]["Enums"]["support_ticket_priority"]
+          related_transaction_id?: string | null
+          status?: Database["public"]["Enums"]["support_ticket_status"]
+          subject: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          category?: Database["public"]["Enums"]["support_ticket_category"]
+          created_at?: string
+          id?: string
+          last_agent_reply_at?: string | null
+          last_customer_reply_at?: string | null
+          priority?: Database["public"]["Enums"]["support_ticket_priority"]
+          related_transaction_id?: string | null
+          status?: Database["public"]["Enums"]["support_ticket_status"]
+          subject?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       trusted_devices: {
         Row: {
           created_at: string
@@ -245,6 +325,20 @@ export type Database = {
     }
     Enums: {
       kyc_status: "unverified" | "pending" | "verified" | "rejected"
+      support_message_author: "customer" | "agent" | "system"
+      support_ticket_category:
+        | "question"
+        | "problem"
+        | "dispute"
+        | "feature_request"
+        | "other"
+      support_ticket_priority: "low" | "normal" | "high" | "urgent"
+      support_ticket_status:
+        | "open"
+        | "in_progress"
+        | "waiting_customer"
+        | "resolved"
+        | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -373,6 +467,22 @@ export const Constants = {
   public: {
     Enums: {
       kyc_status: ["unverified", "pending", "verified", "rejected"],
+      support_message_author: ["customer", "agent", "system"],
+      support_ticket_category: [
+        "question",
+        "problem",
+        "dispute",
+        "feature_request",
+        "other",
+      ],
+      support_ticket_priority: ["low", "normal", "high", "urgent"],
+      support_ticket_status: [
+        "open",
+        "in_progress",
+        "waiting_customer",
+        "resolved",
+        "closed",
+      ],
     },
   },
 } as const
