@@ -522,30 +522,42 @@ export type Database = {
       }
       webhook_events: {
         Row: {
+          attempts: number
           error: string | null
+          event_id: string | null
           event_type: string
           id: string
           payload: Json
+          processed_at: string | null
           provider: string
           received_at: string
+          signature: string | null
           status: string
         }
         Insert: {
+          attempts?: number
           error?: string | null
+          event_id?: string | null
           event_type: string
           id?: string
           payload?: Json
+          processed_at?: string | null
           provider: string
           received_at?: string
+          signature?: string | null
           status?: string
         }
         Update: {
+          attempts?: number
           error?: string | null
+          event_id?: string | null
           event_type?: string
           id?: string
           payload?: Json
+          processed_at?: string | null
           provider?: string
           received_at?: string
+          signature?: string | null
           status?: string
         }
         Relationships: []
