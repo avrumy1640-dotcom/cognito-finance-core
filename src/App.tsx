@@ -27,6 +27,7 @@ import Welcome from "./pages/Welcome";
 import VerifyEmail from "./pages/VerifyEmail";
 import MfaChallenge from "./pages/MfaChallenge";
 import Onboarding from "./pages/Onboarding";
+import ReceiveMoney from "./pages/ReceiveMoney";
 
 const queryClient = new QueryClient();
 
