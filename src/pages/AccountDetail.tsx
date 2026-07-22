@@ -42,7 +42,7 @@ const AccountDetail = () => {
   const [activeTab, setActiveTab] = useState<"transactions" | "details" | "limits" | "statements" | "settings">("transactions");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TxFilter>("all");
-  const { accounts, transactions, loading } = useBank() as ReturnType<typeof useBank> & { loading?: boolean };
+  const { accounts, transactions } = useBank(); const loading = false;
   const { status: kycStatus } = useKyc();
   const account = type === "savings" ? accounts.savings : accounts.checking;
 
@@ -162,7 +162,7 @@ const AccountDetail = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-secondary rounded-xl p-1 overflow-x-auto no-scrollbar">
+        <div className="flex gap-1 bg-secondary rounded-xl p-1 overflow-x-auto [no-scrollbar::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {(["transactions", "details", "limits", "statements", "settings"] as const).map((tab) => (
             <button
               key={tab}
@@ -188,7 +188,7 @@ const AccountDetail = () => {
                   </button>
                 )}
               </div>
-              <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar">
+              <div className="flex gap-2 mb-3 overflow-x-auto [no-scrollbar::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 {filterChips.map((chip) => {
                   const active = filter === chip.key;
                   return (
