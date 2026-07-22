@@ -74,7 +74,7 @@ const App = () => (
               <Route path="/help" element={<Guarded><HelpCenter /></Guarded>} />
               <Route path="/help/contact" element={<Guarded><HelpCenter /></Guarded>} />
               <Route path="/insights" element={<Guarded><SpendingInsights /></Guarded>} />
-              <Route path="/settings" element={<Guarded><SecurityCenter /></Guarded>} />
+              <Route path="/settings" element={<Guarded><Settings /></Guarded>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
