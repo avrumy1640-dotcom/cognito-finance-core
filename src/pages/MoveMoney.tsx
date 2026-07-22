@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Building2,
   CheckCircle2,
+  QrCode,
 } from "lucide-react";
 import { useBank } from "@/store/bankStore";
 import { useKyc } from "@/hooks/useKyc";
@@ -22,6 +23,7 @@ import RequireKyc from "@/components/RequireKyc";
 const actions = [
   { label: "Transfer", desc: "Between my accounts", icon: ArrowLeftRight, id: "transfer" },
   { label: "Send Money", desc: "To another person", icon: Send, id: "send" },
+  { label: "Receive Money", desc: "Share account or QR", icon: QrCode, id: "receive" },
   { label: "Deposit Check", desc: "Mobile check deposit", icon: Camera, id: "deposit" },
   { label: "Pay Bills", desc: "One-time or recurring", icon: Receipt, id: "bills" },
   { label: "External Transfer", desc: "ACH to/from bank", icon: Building2, id: "external" },
@@ -30,6 +32,7 @@ const actions = [
 ];
 
 const MoveMoney = () => {
+  const navigate = useNavigate();
   const { action: routeAction } = useParams();
   const { recipients } = useBank();
   const { canMoveMoney } = useKyc();
@@ -90,7 +93,7 @@ const MoveMoney = () => {
               transition={{ delay: 0.05 + i * 0.04 }}
             >
               <GlassCard
-                onClick={() => setSelected(action.id)}
+                onClick={() => action.id === "receive" ? navigate("/receive") : setSelected(action.id)}
                 className="flex items-center justify-between py-3.5"
               >
                 <div className="flex items-center gap-3">

@@ -26,6 +26,11 @@ import VerifyIdentity from "./pages/VerifyIdentity";
 import Welcome from "./pages/Welcome";
 import VerifyEmail from "./pages/VerifyEmail";
 import MfaChallenge from "./pages/MfaChallenge";
+import Onboarding from "./pages/Onboarding";
+import ReceiveMoney from "./pages/ReceiveMoney";
+import Settings from "./pages/Settings";
+import Support from "./pages/Support";
+import SupportTicket from "./pages/SupportTicket";
 
 const queryClient = new QueryClient();
 
@@ -48,7 +53,9 @@ const App = () => (
               <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/mfa-challenge" element={<MfaChallenge />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/onboarding" element={<Guarded><Onboarding /></Guarded>} />
               <Route path="/" element={<Guarded><Index /></Guarded>} />
+              <Route path="/receive" element={<Guarded><ReceiveMoney /></Guarded>} />
               <Route path="/move-money" element={<Guarded><MoveMoney /></Guarded>} />
               <Route path="/move-money/:action" element={<Guarded><MoveMoney /></Guarded>} />
               <Route path="/cards" element={<Guarded><Cards /></Guarded>} />
@@ -69,7 +76,9 @@ const App = () => (
               <Route path="/help" element={<Guarded><HelpCenter /></Guarded>} />
               <Route path="/help/contact" element={<Guarded><HelpCenter /></Guarded>} />
               <Route path="/insights" element={<Guarded><SpendingInsights /></Guarded>} />
-              <Route path="/settings" element={<Guarded><SecurityCenter /></Guarded>} />
+              <Route path="/settings" element={<Guarded><Settings /></Guarded>} />
+              <Route path="/support" element={<Guarded><Support /></Guarded>} />
+              <Route path="/support/:id" element={<Guarded><SupportTicket /></Guarded>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

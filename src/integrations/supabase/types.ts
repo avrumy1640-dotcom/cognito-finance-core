@@ -124,41 +124,163 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_type: string | null
+          address_city: string | null
+          address_postal_code: string | null
+          address_region: string | null
+          address_street: string | null
           annual_income: string | null
+          business_name: string | null
           citizenship: string | null
+          country: string | null
           created_at: string
           email: string | null
           employer: string | null
           id: string
           occupation: string | null
+          onboarded_at: string | null
           phone: string | null
+          preferred_currency: string | null
           preferred_name: string | null
+          privacy_accepted_at: string | null
+          source_of_funds: string | null
+          tax_country: string | null
+          tax_id_number: string | null
+          tos_accepted_at: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          account_type?: string | null
+          address_city?: string | null
+          address_postal_code?: string | null
+          address_region?: string | null
+          address_street?: string | null
           annual_income?: string | null
+          business_name?: string | null
           citizenship?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           employer?: string | null
           id?: string
           occupation?: string | null
+          onboarded_at?: string | null
           phone?: string | null
+          preferred_currency?: string | null
           preferred_name?: string | null
+          privacy_accepted_at?: string | null
+          source_of_funds?: string | null
+          tax_country?: string | null
+          tax_id_number?: string | null
+          tos_accepted_at?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          account_type?: string | null
+          address_city?: string | null
+          address_postal_code?: string | null
+          address_region?: string | null
+          address_street?: string | null
           annual_income?: string | null
+          business_name?: string | null
           citizenship?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           employer?: string | null
           id?: string
           occupation?: string | null
+          onboarded_at?: string | null
           phone?: string | null
+          preferred_currency?: string | null
           preferred_name?: string | null
+          privacy_accepted_at?: string | null
+          source_of_funds?: string | null
+          tax_country?: string | null
+          tax_id_number?: string | null
+          tos_accepted_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      support_messages: {
+        Row: {
+          author: Database["public"]["Enums"]["support_message_author"]
+          body: string
+          created_at: string
+          id: string
+          ticket_id: string
+          user_id: string
+        }
+        Insert: {
+          author?: Database["public"]["Enums"]["support_message_author"]
+          body: string
+          created_at?: string
+          id?: string
+          ticket_id: string
+          user_id: string
+        }
+        Update: {
+          author?: Database["public"]["Enums"]["support_message_author"]
+          body?: string
+          created_at?: string
+          id?: string
+          ticket_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          body: string
+          category: Database["public"]["Enums"]["support_ticket_category"]
+          created_at: string
+          id: string
+          last_agent_reply_at: string | null
+          last_customer_reply_at: string | null
+          priority: Database["public"]["Enums"]["support_ticket_priority"]
+          related_transaction_id: string | null
+          status: Database["public"]["Enums"]["support_ticket_status"]
+          subject: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          category?: Database["public"]["Enums"]["support_ticket_category"]
+          created_at?: string
+          id?: string
+          last_agent_reply_at?: string | null
+          last_customer_reply_at?: string | null
+          priority?: Database["public"]["Enums"]["support_ticket_priority"]
+          related_transaction_id?: string | null
+          status?: Database["public"]["Enums"]["support_ticket_status"]
+          subject: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          category?: Database["public"]["Enums"]["support_ticket_category"]
+          created_at?: string
+          id?: string
+          last_agent_reply_at?: string | null
+          last_customer_reply_at?: string | null
+          priority?: Database["public"]["Enums"]["support_ticket_priority"]
+          related_transaction_id?: string | null
+          status?: Database["public"]["Enums"]["support_ticket_status"]
+          subject?: string
           updated_at?: string
           user_id?: string
         }
@@ -203,6 +325,20 @@ export type Database = {
     }
     Enums: {
       kyc_status: "unverified" | "pending" | "verified" | "rejected"
+      support_message_author: "customer" | "agent" | "system"
+      support_ticket_category:
+        | "question"
+        | "problem"
+        | "dispute"
+        | "feature_request"
+        | "other"
+      support_ticket_priority: "low" | "normal" | "high" | "urgent"
+      support_ticket_status:
+        | "open"
+        | "in_progress"
+        | "waiting_customer"
+        | "resolved"
+        | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -331,6 +467,22 @@ export const Constants = {
   public: {
     Enums: {
       kyc_status: ["unverified", "pending", "verified", "rejected"],
+      support_message_author: ["customer", "agent", "system"],
+      support_ticket_category: [
+        "question",
+        "problem",
+        "dispute",
+        "feature_request",
+        "other",
+      ],
+      support_ticket_priority: ["low", "normal", "high", "urgent"],
+      support_ticket_status: [
+        "open",
+        "in_progress",
+        "waiting_customer",
+        "resolved",
+        "closed",
+      ],
     },
   },
 } as const

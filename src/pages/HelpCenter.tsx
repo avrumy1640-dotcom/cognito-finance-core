@@ -35,9 +35,9 @@ const HelpCenter = () => {
   ];
 
   const contact = {
-    Chat: () => toast.success("Starting secure chat with a specialist… avg wait 45s"),
+    Chat: () => navigate("/support?new=1&category=question"),
     Call: () => { window.location.href = "tel:+18005555555"; toast.info("Calling 1-800-555-5555"); },
-    Message: () => { window.location.href = "mailto:support@glassbank.com"; toast.info("Opening secure message"); },
+    Message: () => navigate("/support?new=1&category=problem"),
   } as const;
 
   const filteredFaqs = useMemo(() => {
@@ -89,6 +89,16 @@ const HelpCenter = () => {
             </button>
           ))}
         </div>
+
+        <button
+          onClick={() => navigate("/support")}
+          className="w-full text-left"
+        >
+          <GlassCard className="flex items-center justify-between py-3">
+            <span className="text-sm font-medium text-foreground">My support tickets</span>
+            <span className="text-xs text-primary font-medium">View →</span>
+          </GlassCard>
+        </button>
 
         {/* Topics */}
         <div>
