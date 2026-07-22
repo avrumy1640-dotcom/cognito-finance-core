@@ -52,6 +52,7 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/onboarding" element={<Guarded><Onboarding /></Guarded>} />
               <Route path="/" element={<Guarded><Index /></Guarded>} />
+              <Route path="/receive" element={<Guarded><ReceiveMoney /></Guarded>} />
               <Route path="/move-money" element={<Guarded><MoveMoney /></Guarded>} />
               <Route path="/move-money/:action" element={<Guarded><MoveMoney /></Guarded>} />
               <Route path="/cards" element={<Guarded><Cards /></Guarded>} />
