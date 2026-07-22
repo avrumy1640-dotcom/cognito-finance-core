@@ -2,16 +2,21 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Eye, EyeOff, HelpCircle, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, HelpCircle, ArrowRight, ArrowLeft } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 type Mode = "signin" | "signup";
 
-const Login = () => {
+interface Props {
+  initialMode?: Mode;
+}
+
+const Login = ({ initialMode = "signin" }: Props) => {
   const navigate = useNavigate();
   const location = useLocation() as { state?: { from?: string } };
   const { signIn, signUp, sendPasswordReset } = useAuth();
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,37 +24,39 @@ const Login = () => {
 
   const redirectTarget = location.state?.from && location.state.from !== "/login" ? location.state.from : "/";
 
+  const setModeAndUrl = (m: Mode) => {
+    setMode(m);
+    navigate(m === "signin" ? "/login" : "/signup", { replace: true, state: location.state });
+  };
+
   const submit = async () => {
-    if (!email.trim() || !password.trim()) {
-      toast.error("Enter your email and password.");
-      return;
-    }
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters.");
-      return;
-    }
+    if (!email.trim() || !password.trim()) { toast.error("Enter your email and password."); return; }
+    if (password.length < 8) { toast.error("Password must be at least 8 characters."); return; }
     setLoading(true);
-    const { error } = mode === "signin"
-      ? await signIn(email.trim(), password)
-      : await signUp(email.trim(), password);
-    setLoading(false);
-    if (error) {
-      toast.error(error);
+    if (mode === "signup") {
+      const { error } = await signUp(email.trim(), password);
+      setLoading(false);
+      if (error) { toast.error(error); return; }
+      toast.success("Account created — check your email to verify.");
+      navigate(`/verify-email?email=${encodeURIComponent(email.trim())}`, { replace: true });
       return;
     }
-    if (mode === "signup") {
-      toast.success("Account created — you're signed in.");
-    } else {
-      toast.success("Welcome back");
+    const { error } = await signIn(email.trim(), password);
+    setLoading(false);
+    if (error) { toast.error(error); return; }
+
+    // Check whether MFA challenge is required.
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal?.nextLevel === "aal2" && aal.currentLevel === "aal1") {
+      navigate("/mfa-challenge", { replace: true, state: { from: redirectTarget } });
+      return;
     }
+    toast.success("Welcome back");
     navigate(redirectTarget, { replace: true });
   };
 
   const forgot = async () => {
-    if (!email.trim()) {
-      toast.error("Enter your email above, then tap Forgot password.");
-      return;
-    }
+    if (!email.trim()) { toast.error("Enter your email above, then tap Forgot password."); return; }
     const { error } = await sendPasswordReset(email.trim());
     if (error) toast.error(error);
     else toast.success("Password reset link sent to your email.");
@@ -57,6 +64,12 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <button
+        onClick={() => navigate("/welcome")}
+        className="absolute top-6 left-6 flex items-center gap-1 text-sm text-muted-foreground"
+      >
+        <ArrowLeft size={16} /> Back
+      </button>
       <div className="flex-1 flex flex-col items-center justify-center px-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -67,8 +80,12 @@ const Login = () => {
           <div className="w-20 h-20 rounded-3xl gradient-hero mx-auto flex items-center justify-center mb-4 shadow-lg">
             <span className="text-3xl font-display font-bold text-primary-foreground">G</span>
           </div>
-          <h1 className="text-3xl font-display font-bold text-foreground">Glass Bank</h1>
-          <p className="text-sm text-muted-foreground mt-1">Banking, beautifully clear.</p>
+          <h1 className="text-3xl font-display font-bold text-foreground">
+            {mode === "signin" ? "Welcome back" : "Create your account"}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {mode === "signin" ? "Sign in to continue to Glass Bank." : "Get started in under a minute."}
+          </p>
         </motion.div>
 
         <motion.div
@@ -81,7 +98,7 @@ const Login = () => {
             {(["signin", "signup"] as Mode[]).map((m) => (
               <button
                 key={m}
-                onClick={() => setMode(m)}
+                onClick={() => setModeAndUrl(m)}
                 className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${
                   mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
                 }`}
