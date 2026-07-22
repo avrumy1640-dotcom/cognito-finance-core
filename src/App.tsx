@@ -97,6 +97,7 @@ const App = () => (
               <Route path="/support/:id" element={<Guarded><SupportTicket /></Guarded>} />
               <Route path="/beneficiaries" element={<Guarded><Beneficiaries /></Guarded>} />
               <Route path="/payment-requests" element={<Guarded><PaymentRequests /></Guarded>} />
+              <Route path="/scheduled" element={<Guarded><ScheduledTransfers /></Guarded>} />
               <Route path="/admin" element={<Guarded><RequireAdmin allow={["admin","support","compliance"]}><AdminLayout /></RequireAdmin></Guarded>}>
                 <Route index element={<AdminDashboard />} />
                 <Route path="customers" element={<AdminCustomers />} />
