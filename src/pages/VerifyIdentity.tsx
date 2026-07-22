@@ -417,22 +417,55 @@ const VerifyIdentity = () => {
     return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="animate-spin text-primary" /></div>;
   }
 
-  // Status surfaces (verified / pending / rejected) get the premium status card.
-  if (status === "verified" || status === "pending") {
+  // Verified — celebratory landing with contextual next steps
+  if (status === "verified") {
     return (
       <div className="min-h-screen bg-background">
         <div className="px-5 pt-14 pb-8 space-y-5 max-w-md mx-auto">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
+            <button onClick={() => navigate("/")} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center" aria-label="Home">
+              <ArrowLeft size={18} className="text-foreground" />
+            </button>
+            <h1 className="text-lg font-display font-bold text-foreground">You're verified</h1>
+          </div>
+          <KycStatusCard status={status} profile={profile} variant="full" onRetry={refresh} refreshing={kycLoading} />
+          <div className="space-y-2 pt-2">
+            <p className="text-[11px] font-semibold text-primary uppercase tracking-widest">What's next</p>
+            <button onClick={() => navigate("/move-money/send")} className="w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.99] transition-transform">
+              Send your first payment <ArrowRight size={16} />
+            </button>
+            <button onClick={() => navigate("/cards")} className="w-full py-3 rounded-2xl bg-secondary text-sm font-semibold text-foreground active:scale-[0.99] transition-transform">
+              Set up your card
+            </button>
+            <button onClick={() => navigate("/")} className="w-full py-2 text-xs text-muted-foreground font-medium">
+              Back to home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Pending / under review
+  if (status === "pending") {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="px-5 pt-14 pb-8 space-y-5 max-w-md mx-auto">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/")} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center" aria-label="Home">
               <ArrowLeft size={18} className="text-foreground" />
             </button>
             <h1 className="text-lg font-display font-bold text-foreground">Identity Verification</h1>
           </div>
           <KycStatusCard status={status} profile={profile} variant="full" onRetry={refresh} refreshing={kycLoading} />
+          <button onClick={() => navigate("/")} className="w-full py-3 rounded-2xl bg-secondary text-sm font-semibold text-foreground active:scale-[0.99] transition-transform">
+            Continue browsing
+          </button>
         </div>
       </div>
     );
   }
+
 
   // Intro splash (mirrors Onboarding.tsx language)
   if (showIntro) {
