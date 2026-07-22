@@ -552,11 +552,13 @@ const ExternalTransferSheet = ({ onClose }: { onClose: () => void }) => {
                 <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full p-3 pl-8 rounded-xl bg-secondary text-foreground text-2xl font-bold border-0 outline-none text-balance-display" />
               </div>
             </div>
+            <FeesTimingCard kind="external" amount={num} />
+            <LimitsCheckPanel check={checkLimits("external", num)} />
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
               <button
                 onClick={submit}
-                disabled={!num || !bank || !routing || !account}
+                disabled={!num || !bank || !routing || !account || !checkLimits("external", num).ok}
                 className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40"
               >
                 Send Transfer
