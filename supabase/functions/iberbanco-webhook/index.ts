@@ -70,7 +70,7 @@ export async function verifySignature(
   return { ok: true };
 }
 
-Deno.serve(async (req) => {
+export async function handleWebhook(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
@@ -102,9 +102,9 @@ Deno.serve(async (req) => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
   );
 
-  // Idempotency: unique (provider, event_id) — duplicates return 200 without reprocessing.
   const { data: existing } = await supabase
     .from("webhook_events")
     .select("id, status")
@@ -131,7 +131,6 @@ Deno.serve(async (req) => {
     .single();
 
   if (insertError) {
-    // Unique violation → concurrent duplicate, treat as success.
     if ((insertError as { code?: string }).code === "23505") {
       return json({ ok: true, duplicate: true });
     }
@@ -144,5 +143,19 @@ Deno.serve(async (req) => {
     .update({ status: "processed", processed_at: new Date().toISOString() })
     .eq("id", inserted!.id);
 
+  // Audit trail: record that the webhook was processed. actor_id is null
+  // (system-issued). Admins can read these via the existing audit_logs policy.
+  await supabase.from("audit_logs").insert({
+    actor_id: null,
+    actor_email: `webhook:${PROVIDER}`,
+    action: "webhook.processed",
+    entity_type: "webhook_event",
+    entity_id: inserted!.id,
+    metadata: { provider: PROVIDER, event_id: eventId, event_type: eventType },
+  });
+
   return json({ ok: true, id: inserted!.id });
-});
+}
+
+if (import.meta.main) Deno.serve(handleWebhook);
+
