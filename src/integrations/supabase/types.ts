@@ -14,6 +14,141 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          metadata: Json
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          metadata?: Json
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          metadata?: Json
+        }
+        Relationships: []
+      }
+      beneficiaries: {
+        Row: {
+          account_number_last4: string | null
+          address: string | null
+          bank_name: string | null
+          country: string | null
+          created_at: string
+          email: string | null
+          favorite: boolean
+          full_name: string
+          iban: string | null
+          id: string
+          kind: string
+          last_used_at: string | null
+          memo: string | null
+          nickname: string
+          routing_number: string | null
+          swift_bic: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_number_last4?: string | null
+          address?: string | null
+          bank_name?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          favorite?: boolean
+          full_name: string
+          iban?: string | null
+          id?: string
+          kind?: string
+          last_used_at?: string | null
+          memo?: string | null
+          nickname: string
+          routing_number?: string | null
+          swift_bic?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_number_last4?: string | null
+          address?: string | null
+          bank_name?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          favorite?: boolean
+          full_name?: string
+          iban?: string | null
+          id?: string
+          kind?: string
+          last_used_at?: string | null
+          memo?: string | null
+          nickname?: string
+          routing_number?: string | null
+          swift_bic?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      fee_config: {
+        Row: {
+          active: boolean
+          amount_cents: number
+          created_at: string
+          currency: string
+          id: string
+          key: string
+          label: string
+          percent_bps: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          key: string
+          label: string
+          percent_bps?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          key?: string
+          label?: string
+          percent_bps?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       kyc_profiles: {
         Row: {
           city: string
@@ -119,6 +254,54 @@ export type Database = {
           ip_hint?: string | null
           user_agent?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      payment_requests: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          expires_at: string | null
+          id: string
+          note: string | null
+          paid_transaction_id: string | null
+          payer_email: string | null
+          payer_id: string | null
+          payer_name: string | null
+          requester_id: string
+          status: Database["public"]["Enums"]["payment_request_status"]
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency?: string
+          expires_at?: string | null
+          id?: string
+          note?: string | null
+          paid_transaction_id?: string | null
+          payer_email?: string | null
+          payer_id?: string | null
+          payer_name?: string | null
+          requester_id: string
+          status?: Database["public"]["Enums"]["payment_request_status"]
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          expires_at?: string | null
+          id?: string
+          note?: string | null
+          paid_transaction_id?: string | null
+          payer_email?: string | null
+          payer_id?: string | null
+          payer_name?: string | null
+          requester_id?: string
+          status?: Database["public"]["Enums"]["payment_request_status"]
+          updated_at?: string
         }
         Relationships: []
       }
@@ -316,15 +499,79 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      webhook_events: {
+        Row: {
+          error: string | null
+          event_type: string
+          id: string
+          payload: Json
+          provider: string
+          received_at: string
+          status: string
+        }
+        Insert: {
+          error?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          provider: string
+          received_at?: string
+          status?: string
+        }
+        Update: {
+          error?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          provider?: string
+          received_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "admin" | "compliance" | "support" | "user"
       kyc_status: "unverified" | "pending" | "verified" | "rejected"
+      payment_request_status:
+        | "pending"
+        | "paid"
+        | "declined"
+        | "cancelled"
+        | "expired"
       support_message_author: "customer" | "agent" | "system"
       support_ticket_category:
         | "question"
@@ -466,7 +713,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "compliance", "support", "user"],
       kyc_status: ["unverified", "pending", "verified", "rejected"],
+      payment_request_status: [
+        "pending",
+        "paid",
+        "declined",
+        "cancelled",
+        "expired",
+      ],
       support_message_author: ["customer", "agent", "system"],
       support_ticket_category: [
         "question",
