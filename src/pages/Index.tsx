@@ -259,9 +259,17 @@ const HomePage = () => {
 
         {/* Cash Flow */}
         <motion.div custom={4} variants={fadeUp} initial="hidden" animate="visible">
-          <h2 className="text-section-title text-sm text-foreground mb-3">Cash Flow This Month</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-section-title text-sm text-foreground">Cash Flow This Month</h2>
+            <button
+              onClick={() => navigate("/insights")}
+              className="text-xs font-medium text-primary flex items-center gap-0.5"
+            >
+              Details <ChevronRight size={14} />
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-3">
-            <GlassCard>
+            <GlassCard onClick={() => navigate("/insights")}>
               <div className="flex items-center gap-2 mb-2">
                 <ArrowDownLeft size={16} className="text-success" />
                 <span className="text-xs text-muted-foreground font-medium">Money In</span>
@@ -270,7 +278,7 @@ const HomePage = () => {
                 {formatCurrency(cashFlow.moneyIn)}
               </p>
             </GlassCard>
-            <GlassCard>
+            <GlassCard onClick={() => navigate("/insights")}>
               <div className="flex items-center gap-2 mb-2">
                 <ArrowUpRight size={16} className="text-destructive" />
                 <span className="text-xs text-muted-foreground font-medium">Money Out</span>
@@ -287,7 +295,11 @@ const HomePage = () => {
           <h2 className="text-section-title text-sm text-foreground mb-3">Smart Insights</h2>
           <div className="space-y-2">
             {insights.map((insight) => (
-              <GlassCard key={insight.id} className="flex items-center gap-3 py-3">
+              <GlassCard
+                key={insight.id}
+                onClick={() => navigate("/insights")}
+                className="flex items-center gap-3 py-3"
+              >
                 <span className="text-lg">{insight.icon}</span>
                 <p className="text-sm text-foreground flex-1">{insight.text}</p>
                 <ChevronRight size={16} className="text-muted-foreground" />
