@@ -227,6 +227,7 @@ const ActivityPage = () => {
           ))}
         </div>
       </div>
+      <ExportPreviewModal result={exportResult} onClose={() => setExportResult(null)} />
     </AppLayout>
   );
 };
