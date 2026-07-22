@@ -49,28 +49,29 @@ const ActivityPage = () => {
     groups[key].push(tx);
   });
 
-  const exportCsv = () => {
-    const rows = [
-      ["date", "merchant", "category", "account", "amount", "status", "type"],
-      ...filtered.map((tx) => [
-        tx.date,
-        tx.merchant,
-        tx.category,
-        tx.account,
-        tx.amount.toFixed(2),
-        tx.status,
-        tx.type,
-      ]),
-    ];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `activity-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const rowsFor = () =>
+    filtered.map((tx) => ({
+      Date: tx.date,
+      Merchant: tx.merchant,
+      Category: tx.category,
+      Account: tx.account,
+      Amount: tx.amount.toFixed(2),
+      Status: tx.status,
+      Type: tx.type,
+    }));
+
+  const runExport = (format: "csv" | "pdf") => {
+    const headers = ["Date", "Merchant", "Category", "Account", "Amount", "Status", "Type"];
+    const rows = rowsFor();
+    const scope = activeFilter === "All" ? "all" : activeFilter.toLowerCase();
+    const result =
+      format === "csv"
+        ? buildCsv(`activity-${scope}`, headers, rows)
+        : buildPdf(`activity-${scope}`, "Transaction report", `Filter: ${activeFilter} · ${rows.length} rows`, headers, rows);
+    setExportResult(result);
+    setShowExportMenu(false);
   };
+
 
   const insightShortcuts = [
     { label: "Subscriptions", emoji: "📱", filter: null as string | null },
