@@ -6,6 +6,8 @@ import { useBank } from "@/store/bankStore";
 import { useKyc } from "@/hooks/useKyc";
 import { toast } from "sonner";
 import { generateMonthlyStatement } from "@/lib/pdfDocuments";
+import { buildPdf, type ExportResult } from "@/lib/exports";
+import ExportPreviewModal from "@/components/exports/ExportPreviewModal";
 import {
   ArrowLeft,
   Copy,
@@ -42,6 +44,7 @@ const AccountDetail = () => {
   const [activeTab, setActiveTab] = useState<"transactions" | "details" | "limits" | "statements" | "settings">("transactions");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TxFilter>("all");
+  const [limitsExport, setLimitsExport] = useState<ExportResult | null>(null);
   const { accounts, transactions } = useBank(); const loading = false;
   const { status: kycStatus } = useKyc();
   const account = type === "savings" ? accounts.savings : accounts.checking;
@@ -316,9 +319,33 @@ const AccountDetail = () => {
                   );
                 })}
               </div>
-              <button onClick={() => navigate("/support")} className="w-full py-3 rounded-2xl bg-secondary text-sm font-semibold text-foreground active:scale-[0.99] transition-transform">
-                Request a limit increase
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => navigate("/support")} className="flex-1 py-3 rounded-2xl bg-secondary text-sm font-semibold text-foreground active:scale-[0.99] transition-transform">
+                  Request an increase
+                </button>
+                <button
+                  onClick={() => {
+                    const headers = ["Limit", "Used", "Cap", "Utilization"];
+                    const rows = limits.map((l) => ({
+                      Limit: l.label,
+                      Used: "unit" in l && l.unit === "count" ? String(l.used) : formatCurrency(l.used),
+                      Cap: "unit" in l && l.unit === "count" ? String(l.cap) : formatCurrency(l.cap),
+                      Utilization: `${Math.min(100, Math.round((l.used / l.cap) * 100))}%`,
+                    }));
+                    const result = buildPdf(
+                      `limits-${type}`,
+                      `${account.name} — Limits report`,
+                      `Generated ${new Date().toLocaleDateString()} · Account ${account.accountNumber}`,
+                      headers,
+                      rows,
+                    );
+                    setLimitsExport(result);
+                  }}
+                  className="flex-1 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold active:scale-[0.99] transition-transform"
+                >
+                  Export report
+                </button>
+              </div>
             </motion.div>
           )}
 
@@ -402,6 +429,7 @@ const AccountDetail = () => {
           )}
         </AnimatePresence>
       </div>
+      <ExportPreviewModal result={limitsExport} onClose={() => setLimitsExport(null)} />
     </div>
   );
 };

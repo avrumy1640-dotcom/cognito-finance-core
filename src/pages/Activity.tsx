@@ -4,11 +4,15 @@ import { motion } from "framer-motion";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
-import { Search, Download, ChevronRight, SlidersHorizontal } from "lucide-react";
+import { Search, Download, ChevronRight, SlidersHorizontal, FileText } from "lucide-react";
+import { buildCsv, buildPdf, type ExportResult } from "@/lib/exports";
+import ExportPreviewModal from "@/components/exports/ExportPreviewModal";
 
 const filterChips = ["All", "Card", "Transfers", "Deposits", "Bills", "P2P", "Pending", "Income", "Fees"];
 
 const ActivityPage = () => {
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const navigate = useNavigate();
@@ -45,28 +49,29 @@ const ActivityPage = () => {
     groups[key].push(tx);
   });
 
-  const exportCsv = () => {
-    const rows = [
-      ["date", "merchant", "category", "account", "amount", "status", "type"],
-      ...filtered.map((tx) => [
-        tx.date,
-        tx.merchant,
-        tx.category,
-        tx.account,
-        tx.amount.toFixed(2),
-        tx.status,
-        tx.type,
-      ]),
-    ];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `activity-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const rowsFor = () =>
+    filtered.map((tx) => ({
+      Date: tx.date,
+      Merchant: tx.merchant,
+      Category: tx.category,
+      Account: tx.account,
+      Amount: tx.amount.toFixed(2),
+      Status: tx.status,
+      Type: tx.type,
+    }));
+
+  const runExport = (format: "csv" | "pdf") => {
+    const headers = ["Date", "Merchant", "Category", "Account", "Amount", "Status", "Type"];
+    const rows = rowsFor();
+    const scope = activeFilter === "All" ? "all" : activeFilter.toLowerCase();
+    const result =
+      format === "csv"
+        ? buildCsv(`activity-${scope}`, headers, rows)
+        : buildPdf(`activity-${scope}`, "Transaction report", `Filter: ${activeFilter} · ${rows.length} rows`, headers, rows);
+    setExportResult(result);
+    setShowExportMenu(false);
   };
+
 
   const insightShortcuts = [
     { label: "Subscriptions", emoji: "📱", filter: null as string | null },
@@ -84,13 +89,25 @@ const ActivityPage = () => {
               <h1 className="text-2xl font-display font-bold text-foreground">Activity</h1>
               <p className="text-sm text-muted-foreground mt-1">All transactions & history</p>
             </div>
-            <button
-              onClick={exportCsv}
-              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
-              title="Export as CSV"
-            >
-              <Download size={18} className="text-muted-foreground" />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu((v) => !v)}
+                className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
+                title="Export report"
+              >
+                <Download size={18} className="text-muted-foreground" />
+              </button>
+              {showExportMenu && (
+                <div className="absolute right-0 mt-2 w-44 bg-card border border-border rounded-2xl shadow-lg overflow-hidden z-30">
+                  <button onClick={() => runExport("csv")} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-foreground hover:bg-secondary">
+                    <FileText size={14} className="text-primary" /> CSV report
+                  </button>
+                  <button onClick={() => runExport("pdf")} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-foreground hover:bg-secondary border-t border-border">
+                    <FileText size={14} className="text-primary" /> PDF report
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </motion.div>
 
@@ -210,6 +227,7 @@ const ActivityPage = () => {
           ))}
         </div>
       </div>
+      <ExportPreviewModal result={exportResult} onClose={() => setExportResult(null)} />
     </AppLayout>
   );
 };

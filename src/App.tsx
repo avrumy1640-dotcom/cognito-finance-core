@@ -33,6 +33,7 @@ import Support from "./pages/Support";
 import SupportTicket from "./pages/SupportTicket";
 import Beneficiaries from "./pages/Beneficiaries";
 import PaymentRequests from "./pages/PaymentRequests";
+import ScheduledTransfers from "./pages/ScheduledTransfers";
 import RequireAdmin from "./components/RequireAdmin";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -96,6 +97,7 @@ const App = () => (
               <Route path="/support/:id" element={<Guarded><SupportTicket /></Guarded>} />
               <Route path="/beneficiaries" element={<Guarded><Beneficiaries /></Guarded>} />
               <Route path="/payment-requests" element={<Guarded><PaymentRequests /></Guarded>} />
+              <Route path="/scheduled" element={<Guarded><ScheduledTransfers /></Guarded>} />
               <Route path="/admin" element={<Guarded><RequireAdmin allow={["admin","support","compliance"]}><AdminLayout /></RequireAdmin></Guarded>}>
                 <Route index element={<AdminDashboard />} />
                 <Route path="customers" element={<AdminCustomers />} />

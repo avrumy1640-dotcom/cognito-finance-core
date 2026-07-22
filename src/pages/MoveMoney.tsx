@@ -15,19 +15,23 @@ import {
   Building2,
   CheckCircle2,
   QrCode,
+  CalendarClock,
 } from "lucide-react";
 import { useBank } from "@/store/bankStore";
 import { useKyc } from "@/hooks/useKyc";
 import RequireKyc from "@/components/RequireKyc";
+import { FeesTimingCard, LimitsCheckPanel } from "@/components/money/FeesTimingCard";
+import { checkLimits } from "@/lib/txPolicy";
 
 const actions = [
-  { label: "Transfer", desc: "Between my accounts", icon: ArrowLeftRight, id: "transfer" },
-  { label: "Send Money", desc: "To another person", icon: Send, id: "send" },
+  { label: "Transfer", desc: "Between my accounts · Instant · Free", icon: ArrowLeftRight, id: "transfer" },
+  { label: "Send Money", desc: "To another person · Instant · Free", icon: Send, id: "send" },
   { label: "Receive Money", desc: "Share account or QR", icon: QrCode, id: "receive" },
-  { label: "Deposit Check", desc: "Mobile check deposit", icon: Camera, id: "deposit" },
-  { label: "Pay Bills", desc: "One-time or recurring", icon: Receipt, id: "bills" },
-  { label: "External Transfer", desc: "ACH to/from bank", icon: Building2, id: "external" },
-  { label: "Wire Transfer", desc: "Domestic or international", icon: Globe, id: "wire" },
+  { label: "Scheduled Transfers", desc: "Automate future payments", icon: CalendarClock, id: "scheduled" },
+  { label: "Deposit Check", desc: "Mobile check · Next business day", icon: Camera, id: "deposit" },
+  { label: "Pay Bills", desc: "One-time or recurring · 1–2 days", icon: Receipt, id: "bills" },
+  { label: "External Transfer", desc: "ACH to/from bank · 1–3 days · Free", icon: Building2, id: "external" },
+  { label: "Wire Transfer", desc: "Same-day domestic · $25 fee", icon: Globe, id: "wire" },
   { label: "Add Money", desc: "Fund your account", icon: Plus, id: "add" },
 ];
 
@@ -93,7 +97,11 @@ const MoveMoney = () => {
               transition={{ delay: 0.05 + i * 0.04 }}
             >
               <GlassCard
-                onClick={() => action.id === "receive" ? navigate("/receive") : setSelected(action.id)}
+                onClick={() => {
+                  if (action.id === "receive") navigate("/receive");
+                  else if (action.id === "scheduled") navigate("/scheduled");
+                  else setSelected(action.id);
+                }}
                 className="flex items-center justify-between py-3.5"
               >
                 <div className="flex items-center gap-3">
@@ -246,22 +254,28 @@ const TransferSheet = ({ onClose }: { onClose: () => void }) => {
         </>
       )}
 
-      {step === "review" && (
-        <>
-          <h2 className="text-xl font-display font-bold text-foreground mb-5">Review Transfer</h2>
-          <GlassCard className="space-y-3 mb-5">
-            <Row label="Amount" value={`$${numAmount.toFixed(2)}`} bold />
-            <Row label="From" value={from === "checking" ? "Everyday Checking" : "High Yield Savings"} />
-            <Row label="To" value={to === "checking" ? "Everyday Checking" : "High Yield Savings"} />
-            <Row label="Speed" value="Instant" success />
-            {memo && <Row label="Memo" value={memo} />}
-          </GlassCard>
-          <div className="flex gap-3">
-            <button onClick={() => setStep("form")} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Back</button>
-            <button onClick={handleConfirm} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">Confirm</button>
-          </div>
-        </>
-      )}
+      {step === "review" && (() => {
+        const limitCheck = checkLimits("internal", numAmount);
+        return (
+          <>
+            <h2 className="text-xl font-display font-bold text-foreground mb-5">Review Transfer</h2>
+            <GlassCard className="space-y-3 mb-3">
+              <Row label="Amount" value={`$${numAmount.toFixed(2)}`} bold />
+              <Row label="From" value={from === "checking" ? "Everyday Checking" : "High Yield Savings"} />
+              <Row label="To" value={to === "checking" ? "Everyday Checking" : "High Yield Savings"} />
+              {memo && <Row label="Memo" value={memo} />}
+            </GlassCard>
+            <div className="space-y-3 mb-5">
+              <FeesTimingCard kind="internal" amount={numAmount} />
+              <LimitsCheckPanel check={limitCheck} />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setStep("form")} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Back</button>
+              <button onClick={handleConfirm} disabled={!limitCheck.ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Confirm</button>
+            </div>
+          </>
+        );
+      })()}
 
       {step === "success" && (
         <SuccessView title="Transfer Complete" subtitle={`$${numAmount.toFixed(2)} moved successfully.`} onDone={onClose} />
@@ -329,22 +343,28 @@ const SendMoneySheet = ({ onClose }: { onClose: () => void }) => {
           </div>
         </>
       )}
-      {step === "review" && (
-        <>
-          <h2 className="text-xl font-display font-bold text-foreground mb-5">Review Payment</h2>
-          <GlassCard className="space-y-3 mb-5">
-            <Row label="To" value={recipient} />
-            <Row label="Amount" value={`$${numAmount.toFixed(2)}`} bold />
-            <Row label="From" value="Everyday Checking" />
-            <Row label="Speed" value="Instant" success />
-            {note && <Row label="Note" value={note} />}
-          </GlassCard>
-          <div className="flex gap-3">
-            <button onClick={() => setStep("form")} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Back</button>
-            <button onClick={confirm} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">Send</button>
-          </div>
-        </>
-      )}
+      {step === "review" && (() => {
+        const limitCheck = checkLimits("send", numAmount);
+        return (
+          <>
+            <h2 className="text-xl font-display font-bold text-foreground mb-5">Review Payment</h2>
+            <GlassCard className="space-y-3 mb-3">
+              <Row label="To" value={recipient} />
+              <Row label="Amount" value={`$${numAmount.toFixed(2)}`} bold />
+              <Row label="From" value="Everyday Checking" />
+              {note && <Row label="Note" value={note} />}
+            </GlassCard>
+            <div className="space-y-3 mb-5">
+              <FeesTimingCard kind="send" amount={numAmount} />
+              <LimitsCheckPanel check={limitCheck} />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setStep("form")} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Back</button>
+              <button onClick={confirm} disabled={!limitCheck.ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send</button>
+            </div>
+          </>
+        );
+      })()}
       {step === "success" && (
         <SuccessView title="Money Sent" subtitle={`$${numAmount.toFixed(2)} sent to ${recipient}`} onDone={onClose} />
       )}
@@ -478,9 +498,11 @@ const BillPaySheet = ({ onClose }: { onClose: () => void }) => {
               </div>
               {insufficient && num > 0 && <p className="text-xs text-destructive mt-1">Insufficient funds</p>}
             </div>
+            <FeesTimingCard kind="bill" amount={num} />
+            <LimitsCheckPanel check={checkLimits("bill", num)} />
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-              <button onClick={pay} disabled={!num || !biller.trim() || insufficient} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Pay Now</button>
+              <button onClick={pay} disabled={!num || !biller.trim() || insufficient || !checkLimits("bill", num).ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Pay Now</button>
             </div>
           </div>
         </>
@@ -530,11 +552,13 @@ const ExternalTransferSheet = ({ onClose }: { onClose: () => void }) => {
                 <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full p-3 pl-8 rounded-xl bg-secondary text-foreground text-2xl font-bold border-0 outline-none text-balance-display" />
               </div>
             </div>
+            <FeesTimingCard kind="external" amount={num} />
+            <LimitsCheckPanel check={checkLimits("external", num)} />
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
               <button
                 onClick={submit}
-                disabled={!num || !bank || !routing || !account}
+                disabled={!num || !bank || !routing || !account || !checkLimits("external", num).ok}
                 className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40"
               >
                 Send Transfer
@@ -590,9 +614,11 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
               </div>
               <p className="text-xs text-muted-foreground mt-1">+ $25.00 wire fee</p>
             </div>
+            <FeesTimingCard kind="wire" amount={num} />
+            <LimitsCheckPanel check={checkLimits("wire", num)} />
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-              <button onClick={submit} disabled={!num || !name || !routing || !account} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send Wire</button>
+              <button onClick={submit} disabled={!num || !name || !routing || !account || !checkLimits("wire", num).ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send Wire</button>
             </div>
           </div>
         </>
