@@ -15,6 +15,7 @@ import {
 import {
   ArrowUpRight,
   ArrowDownLeft,
+  QrCode,
   Send,
   ArrowLeftRight,
   Camera,
