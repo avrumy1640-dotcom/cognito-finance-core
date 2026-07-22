@@ -264,7 +264,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 const SelectRow = ({
   icon: Icon, label, value, onChange, options,
 }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -288,7 +288,7 @@ const SelectRow = ({
 const ToggleRow = ({
   icon: Icon, label, desc, checked, onChange,
 }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
   label: string; desc?: string; checked: boolean; onChange: () => void;
 }) => (
   <button onClick={onChange} className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left">
