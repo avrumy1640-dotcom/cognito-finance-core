@@ -254,22 +254,28 @@ const TransferSheet = ({ onClose }: { onClose: () => void }) => {
         </>
       )}
 
-      {step === "review" && (
-        <>
-          <h2 className="text-xl font-display font-bold text-foreground mb-5">Review Transfer</h2>
-          <GlassCard className="space-y-3 mb-5">
-            <Row label="Amount" value={`$${numAmount.toFixed(2)}`} bold />
-            <Row label="From" value={from === "checking" ? "Everyday Checking" : "High Yield Savings"} />
-            <Row label="To" value={to === "checking" ? "Everyday Checking" : "High Yield Savings"} />
-            <Row label="Speed" value="Instant" success />
-            {memo && <Row label="Memo" value={memo} />}
-          </GlassCard>
-          <div className="flex gap-3">
-            <button onClick={() => setStep("form")} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Back</button>
-            <button onClick={handleConfirm} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">Confirm</button>
-          </div>
-        </>
-      )}
+      {step === "review" && (() => {
+        const limitCheck = checkLimits("internal", numAmount);
+        return (
+          <>
+            <h2 className="text-xl font-display font-bold text-foreground mb-5">Review Transfer</h2>
+            <GlassCard className="space-y-3 mb-3">
+              <Row label="Amount" value={`$${numAmount.toFixed(2)}`} bold />
+              <Row label="From" value={from === "checking" ? "Everyday Checking" : "High Yield Savings"} />
+              <Row label="To" value={to === "checking" ? "Everyday Checking" : "High Yield Savings"} />
+              {memo && <Row label="Memo" value={memo} />}
+            </GlassCard>
+            <div className="space-y-3 mb-5">
+              <FeesTimingCard kind="internal" amount={numAmount} />
+              <LimitsCheckPanel check={limitCheck} />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setStep("form")} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Back</button>
+              <button onClick={handleConfirm} disabled={!limitCheck.ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Confirm</button>
+            </div>
+          </>
+        );
+      })()}
 
       {step === "success" && (
         <SuccessView title="Transfer Complete" subtitle={`$${numAmount.toFixed(2)} moved successfully.`} onDone={onClose} />
