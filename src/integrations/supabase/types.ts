@@ -389,6 +389,69 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_transfers: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          frequency: string
+          from_account: string
+          id: string
+          kind: string
+          last_error: string | null
+          last_run_at: string | null
+          memo: string | null
+          metadata: Json
+          next_run_at: string | null
+          scheduled_for: string
+          status: string
+          timezone: string
+          to_label: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          frequency?: string
+          from_account: string
+          id?: string
+          kind: string
+          last_error?: string | null
+          last_run_at?: string | null
+          memo?: string | null
+          metadata?: Json
+          next_run_at?: string | null
+          scheduled_for: string
+          status?: string
+          timezone?: string
+          to_label: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          frequency?: string
+          from_account?: string
+          id?: string
+          kind?: string
+          last_error?: string | null
+          last_run_at?: string | null
+          memo?: string | null
+          metadata?: Json
+          next_run_at?: string | null
+          scheduled_for?: string
+          status?: string
+          timezone?: string
+          to_label?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       support_messages: {
         Row: {
           author: Database["public"]["Enums"]["support_message_author"]
