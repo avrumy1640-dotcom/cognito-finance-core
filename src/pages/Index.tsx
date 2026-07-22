@@ -1,4 +1,4 @@
-import { Bell, Search, Eye, EyeOff } from "lucide-react";
+import { Bell, Search, Eye, EyeOff, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
+import { useKyc } from "@/hooks/useKyc";
 import {
   user,
   cashFlow,
