@@ -386,7 +386,10 @@ const HomePage = () => {
 
         {/* Financial Wellness */}
         <motion.div custom={8} variants={fadeUp} initial="hidden" animate="visible" className="pb-4">
-          <GlassCard className="flex items-center justify-between">
+          <GlassCard
+            onClick={() => navigate("/insights")}
+            className="flex items-center justify-between"
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl gradient-accent flex items-center justify-center">
                 <Shield size={18} className="text-primary-foreground" />
