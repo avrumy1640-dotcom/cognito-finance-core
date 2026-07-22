@@ -4,12 +4,16 @@
 //
 // Runs inside the edge-function Deno runtime so SUPABASE_SERVICE_ROLE_KEY is
 // available. Creates two ephemeral users, runs assertions, deletes them.
+import "https://deno.land/std@0.224.0/dotenv/load.ts";
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
-const URL = Deno.env.get("SUPABASE_URL")!;
-const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+const URL = Deno.env.get("SUPABASE_URL") ?? Deno.env.get("VITE_SUPABASE_URL")!;
+const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("VITE_SUPABASE_PUBLISHABLE_KEY")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+if (!SERVICE) {
+  console.warn("SUPABASE_SERVICE_ROLE_KEY missing — RLS tests need it to mint ephemeral users");
+}
 
 const admin = createClient(URL, SERVICE, { auth: { persistSession: false } });
 const anonClient = createClient(URL, ANON, { auth: { persistSession: false } });
