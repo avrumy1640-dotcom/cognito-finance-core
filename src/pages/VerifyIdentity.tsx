@@ -6,7 +6,6 @@ import { z } from "zod";
 import {
   ArrowLeft,
   ArrowRight,
-  Camera,
   Check,
   Loader2,
   Lock,
