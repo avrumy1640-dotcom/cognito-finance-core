@@ -19,6 +19,7 @@ import {
   ScanFace,
 } from "lucide-react";
 import KycStatusCard from "@/components/kyc/KycStatusCard";
+import DocumentUploader from "@/components/kyc/DocumentUploader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useKyc } from "@/hooks/useKyc";
