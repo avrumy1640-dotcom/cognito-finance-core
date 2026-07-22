@@ -33,6 +33,7 @@ import Support from "./pages/Support";
 import SupportTicket from "./pages/SupportTicket";
 import Beneficiaries from "./pages/Beneficiaries";
 import PaymentRequests from "./pages/PaymentRequests";
+import ScheduledTransfers from "./pages/ScheduledTransfers";
 import RequireAdmin from "./components/RequireAdmin";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
