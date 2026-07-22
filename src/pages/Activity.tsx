@@ -4,11 +4,15 @@ import { motion } from "framer-motion";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
-import { Search, Download, ChevronRight, SlidersHorizontal } from "lucide-react";
+import { Search, Download, ChevronRight, SlidersHorizontal, FileText } from "lucide-react";
+import { buildCsv, buildPdf, type ExportResult } from "@/lib/exports";
+import ExportPreviewModal from "@/components/exports/ExportPreviewModal";
 
 const filterChips = ["All", "Card", "Transfers", "Deposits", "Bills", "P2P", "Pending", "Income", "Fees"];
 
 const ActivityPage = () => {
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const navigate = useNavigate();
