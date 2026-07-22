@@ -82,6 +82,14 @@ const EMPLOYMENT: { value: FormState["employment_status"]; label: string }[] = [
 
 type StepDef = { title: string; kicker: string; valid: () => boolean; render: () => JSX.Element };
 
+const draftKey = (uid?: string | null) => `kyc_draft_v1:${uid ?? "anon"}`;
+
+type SubmitError = {
+  kind: "network" | "auth" | "provider" | "validation" | "unknown";
+  message: string;
+  retryable: boolean;
+} | null;
+
 const VerifyIdentity = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -91,9 +99,37 @@ const VerifyIdentity = () => {
   const [form, setForm] = useState<FormState>(empty);
   const [selfie, setSelfie] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<SubmitError>(null);
+  const [attempt, setAttempt] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+  const hydratedRef = useRef(false);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Hydrate any prior draft so a refresh, session expiry, or crash doesn't
+  // force the user to start over.
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    try {
+      const raw = localStorage.getItem(draftKey(user?.id));
+      if (raw) {
+        const parsed = JSON.parse(raw) as { form?: FormState; selfie?: string | null; step?: number; showIntro?: boolean };
+        if (parsed.form) setForm((f) => ({ ...f, ...parsed.form }));
+        if (parsed.selfie) setSelfie(parsed.selfie);
+        if (typeof parsed.step === "number") setStep(parsed.step);
+        if (parsed.showIntro === false) setShowIntro(false);
+      }
+    } catch { /* ignore */ }
+    hydratedRef.current = true;
+  }, [user?.id]);
+
+  // Persist draft as the user progresses.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    try {
+      localStorage.setItem(draftKey(user?.id), JSON.stringify({ form, selfie, step, showIntro }));
+    } catch { /* quota — ignore */ }
+  }, [form, selfie, step, showIntro, user?.id]);
 
   useEffect(() => {
     if (profile) {
@@ -112,12 +148,29 @@ const VerifyIdentity = () => {
     reader.readAsDataURL(f);
   };
 
+  const clearDraft = () => {
+    try { localStorage.removeItem(draftKey(user?.id)); } catch { /* ignore */ }
+  };
+
   const submit = async () => {
-    if (!user) { toast.error("Sign in required"); return; }
+    setSubmitError(null);
+    if (!user) {
+      setSubmitError({ kind: "auth", message: "Your session expired. Sign in again — your progress is saved.", retryable: false });
+      return;
+    }
     const parsed = schema.safeParse(form);
-    if (!parsed.success) { toast.error(parsed.error.errors[0]?.message ?? "Please review the form"); return; }
-    if (!selfie) { toast.error("A selfie photo is required by our provider"); return; }
+    if (!parsed.success) {
+      const msg = parsed.error.errors[0]?.message ?? "Please review the form";
+      setSubmitError({ kind: "validation", message: msg, retryable: true });
+      toast.error(msg);
+      return;
+    }
+    if (!selfie) {
+      setSubmitError({ kind: "validation", message: "A selfie photo is required.", retryable: true });
+      return;
+    }
     setSubmitting(true);
+    setAttempt((a) => a + 1);
     const d = parsed.data;
 
     const insertPayload = {
@@ -136,36 +189,74 @@ const VerifyIdentity = () => {
     };
 
     const { error: upsertErr } = await supabase.from("kyc_profiles").upsert(insertPayload, { onConflict: "user_id" });
-    if (upsertErr) { setSubmitting(false); toast.error(upsertErr.message); return; }
+    if (upsertErr) {
+      setSubmitting(false);
+      const isAuth = /jwt|auth|session/i.test(upsertErr.message);
+      setSubmitError({
+        kind: isAuth ? "auth" : "network",
+        message: isAuth ? "Your session expired. Sign in again — your progress is saved." : upsertErr.message,
+        retryable: !isAuth,
+      });
+      return;
+    }
 
     toast.loading("Verifying your identity…", { id: "kyc" });
-    const { data: result, error: fnErr } = await supabase.functions.invoke("iberbanco-kyc", {
-      body: {
-        first_name: d.legal_first_name, last_name: d.legal_last_name,
-        email: user.email, password: d.password, call_number: d.call_number,
-        date_of_birth: d.date_of_birth, address: d.street, city: d.city,
-        state_or_province: d.region.toUpperCase(), post_code: d.postal_code,
-        country: d.country.toUpperCase(), citizenship: d.citizenship.toUpperCase(),
-        currencies: [1], selected_service: ["crypto", "card", "bank"],
-        identity_card_type: ID_TYPE_MAP[d.id_type], identity_card_id: d.id_number,
-        identityIssuedDate: d.id_issued_date, identityExpirationDate: d.id_expiration_date,
-        employmentStatus: d.employment_status, income: d.income, occupation: d.occupation,
-        selfie,
-      },
-    });
+    let result: any = null;
+    let fnErr: any = null;
+    try {
+      const res = await supabase.functions.invoke("iberbanco-kyc", {
+        body: {
+          first_name: d.legal_first_name, last_name: d.legal_last_name,
+          email: user.email, password: d.password, call_number: d.call_number,
+          date_of_birth: d.date_of_birth, address: d.street, city: d.city,
+          state_or_province: d.region.toUpperCase(), post_code: d.postal_code,
+          country: d.country.toUpperCase(), citizenship: d.citizenship.toUpperCase(),
+          currencies: [1], selected_service: ["crypto", "card", "bank"],
+          identity_card_type: ID_TYPE_MAP[d.id_type], identity_card_id: d.id_number,
+          identityIssuedDate: d.id_issued_date, identityExpirationDate: d.id_expiration_date,
+          employmentStatus: d.employment_status, income: d.income, occupation: d.occupation,
+          selfie,
+        },
+      });
+      result = res.data;
+      fnErr = res.error;
+    } catch (e) {
+      fnErr = e;
+    }
     setSubmitting(false);
 
     if (fnErr) {
-      toast.error(fnErr.message ?? "Verification service unavailable", { id: "kyc" });
+      const raw = fnErr?.message ?? String(fnErr);
+      const isAuth = /401|unauthori[sz]ed|jwt|session/i.test(raw);
+      const isNet = /fetch|network|timeout|failed to fetch/i.test(raw);
+      toast.error(isNet ? "Network hiccup — tap Try again to resubmit." : raw, { id: "kyc" });
+      setSubmitError({
+        kind: isAuth ? "auth" : isNet ? "network" : "provider",
+        message: isAuth
+          ? "Your session expired. Sign in again — your progress is saved."
+          : isNet
+          ? "Couldn't reach the verification service. Check your connection and try again."
+          : raw,
+        retryable: !isAuth,
+      });
       await refresh();
       return;
     }
     const outcome = (result as { status?: string; reason?: string } | null)?.status ?? "pending";
-    if (outcome === "verified") toast.success("Identity verified — your account is now active.", { id: "kyc" });
-    else if (outcome === "rejected") toast.error((result as { reason?: string })?.reason ?? "Verification denied.", { id: "kyc" });
-    else toast("Submitted — our team is reviewing your application.", { id: "kyc" });
+    if (outcome === "verified") { toast.success("Identity verified — your account is now active.", { id: "kyc" }); clearDraft(); }
+    else if (outcome === "rejected") {
+      const reason = (result as { reason?: string })?.reason ?? "Verification denied.";
+      toast.error(reason, { id: "kyc" });
+      setSubmitError({ kind: "provider", message: reason, retryable: true });
+    } else { toast("Submitted — our team is reviewing your application.", { id: "kyc" }); clearDraft(); }
     await refresh();
   };
+
+  const saveAndExit = () => {
+    toast.success("Progress saved — pick up where you left off anytime.");
+    navigate("/");
+  };
+
 
   const steps = useMemo<StepDef[]>(() => [
     {
