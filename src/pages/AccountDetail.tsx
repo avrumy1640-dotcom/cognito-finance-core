@@ -429,6 +429,7 @@ const AccountDetail = () => {
           )}
         </AnimatePresence>
       </div>
+      <ExportPreviewModal result={limitsExport} onClose={() => setLimitsExport(null)} />
     </div>
   );
 };
