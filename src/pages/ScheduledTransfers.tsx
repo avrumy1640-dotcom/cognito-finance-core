@@ -106,7 +106,7 @@ const ScheduledTransfers = () => {
     } catch (e) {
       ok = false;
     }
-    const patch: Partial<ScheduledTransfer> & { updated_at?: string } = ok
+    const patch = ok
       ? {
           status: r.frequency === "once" ? "completed" : "scheduled",
           last_run_at: new Date().toISOString(),
@@ -114,7 +114,7 @@ const ScheduledTransfers = () => {
           next_run_at: r.frequency === "once" ? null : nextRunFor(r.frequency, r.scheduled_for),
         }
       : { status: "failed", last_error: "Execution failed — check balance and details.", last_run_at: new Date().toISOString() };
-    await supabase.from("scheduled_transfers").update(patch).eq("id", r.id);
+    await supabase.from("scheduled_transfers").update(patch as never).eq("id", r.id);
     if (ok) toast.success("Scheduled transfer executed");
     else toast.error("Execution failed — marked as failed");
     load();
