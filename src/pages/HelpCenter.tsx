@@ -90,6 +90,16 @@ const HelpCenter = () => {
           ))}
         </div>
 
+        <button
+          onClick={() => navigate("/support")}
+          className="w-full text-left"
+        >
+          <GlassCard className="flex items-center justify-between py-3">
+            <span className="text-sm font-medium text-foreground">My support tickets</span>
+            <span className="text-xs text-primary font-medium">View →</span>
+          </GlassCard>
+        </button>
+
         {/* Topics */}
         <div>
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Topics</h2>
