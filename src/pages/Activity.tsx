@@ -89,13 +89,25 @@ const ActivityPage = () => {
               <h1 className="text-2xl font-display font-bold text-foreground">Activity</h1>
               <p className="text-sm text-muted-foreground mt-1">All transactions & history</p>
             </div>
-            <button
-              onClick={exportCsv}
-              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
-              title="Export as CSV"
-            >
-              <Download size={18} className="text-muted-foreground" />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu((v) => !v)}
+                className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
+                title="Export report"
+              >
+                <Download size={18} className="text-muted-foreground" />
+              </button>
+              {showExportMenu && (
+                <div className="absolute right-0 mt-2 w-44 bg-card border border-border rounded-2xl shadow-lg overflow-hidden z-30">
+                  <button onClick={() => runExport("csv")} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-foreground hover:bg-secondary">
+                    <FileText size={14} className="text-primary" /> CSV report
+                  </button>
+                  <button onClick={() => runExport("pdf")} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-foreground hover:bg-secondary border-t border-border">
+                    <FileText size={14} className="text-primary" /> PDF report
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </motion.div>
 
