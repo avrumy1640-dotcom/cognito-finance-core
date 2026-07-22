@@ -49,6 +49,7 @@ const App = () => (
               <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/mfa-challenge" element={<MfaChallenge />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/onboarding" element={<Guarded><Onboarding /></Guarded>} />
               <Route path="/" element={<Guarded><Index /></Guarded>} />
               <Route path="/move-money" element={<Guarded><MoveMoney /></Guarded>} />
               <Route path="/move-money/:action" element={<Guarded><MoveMoney /></Guarded>} />
