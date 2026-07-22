@@ -279,30 +279,26 @@ const VerifyIdentity = () => {
       valid: () => !!selfie && form.password.length >= 8 && form.confirm,
       render: () => (
         <div className="space-y-4">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className={`w-full rounded-2xl border-2 border-dashed p-6 flex flex-col items-center gap-3 transition-all ${
-              selfie ? "border-primary bg-primary/5" : "border-border bg-card"
-            }`}
-          >
-            {selfie ? (
-              <img src={selfie} alt="Selfie preview" className="w-24 h-24 rounded-full object-cover shadow-lg" />
-            ) : (
-              <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center">
-                <ScanFace size={28} className="text-primary" />
-              </div>
-            )}
-            <div className="text-center">
-              <div className="text-sm font-semibold text-foreground">{selfie ? "Looks good — tap to retake" : "Tap to take a selfie"}</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">Good lighting, no hat or glasses</div>
-            </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-primary font-semibold">
-              <Camera size={12} /> {selfie ? "Replace photo" : "Open camera"}
-            </div>
-          </button>
-          <input ref={fileRef} type="file" accept="image/*" capture="user" className="hidden"
-            onChange={(e) => e.target.files?.[0] && readSelfie(e.target.files[0])} />
+          <DocumentUploader
+            spec={{
+              id: "selfie",
+              label: "Live selfie",
+              description: "We compare this to your ID photo to confirm it's really you.",
+              kind: "selfie",
+              maxMb: 6,
+              minShortEdge: 480,
+              tips: [
+                "Face the camera straight-on with good lighting",
+                "No hats, sunglasses, or masks",
+                "Keep your whole face inside the frame",
+              ],
+            }}
+            value={selfie}
+            onChange={(url) => setSelfie(url)}
+            rejectionReason={status === "rejected" ? profile?.rejection_reason ?? null : null}
+            required
+          />
+
 
           <Field label="Create account password" type="password" placeholder="At least 8 characters"
             value={form.password} onChange={(v) => set("password", v)} />
