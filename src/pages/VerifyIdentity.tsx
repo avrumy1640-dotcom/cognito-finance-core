@@ -205,18 +205,7 @@ const VerifyIdentity = () => {
             </button>
             <h1 className="text-lg font-display font-bold text-foreground">Identity Verification</h1>
           </div>
-          <GlassCard elevated className="text-center py-8">
-            <div className="w-16 h-16 rounded-full bg-success/10 mx-auto flex items-center justify-center mb-3">
-              <ShieldCheck size={28} className="text-success" />
-            </div>
-            <h2 className="text-lg font-display font-bold text-foreground">You're verified</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Verified as {profile?.legal_first_name} {profile?.legal_last_name}. All money-movement features are unlocked.
-            </p>
-            <button onClick={() => navigate("/")} className="mt-5 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
-              Back to home
-            </button>
-          </GlassCard>
+          <KycStatusCard status={status} profile={profile} variant="full" onRetry={refresh} refreshing={kycLoading} />
         </div>
       </AppLayout>
     );
@@ -234,21 +223,10 @@ const VerifyIdentity = () => {
           <h1 className="text-lg font-display font-bold text-foreground">Identity Verification</h1>
         </div>
 
-        {status === "pending" && (
-          <div className="rounded-2xl p-4 bg-primary/10 text-primary flex items-start gap-3">
-            <Clock size={20} className="shrink-0 mt-0.5" />
-            <p className="text-sm">Your submission is under review by Iberbanco.</p>
-          </div>
+        {(status === "pending" || status === "rejected") && (
+          <KycStatusCard status={status} profile={profile} variant="full" onRetry={refresh} refreshing={kycLoading} />
         )}
-        {status === "rejected" && (
-          <div className="rounded-2xl p-4 bg-destructive/10 text-destructive flex items-start gap-3">
-            <ShieldAlert size={20} className="shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold">Verification failed</p>
-              <p className="text-xs mt-1 opacity-90">{profile?.rejection_reason ?? "Please double-check your information and resubmit."}</p>
-            </div>
-          </div>
-        )}
+
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <GlassCard elevated>
