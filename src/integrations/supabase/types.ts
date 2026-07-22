@@ -124,41 +124,83 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_type: string | null
+          address_city: string | null
+          address_postal_code: string | null
+          address_region: string | null
+          address_street: string | null
           annual_income: string | null
+          business_name: string | null
           citizenship: string | null
+          country: string | null
           created_at: string
           email: string | null
           employer: string | null
           id: string
           occupation: string | null
+          onboarded_at: string | null
           phone: string | null
+          preferred_currency: string | null
           preferred_name: string | null
+          privacy_accepted_at: string | null
+          source_of_funds: string | null
+          tax_country: string | null
+          tax_id_number: string | null
+          tos_accepted_at: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          account_type?: string | null
+          address_city?: string | null
+          address_postal_code?: string | null
+          address_region?: string | null
+          address_street?: string | null
           annual_income?: string | null
+          business_name?: string | null
           citizenship?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           employer?: string | null
           id?: string
           occupation?: string | null
+          onboarded_at?: string | null
           phone?: string | null
+          preferred_currency?: string | null
           preferred_name?: string | null
+          privacy_accepted_at?: string | null
+          source_of_funds?: string | null
+          tax_country?: string | null
+          tax_id_number?: string | null
+          tos_accepted_at?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          account_type?: string | null
+          address_city?: string | null
+          address_postal_code?: string | null
+          address_region?: string | null
+          address_street?: string | null
           annual_income?: string | null
+          business_name?: string | null
           citizenship?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           employer?: string | null
           id?: string
           occupation?: string | null
+          onboarded_at?: string | null
           phone?: string | null
+          preferred_currency?: string | null
           preferred_name?: string | null
+          privacy_accepted_at?: string | null
+          source_of_funds?: string | null
+          tax_country?: string | null
+          tax_id_number?: string | null
+          tos_accepted_at?: string | null
           updated_at?: string
           user_id?: string
         }
