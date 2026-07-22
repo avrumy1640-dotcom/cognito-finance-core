@@ -97,7 +97,11 @@ const MoveMoney = () => {
               transition={{ delay: 0.05 + i * 0.04 }}
             >
               <GlassCard
-                onClick={() => action.id === "receive" ? navigate("/receive") : setSelected(action.id)}
+                onClick={() => {
+                  if (action.id === "receive") navigate("/receive");
+                  else if (action.id === "scheduled") navigate("/scheduled");
+                  else setSelected(action.id);
+                }}
                 className="flex items-center justify-between py-3.5"
               >
                 <div className="flex items-center gap-3">
