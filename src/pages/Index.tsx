@@ -195,18 +195,18 @@ const HomePage = () => {
 
         {/* Quick Actions */}
         <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible">
-          <h2 className="text-section-title text-sm text-foreground mb-3">Quick Actions</h2>
+          <h2 className="text-section-title text-sm text-foreground mb-3">What would you like to do?</h2>
           <div className="grid grid-cols-4 gap-3">
             {quickActions.map((action) => (
               <button
                 key={action.label}
                 onClick={() => navigate(action.path)}
-                className="flex flex-col items-center gap-1.5"
+                className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform"
               >
-                <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center active:scale-95 transition-transform">
-                  <action.icon size={20} className="text-foreground" />
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+                  <action.icon size={22} className="text-primary" strokeWidth={2} />
                 </div>
-                <span className="text-[10px] font-medium text-muted-foreground">{action.label}</span>
+                <span className="text-[11px] font-medium text-foreground text-center leading-tight">{action.label}</span>
               </button>
             ))}
           </div>
@@ -259,9 +259,17 @@ const HomePage = () => {
 
         {/* Cash Flow */}
         <motion.div custom={4} variants={fadeUp} initial="hidden" animate="visible">
-          <h2 className="text-section-title text-sm text-foreground mb-3">Cash Flow This Month</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-section-title text-sm text-foreground">Cash Flow This Month</h2>
+            <button
+              onClick={() => navigate("/insights")}
+              className="text-xs font-medium text-primary flex items-center gap-0.5"
+            >
+              Details <ChevronRight size={14} />
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-3">
-            <GlassCard>
+            <GlassCard onClick={() => navigate("/insights")}>
               <div className="flex items-center gap-2 mb-2">
                 <ArrowDownLeft size={16} className="text-success" />
                 <span className="text-xs text-muted-foreground font-medium">Money In</span>
@@ -270,7 +278,7 @@ const HomePage = () => {
                 {formatCurrency(cashFlow.moneyIn)}
               </p>
             </GlassCard>
-            <GlassCard>
+            <GlassCard onClick={() => navigate("/insights")}>
               <div className="flex items-center gap-2 mb-2">
                 <ArrowUpRight size={16} className="text-destructive" />
                 <span className="text-xs text-muted-foreground font-medium">Money Out</span>
@@ -287,7 +295,11 @@ const HomePage = () => {
           <h2 className="text-section-title text-sm text-foreground mb-3">Smart Insights</h2>
           <div className="space-y-2">
             {insights.map((insight) => (
-              <GlassCard key={insight.id} className="flex items-center gap-3 py-3">
+              <GlassCard
+                key={insight.id}
+                onClick={() => navigate("/insights")}
+                className="flex items-center gap-3 py-3"
+              >
                 <span className="text-lg">{insight.icon}</span>
                 <p className="text-sm text-foreground flex-1">{insight.text}</p>
                 <ChevronRight size={16} className="text-muted-foreground" />
@@ -374,7 +386,10 @@ const HomePage = () => {
 
         {/* Financial Wellness */}
         <motion.div custom={8} variants={fadeUp} initial="hidden" animate="visible" className="pb-4">
-          <GlassCard className="flex items-center justify-between">
+          <GlassCard
+            onClick={() => navigate("/insights")}
+            className="flex items-center justify-between"
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl gradient-accent flex items-center justify-center">
                 <Shield size={18} className="text-primary-foreground" />

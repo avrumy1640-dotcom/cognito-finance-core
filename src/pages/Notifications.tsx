@@ -222,7 +222,19 @@ const NotificationsPage = () => {
 
         <div className="space-y-2">
           {notifications.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-10">You're all caught up.</p>
+            <GlassCard className="text-center py-10">
+              <div className="text-4xl mb-2">🔔</div>
+              <p className="text-sm font-medium text-foreground">You're all caught up</p>
+              <p className="text-xs text-muted-foreground mt-1 mb-4">
+                Deposits, card activity, and alerts will show up here.
+              </p>
+              <button
+                onClick={() => navigate("/notifications/settings")}
+                className="text-xs font-semibold text-primary"
+              >
+                Manage alert preferences →
+              </button>
+            </GlassCard>
           )}
           {notifications.map((n, i) => (
             <motion.div key={n.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
