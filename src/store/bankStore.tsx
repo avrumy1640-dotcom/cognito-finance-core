@@ -399,6 +399,10 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const lastCardStateRef = useRef<string | null>(null);
   const lowBalanceFiredRef = useRef<Record<string, boolean>>({});
   const firstSyncRef = useRef(true);
+  // Keep a live reference to the latest state + card so the stable refreshColumn
+  // (built once with []-deps) always sees fresh names/apy/etc. without re-creating.
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
 
   const fireAlert = useCallback((title: string, body: string, type: string, kind: "info" | "warning" | "success" = "info") => {
     const notif: NotificationItem = { id: uid("n"), title, body, time: "Just now", read: false, type };
