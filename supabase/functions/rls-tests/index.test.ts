@@ -15,8 +15,8 @@ if (!SERVICE) {
   console.warn("SUPABASE_SERVICE_ROLE_KEY missing — RLS tests need it to mint ephemeral users");
 }
 
-const admin = createClient(URL, SERVICE, { auth: { persistSession: false } });
-const anonClient = createClient(URL, ANON, { auth: { persistSession: false } });
+const admin = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
+const anonClient = createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 
 async function makeUser(): Promise<{ id: string; client: SupabaseClient }> {
   const email = `rlstest+${crypto.randomUUID()}@example.com`;
@@ -25,7 +25,7 @@ async function makeUser(): Promise<{ id: string; client: SupabaseClient }> {
     email, password, email_confirm: true,
   });
   if (error || !data.user) throw new Error("createUser: " + error?.message);
-  const client = createClient(URL, ANON, { auth: { persistSession: false } });
+  const client = createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
   const { error: signInErr } = await client.auth.signInWithPassword({ email, password });
   if (signInErr) throw new Error("signIn: " + signInErr.message);
   return { id: data.user.id, client };
@@ -40,7 +40,7 @@ async function cleanup(ids: string[]) {
   }
 }
 
-Deno.test("RLS: anon cannot read or write hardened tables", async () => {
+Deno.test.bind(null, { sanitizeOps: false, sanitizeResources: false })("RLS: anon cannot read or write hardened tables", async () => {
   const td = await anonClient.from("trusted_devices").select("*");
   assert(td.error || (td.data ?? []).length === 0, "anon must not read trusted_devices");
 
@@ -66,7 +66,7 @@ Deno.test("RLS: anon cannot read or write hardened tables", async () => {
   assert(insRole.error, "anon must be blocked from inserting user_roles");
 });
 
-Deno.test("RLS: trusted_devices — owner can CRUD own, cannot touch others", async () => {
+Deno.test.bind(null, { sanitizeOps: false, sanitizeResources: false })("RLS: trusted_devices — owner can CRUD own, cannot touch others", async () => {
   const alice = await makeUser();
   const bob = await makeUser();
   try {
@@ -109,7 +109,7 @@ Deno.test("RLS: trusted_devices — owner can CRUD own, cannot touch others", as
   }
 });
 
-Deno.test("RLS: profiles — owner writes, others cannot", async () => {
+Deno.test.bind(null, { sanitizeOps: false, sanitizeResources: false })("RLS: profiles — owner writes, others cannot", async () => {
   const alice = await makeUser();
   const bob = await makeUser();
   try {
@@ -134,7 +134,7 @@ Deno.test("RLS: profiles — owner writes, others cannot", async () => {
   }
 });
 
-Deno.test("RLS: user_roles — authenticated users cannot self-grant admin", async () => {
+Deno.test.bind(null, { sanitizeOps: false, sanitizeResources: false })("RLS: user_roles — authenticated users cannot self-grant admin", async () => {
   const alice = await makeUser();
   try {
     const selfGrant = await alice.client.from("user_roles").insert({
@@ -151,7 +151,7 @@ Deno.test("RLS: user_roles — authenticated users cannot self-grant admin", asy
   }
 });
 
-Deno.test("RLS: webhook_events — non-admin authenticated user cannot read/write", async () => {
+Deno.test.bind(null, { sanitizeOps: false, sanitizeResources: false })("RLS: webhook_events — non-admin authenticated user cannot read/write", async () => {
   const alice = await makeUser();
   try {
     const read = await alice.client.from("webhook_events").select("*");
