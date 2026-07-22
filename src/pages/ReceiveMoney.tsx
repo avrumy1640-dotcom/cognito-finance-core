@@ -83,7 +83,7 @@ const ReceiveMoney = () => {
   };
 
   const downloadQr = () => {
-    const svg = document.getElementById("receive-qr") as SVGSVGElement | null;
+    const svg = document.getElementById("receive-qr") as unknown as SVGSVGElement | null;
     if (!svg) return;
     const serializer = new XMLSerializer();
     const source = serializer.serializeToString(svg);
