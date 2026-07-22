@@ -77,8 +77,19 @@ const CardsPage = () => {
 
   const doLock = () => {
     toggleCardLock();
-    toast[card.isLocked ? "success" : "warning"](card.isLocked ? "Card unlocked" : "Card locked");
+    const nowLocked = !card.isLocked;
+    if (columnLive) {
+      // Iberbanco v2 doesn't expose a card lock endpoint; we hold the state
+      // locally and surface that clearly so the user isn't misled.
+      toast[nowLocked ? "warning" : "success"](
+        nowLocked ? "Card locked in this app" : "Card unlocked in this app",
+        { description: "Lock is enforced in-app. Contact support to freeze at the network." },
+      );
+    } else {
+      toast[nowLocked ? "warning" : "success"](nowLocked ? "Card locked" : "Card unlocked");
+    }
   };
+
 
   const toggleTravel = () => {
     setTravelActive((v) => !v);

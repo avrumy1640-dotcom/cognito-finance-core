@@ -1,4 +1,4 @@
-import { Bell, Search, Eye, EyeOff } from "lucide-react";
+import { Bell, Search, Eye, EyeOff, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
+import { useKyc } from "@/hooks/useKyc";
 import {
   user,
   cashFlow,
@@ -57,6 +58,7 @@ const HomePage = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const navigate = useNavigate();
   const { accounts, totalBalance, transactions, notifications } = useBank();
+  const { status: kycStatus, loading: kycLoading } = useKyc();
   const unread = notifications.filter((n) => !n.read).length;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -86,6 +88,17 @@ const HomePage = () => {
     copyToClipboard(text, "Direct deposit info");
   };
 
+  const kycMeta = (() => {
+    if (kycLoading) return null;
+    if (kycStatus === "verified")
+      return { icon: ShieldCheck, tint: "text-success", bg: "bg-success/10", label: "Identity verified", hint: "Bank-grade protection is active." };
+    if (kycStatus === "pending")
+      return { icon: Clock, tint: "text-warning", bg: "bg-warning/10", label: "Verification in review", hint: "You can browse — money movement unlocks once we're done." };
+    if (kycStatus === "rejected")
+      return { icon: AlertCircle, tint: "text-destructive", bg: "bg-destructive/10", label: "Verification needs attention", hint: "Update your details to unlock transfers." };
+    return { icon: ShieldCheck, tint: "text-primary", bg: "bg-primary/10", label: "Verify to unlock transfers", hint: "Takes 2 minutes. Required by banking regulations." };
+  })();
+
   return (
     <AppLayout>
       <div className="px-5 pt-14 space-y-5">
@@ -96,21 +109,23 @@ const HomePage = () => {
           className="flex items-center justify-between"
         >
           <div>
-            <p className="text-muted-foreground text-sm">{greeting},</p>
-            <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">
+            <p className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1">{greeting}</p>
+            <h1 className="text-[26px] font-display font-bold tracking-tight text-foreground leading-tight">
               {user.preferredName}
             </h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("/activity")}
-              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
+              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
+              aria-label="Search"
             >
               <Search size={18} className="text-muted-foreground" />
             </button>
             <button
               onClick={() => navigate("/notifications")}
-              className="relative w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
+              className="relative w-10 h-10 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
+              aria-label="Notifications"
             >
               <Bell size={18} className="text-muted-foreground" />
               {unread > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent" />}
@@ -118,17 +133,43 @@ const HomePage = () => {
           </div>
         </motion.div>
 
+        {/* KYC / Trust banner — contextual, replaces the buried CTA */}
+        {kycMeta && kycStatus !== "verified" && (
+          <motion.button
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => navigate("/profile/verify")}
+            className={`w-full text-left rounded-2xl border border-border/60 ${kycMeta.bg} p-3.5 flex items-start gap-3 active:scale-[0.99] transition-transform`}
+          >
+            <div className={`w-9 h-9 rounded-xl bg-card flex items-center justify-center shrink-0`}>
+              <kycMeta.icon size={18} className={kycMeta.tint} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">{kycMeta.label}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{kycMeta.hint}</p>
+            </div>
+            <ChevronRight size={16} className="text-muted-foreground mt-2 shrink-0" />
+          </motion.button>
+        )}
 
         {/* Total Balance Card */}
         <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible">
           <GlassCard elevated className="relative overflow-hidden">
-            <div className="absolute inset-0 gradient-hero opacity-[0.07] rounded-2xl" />
+            <div className="absolute inset-0 gradient-hero opacity-[0.08] rounded-2xl" />
             <div className="relative">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm text-muted-foreground font-medium">Total Available</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold text-primary uppercase tracking-widest">Total available</span>
+                  {kycStatus === "verified" && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-success bg-success/10 rounded-full px-2 py-0.5">
+                      <ShieldCheck size={10} /> Insured
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={() => setBalanceVisible(!balanceVisible)}
                   className="p-1 rounded-full"
+                  aria-label={balanceVisible ? "Hide balance" : "Show balance"}
                 >
                   {balanceVisible ? (
                     <Eye size={16} className="text-muted-foreground" />
@@ -137,7 +178,7 @@ const HomePage = () => {
                   )}
                 </button>
               </div>
-              <p className="text-balance-display text-4xl text-foreground">
+              <p className="text-balance-display text-4xl text-foreground mt-1">
                 {formatCurrency(totalBalance)}
               </p>
               <div className="flex items-center gap-1.5 mt-2">
@@ -147,6 +188,7 @@ const HomePage = () => {
             </div>
           </GlassCard>
         </motion.div>
+
 
         {/* Account Cards */}
         <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
