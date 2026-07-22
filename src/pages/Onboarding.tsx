@@ -357,7 +357,7 @@ const Onboarding = () => {
     if (!user) return;
     setSaving(true);
     const now = new Date().toISOString();
-    const payload: Record<string, unknown> = {
+    const payload = {
       user_id: user.id,
       email: user.email,
       account_type: form.account_type,
