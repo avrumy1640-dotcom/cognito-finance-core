@@ -29,6 +29,8 @@ import MfaChallenge from "./pages/MfaChallenge";
 import Onboarding from "./pages/Onboarding";
 import ReceiveMoney from "./pages/ReceiveMoney";
 import Settings from "./pages/Settings";
+import Support from "./pages/Support";
+import SupportTicket from "./pages/SupportTicket";
 
 const queryClient = new QueryClient();
 
@@ -75,6 +77,8 @@ const App = () => (
               <Route path="/help/contact" element={<Guarded><HelpCenter /></Guarded>} />
               <Route path="/insights" element={<Guarded><SpendingInsights /></Guarded>} />
               <Route path="/settings" element={<Guarded><Settings /></Guarded>} />
+              <Route path="/support" element={<Guarded><Support /></Guarded>} />
+              <Route path="/support/:id" element={<Guarded><SupportTicket /></Guarded>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
