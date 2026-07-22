@@ -31,6 +31,21 @@ import ReceiveMoney from "./pages/ReceiveMoney";
 import Settings from "./pages/Settings";
 import Support from "./pages/Support";
 import SupportTicket from "./pages/SupportTicket";
+import Beneficiaries from "./pages/Beneficiaries";
+import PaymentRequests from "./pages/PaymentRequests";
+import RequireAdmin from "./components/RequireAdmin";
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminCustomers from "./pages/admin/AdminCustomers";
+import AdminKyc from "./pages/admin/AdminKyc";
+import AdminCards from "./pages/admin/AdminCards";
+import AdminTransactions from "./pages/admin/AdminTransactions";
+import AdminFees from "./pages/admin/AdminFees";
+import AdminWebhooks from "./pages/admin/AdminWebhooks";
+import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
+import AdminTickets from "./pages/admin/AdminTickets";
+import AdminRoles from "./pages/admin/AdminRoles";
+import { AdminAccounts, AdminCrypto, AdminExchange } from "./pages/admin/AdminSimple";
 
 const queryClient = new QueryClient();
 
@@ -79,6 +94,23 @@ const App = () => (
               <Route path="/settings" element={<Guarded><Settings /></Guarded>} />
               <Route path="/support" element={<Guarded><Support /></Guarded>} />
               <Route path="/support/:id" element={<Guarded><SupportTicket /></Guarded>} />
+              <Route path="/beneficiaries" element={<Guarded><Beneficiaries /></Guarded>} />
+              <Route path="/payment-requests" element={<Guarded><PaymentRequests /></Guarded>} />
+              <Route path="/admin" element={<Guarded><RequireAdmin allow={["admin","support","compliance"]}><AdminLayout /></RequireAdmin></Guarded>}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="customers" element={<AdminCustomers />} />
+                <Route path="kyc" element={<AdminKyc />} />
+                <Route path="accounts" element={<AdminAccounts />} />
+                <Route path="cards" element={<AdminCards />} />
+                <Route path="transactions" element={<AdminTransactions />} />
+                <Route path="crypto" element={<AdminCrypto />} />
+                <Route path="exchange" element={<AdminExchange />} />
+                <Route path="fees" element={<RequireAdmin><AdminFees /></RequireAdmin>} />
+                <Route path="webhooks" element={<RequireAdmin><AdminWebhooks /></RequireAdmin>} />
+                <Route path="audit" element={<RequireAdmin><AdminAuditLogs /></RequireAdmin>} />
+                <Route path="tickets" element={<AdminTickets />} />
+                <Route path="roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
+              </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
