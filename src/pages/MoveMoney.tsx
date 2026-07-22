@@ -15,19 +15,23 @@ import {
   Building2,
   CheckCircle2,
   QrCode,
+  CalendarClock,
 } from "lucide-react";
 import { useBank } from "@/store/bankStore";
 import { useKyc } from "@/hooks/useKyc";
 import RequireKyc from "@/components/RequireKyc";
+import { FeesTimingCard, LimitsCheckPanel } from "@/components/money/FeesTimingCard";
+import { checkLimits } from "@/lib/txPolicy";
 
 const actions = [
-  { label: "Transfer", desc: "Between my accounts", icon: ArrowLeftRight, id: "transfer" },
-  { label: "Send Money", desc: "To another person", icon: Send, id: "send" },
+  { label: "Transfer", desc: "Between my accounts · Instant · Free", icon: ArrowLeftRight, id: "transfer" },
+  { label: "Send Money", desc: "To another person · Instant · Free", icon: Send, id: "send" },
   { label: "Receive Money", desc: "Share account or QR", icon: QrCode, id: "receive" },
-  { label: "Deposit Check", desc: "Mobile check deposit", icon: Camera, id: "deposit" },
-  { label: "Pay Bills", desc: "One-time or recurring", icon: Receipt, id: "bills" },
-  { label: "External Transfer", desc: "ACH to/from bank", icon: Building2, id: "external" },
-  { label: "Wire Transfer", desc: "Domestic or international", icon: Globe, id: "wire" },
+  { label: "Scheduled Transfers", desc: "Automate future payments", icon: CalendarClock, id: "scheduled" },
+  { label: "Deposit Check", desc: "Mobile check · Next business day", icon: Camera, id: "deposit" },
+  { label: "Pay Bills", desc: "One-time or recurring · 1–2 days", icon: Receipt, id: "bills" },
+  { label: "External Transfer", desc: "ACH to/from bank · 1–3 days · Free", icon: Building2, id: "external" },
+  { label: "Wire Transfer", desc: "Same-day domestic · $25 fee", icon: Globe, id: "wire" },
   { label: "Add Money", desc: "Fund your account", icon: Plus, id: "add" },
 ];
 
