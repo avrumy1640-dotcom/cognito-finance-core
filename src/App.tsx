@@ -23,6 +23,9 @@ import SpendingInsights from "./pages/SpendingInsights";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyIdentity from "./pages/VerifyIdentity";
+import Welcome from "./pages/Welcome";
+import VerifyEmail from "./pages/VerifyEmail";
+import MfaChallenge from "./pages/MfaChallenge";
 
 const queryClient = new QueryClient();
 
@@ -39,7 +42,11 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/login" element={<Login />} />
+              <Route path="/welcome" element={<Welcome />} />
+              <Route path="/login" element={<Login initialMode="signin" />} />
+              <Route path="/signup" element={<Login initialMode="signup" />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/mfa-challenge" element={<MfaChallenge />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/" element={<Guarded><Index /></Guarded>} />
               <Route path="/move-money" element={<Guarded><MoveMoney /></Guarded>} />
