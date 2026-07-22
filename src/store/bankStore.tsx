@@ -444,17 +444,17 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       const secondary = active.find((a) => a !== primary) || primary;
 
       const mappedChecking = {
-        ...state.accounts.checking,
+        ...stateRef.current.accounts.checking,
         ...mapIberAccount(primary),
         type: "checking" as const,
-        name: state.accounts.checking.name,
+        name: stateRef.current.accounts.checking.name,
       };
       const mappedSavings = {
-        ...state.accounts.savings,
+        ...stateRef.current.accounts.savings,
         ...mapIberAccount(secondary),
         type: "savings" as const,
-        name: state.accounts.savings.name,
-        apy: state.accounts.savings.apy,
+        name: stateRef.current.accounts.savings.name,
+        apy: stateRef.current.accounts.savings.apy,
       };
 
       const [chkTx, savTx] = await Promise.all([
