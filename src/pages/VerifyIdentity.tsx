@@ -547,7 +547,33 @@ const VerifyIdentity = () => {
         </AnimatePresence>
       </div>
 
-      <div className="px-5 pb-8 pt-3 sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0">
+      <div className="px-5 pb-8 pt-3 sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0 space-y-3">
+        {submitError && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 flex items-start gap-2"
+          >
+            <Shield size={14} className="text-destructive mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-destructive">
+                {submitError.kind === "network" ? "Connection issue"
+                  : submitError.kind === "auth" ? "Session expired"
+                  : submitError.kind === "provider" ? "Verification service said"
+                  : "Please review"}
+              </p>
+              <p className="text-[11px] text-destructive/90 mt-0.5">{submitError.message}</p>
+              {attempt > 1 && submitError.retryable && (
+                <p className="text-[10px] text-muted-foreground mt-1">Attempt {attempt} · your progress is saved.</p>
+              )}
+            </div>
+            {submitError.kind === "auth" ? (
+              <button onClick={() => navigate("/login")} className="text-xs font-semibold text-destructive underline">Sign in</button>
+            ) : (
+              <button onClick={() => setSubmitError(null)} className="text-xs text-destructive/70">Dismiss</button>
+            )}
+          </motion.div>
+        )}
         <button
           onClick={next}
           disabled={submitting}
@@ -555,14 +581,20 @@ const VerifyIdentity = () => {
         >
           {submitting ? (
             <><Loader2 size={16} className="animate-spin" /> Submitting…</>
+          ) : submitError?.retryable && step === steps.length - 1 ? (
+            <>Try again <ArrowRight size={16} /></>
           ) : step === steps.length - 1 ? (
             <>Submit for verification <Check size={16} /></>
           ) : (
             <>Continue <ArrowRight size={16} /></>
           )}
         </button>
+        <button onClick={saveAndExit} className="w-full py-2 text-xs text-muted-foreground font-medium">
+          Save & continue later
+        </button>
       </div>
     </div>
+
   );
 };
 
