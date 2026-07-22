@@ -498,9 +498,11 @@ const BillPaySheet = ({ onClose }: { onClose: () => void }) => {
               </div>
               {insufficient && num > 0 && <p className="text-xs text-destructive mt-1">Insufficient funds</p>}
             </div>
+            <FeesTimingCard kind="bill" amount={num} />
+            <LimitsCheckPanel check={checkLimits("bill", num)} />
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-              <button onClick={pay} disabled={!num || !biller.trim() || insufficient} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Pay Now</button>
+              <button onClick={pay} disabled={!num || !biller.trim() || insufficient || !checkLimits("bill", num).ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Pay Now</button>
             </div>
           </div>
         </>
