@@ -34,6 +34,7 @@ import {
 
 const quickActions = [
   { label: "Send", icon: Send, path: "/move-money/send" },
+  { label: "Receive", icon: QrCode, path: "/receive" },
   { label: "Transfer", icon: ArrowLeftRight, path: "/move-money/transfer" },
   { label: "Deposit", icon: Camera, path: "/move-money/deposit" },
   { label: "Pay Bills", icon: Receipt, path: "/move-money/bills" },
