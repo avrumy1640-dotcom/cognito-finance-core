@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, KeyboardEvent, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -12,7 +12,6 @@ import {
   Shield,
   Sparkles,
   Lock,
-  ChevronRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,10 +21,11 @@ type AccountType = "personal" | "business";
 interface FormState {
   account_type: AccountType | "";
   business_name: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
   country: string;
   preferred_currency: string;
-  preferred_name: string;
-  phone: string;
   address_street: string;
   address_city: string;
   address_region: string;
@@ -41,8 +41,9 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
-  account_type: "", business_name: "", country: "", preferred_currency: "",
-  preferred_name: "", phone: "",
+  account_type: "", business_name: "",
+  first_name: "", last_name: "", phone: "",
+  country: "", preferred_currency: "",
   address_street: "", address_city: "", address_region: "", address_postal_code: "",
   occupation: "", employer: "", annual_income: "", source_of_funds: "",
   tax_country: "", tax_id_number: "",
@@ -56,9 +57,11 @@ const COUNTRIES: [string, string, string][] = [
   ["BR", "Brazil", "🇧🇷"], ["AU", "Australia", "🇦🇺"], ["JP", "Japan", "🇯🇵"],
   ["SG", "Singapore", "🇸🇬"], ["AE", "United Arab Emirates", "🇦🇪"],
 ];
-const CURRENCIES: [string, string][] = [
-  ["USD", "$"], ["EUR", "€"], ["GBP", "£"], ["CAD", "$"], ["AUD", "$"],
-  ["JPY", "¥"], ["SGD", "$"], ["AED", "د.إ"], ["BRL", "R$"], ["MXN", "$"],
+const CURRENCIES: [string, string, string][] = [
+  ["USD", "$", "US Dollar"], ["EUR", "€", "Euro"], ["GBP", "£", "British Pound"],
+  ["CAD", "$", "Canadian Dollar"], ["AUD", "$", "Australian Dollar"], ["JPY", "¥", "Japanese Yen"],
+  ["SGD", "$", "Singapore Dollar"], ["AED", "د.إ", "UAE Dirham"], ["BRL", "R$", "Brazilian Real"],
+  ["MXN", "$", "Mexican Peso"],
 ];
 const SOURCES = [
   "Employment income", "Business income", "Investment income", "Savings",
@@ -70,7 +73,15 @@ const INCOME_BANDS = [
 ];
 const REQUIRES_TAX_ID = new Set(["US", "CA", "GB", "DE", "FR", "ES", "IT", "NL", "AU"]);
 
-type StepDef = { title: string; kicker: string; valid: () => boolean; render: () => JSX.Element };
+type StepDef = {
+  id: string;
+  kicker: string;
+  title: string;
+  subtitle?: string;
+  valid: () => boolean;
+  autoAdvance?: boolean;
+  render: (helpers: { next: () => void }) => ReactNode;
+};
 
 const Onboarding = () => {
   const navigate = useNavigate();
@@ -87,14 +98,17 @@ const Onboarding = () => {
       if (!user) return;
       const { data } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
       if (data) {
+        const pn: string = (data.preferred_name || "").trim();
+        const [first, ...rest] = pn.split(/\s+/);
         setForm((f) => ({
           ...f,
           account_type: (data.account_type as AccountType) || "",
           business_name: data.business_name || "",
+          first_name: first || "",
+          last_name: rest.join(" ") || "",
+          phone: data.phone || "",
           country: data.country || "",
           preferred_currency: data.preferred_currency || "",
-          preferred_name: data.preferred_name || "",
-          phone: data.phone || "",
           address_street: data.address_street || "",
           address_city: data.address_city || "",
           address_region: data.address_region || "",
@@ -115,261 +129,355 @@ const Onboarding = () => {
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
   const needsTax = useMemo(() => REQUIRES_TAX_ID.has(form.country), [form.country]);
+  const isBusiness = form.account_type === "business";
 
   const steps = useMemo<StepDef[]>(() => {
-    const s: StepDef[] = [
-      {
-        kicker: "01 · About you",
-        title: form.account_type === "business" ? "Tell us about your business" : "How will you use Glass Bank?",
-        valid: () => form.account_type !== "" && (form.account_type !== "business" || form.business_name.trim().length > 1),
-        render: () => (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3">
-              {([
-                { key: "personal", label: "Personal", icon: UserIcon, desc: "Everyday spending, saving, and transfers" },
-                { key: "business", label: "Business", icon: Building2, desc: "Company payments, payroll, invoicing" },
-              ] as const).map((opt) => {
-                const active = form.account_type === opt.key;
-                return (
-                  <button
-                    key={opt.key}
-                    onClick={() => set("account_type", opt.key)}
-                    className={`p-4 rounded-2xl text-left border-2 transition-all flex items-center gap-4 ${
-                      active ? "border-primary bg-primary/5 shadow-sm" : "border-border/60 bg-card hover:border-border"
-                    }`}
-                  >
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
-                      <opt.icon size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold text-foreground">{opt.label}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${active ? "border-primary bg-primary" : "border-border"}`}>
-                      {active && <Check size={12} className="text-primary-foreground" strokeWidth={3} />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <AnimatePresence>
-              {form.account_type === "business" && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                >
-                  <FieldInput label="Legal business name" value={form.business_name} onChange={(v) => set("business_name", v)} placeholder="Acme, Inc." />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        ),
-      },
-      {
-        kicker: "02 · Location",
-        title: "Where do you live?",
-        valid: () => !!form.country,
-        render: () => (
-          <div className="space-y-2 max-h-[420px] overflow-y-auto hide-scrollbar pr-1">
-            {COUNTRIES.map(([c, l, flag]) => {
-              const active = form.country === c;
-              return (
-                <button
-                  key={c}
-                  onClick={() => set("country", c)}
-                  className={`w-full p-3.5 rounded-xl text-left flex items-center gap-3 border-2 transition-all ${
-                    active ? "border-primary bg-primary/5" : "border-transparent bg-secondary hover:bg-muted"
-                  }`}
-                >
-                  <span className="text-2xl leading-none">{flag}</span>
-                  <span className="flex-1 text-sm font-medium text-foreground">{l}</span>
-                  {active && <Check size={18} className="text-primary" strokeWidth={2.5} />}
-                </button>
-              );
-            })}
-          </div>
-        ),
-      },
-      {
-        kicker: "03 · Currency",
-        title: "Your primary currency",
-        valid: () => !!form.preferred_currency,
-        render: () => (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">You can add and switch between currencies anytime.</p>
-            <div className="grid grid-cols-2 gap-2.5">
-              {CURRENCIES.map(([c, sym]) => {
-                const active = form.preferred_currency === c;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => set("preferred_currency", c)}
-                    className={`py-4 px-3 rounded-2xl border-2 transition-all flex items-center gap-3 ${
-                      active ? "border-primary bg-primary/5" : "border-border/60 bg-card"
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-semibold ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
-                      {sym}
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">{c}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ),
-      },
-      {
-        kicker: "04 · Contact",
-        title: "How should we reach you?",
-        valid: () => form.preferred_name.trim().length > 0 && form.phone.trim().length > 4,
-        render: () => (
-          <div className="space-y-3">
-            <FieldInput label="Preferred name" value={form.preferred_name} onChange={(v) => set("preferred_name", v)} placeholder="Alex Rivera" />
-            <FieldInput label="Mobile phone" value={form.phone} onChange={(v) => set("phone", v)} placeholder="+1 555 123 4567" />
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
-              <Lock size={11} /> We only use your number for security alerts and support.
-            </p>
-          </div>
-        ),
-      },
-      {
-        kicker: "05 · Address",
-        title: "Your home address",
-        valid: () =>
-          form.address_street.trim().length > 2 &&
-          form.address_city.trim().length > 1 &&
-          form.address_postal_code.trim().length > 2,
-        render: () => (
-          <div className="space-y-3">
-            <FieldInput label="Street address" value={form.address_street} onChange={(v) => set("address_street", v)} placeholder="123 Market St, Apt 4B" />
-            <div className="grid grid-cols-2 gap-3">
-              <FieldInput label="City" value={form.address_city} onChange={(v) => set("address_city", v)} />
-              <FieldInput label="Region / State" value={form.address_region} onChange={(v) => set("address_region", v)} />
-            </div>
-            <FieldInput label="Postal code" value={form.address_postal_code} onChange={(v) => set("address_postal_code", v)} />
-          </div>
-        ),
-      },
-      {
-        kicker: "06 · Work",
-        title: "What do you do?",
-        valid: () => form.occupation.trim().length > 1 && !!form.annual_income,
-        render: () => (
-          <div className="space-y-3">
-            <FieldInput label="Occupation" value={form.occupation} onChange={(v) => set("occupation", v)} placeholder="Software Engineer" />
-            <FieldInput label="Employer (optional)" value={form.employer} onChange={(v) => set("employer", v)} placeholder="Acme Inc." />
-            <div>
-              <label className="text-xs text-muted-foreground font-semibold mb-1.5 block uppercase tracking-wide">Annual income</label>
-              <div className="grid grid-cols-1 gap-2">
-                {INCOME_BANDS.map((b) => {
-                  const active = form.annual_income === b;
-                  return (
-                    <button
-                      key={b}
-                      onClick={() => set("annual_income", b)}
-                      className={`p-3 rounded-xl text-left text-sm border-2 transition-all flex items-center justify-between ${
-                        active ? "border-primary bg-primary/5 text-foreground font-semibold" : "border-transparent bg-secondary text-foreground/80"
-                      }`}
-                    >
-                      <span>{b}</span>
-                      {active && <Check size={16} className="text-primary" strokeWidth={2.5} />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        ),
-      },
-      {
-        kicker: "07 · Source of funds",
-        title: "Where will your money come from?",
-        valid: () => !!form.source_of_funds,
-        render: () => (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground pb-1">This helps us keep your account and everyone else's safe.</p>
-            {SOURCES.map((s) => {
-              const active = form.source_of_funds === s;
-              return (
-                <button
-                  key={s}
-                  onClick={() => set("source_of_funds", s)}
-                  className={`w-full p-3.5 rounded-xl text-left text-sm border-2 transition-all flex items-center justify-between ${
-                    active ? "border-primary bg-primary/5 text-foreground font-semibold" : "border-transparent bg-secondary text-foreground/80"
-                  }`}
-                >
-                  <span>{s}</span>
-                  <ChevronRight size={16} className={active ? "text-primary" : "text-muted-foreground"} />
-                </button>
-              );
-            })}
-          </div>
-        ),
-      },
-    ];
+    const list: StepDef[] = [];
+    let n = 0;
+    const kicker = (label: string) => `${String(++n).padStart(2, "0")} · ${label}`;
 
-    if (needsTax) {
-      s.push({
-        kicker: "08 · Tax",
-        title: "Tax residency",
-        valid: () => form.tax_country.trim().length === 2 && form.tax_id_number.trim().length > 3,
-        render: () => (
-          <div className="space-y-3">
-            <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/10 flex gap-3">
-              <Shield size={18} className="text-primary shrink-0 mt-0.5" />
-              <p className="text-xs text-foreground/80 leading-relaxed">
-                Your tax details are encrypted and only used for regulatory reporting. We never share them for marketing.
-              </p>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground font-semibold mb-1.5 block uppercase tracking-wide">Tax country</label>
-              <select
-                value={form.tax_country}
-                onChange={(e) => set("tax_country", e.target.value)}
-                className="w-full p-3.5 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none focus:ring-2 focus:ring-primary/40"
+    // 1. Account type
+    list.push({
+      id: "account_type",
+      kicker: kicker("Account"),
+      title: "How will you use Glass Bank?",
+      valid: () => form.account_type !== "",
+      autoAdvance: true,
+      render: ({ next }) => (
+        <div className="space-y-3">
+          {([
+            { key: "personal", label: "Personal", icon: UserIcon, desc: "Everyday spending, saving, transfers" },
+            { key: "business", label: "Business", icon: Building2, desc: "Company payments, payroll, invoicing" },
+          ] as const).map((opt) => {
+            const active = form.account_type === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => { set("account_type", opt.key); setTimeout(next, 220); }}
+                className={`w-full p-5 rounded-2xl text-left border-2 transition-all flex items-center gap-4 ${
+                  active ? "border-primary bg-primary/5" : "border-border/60 bg-card hover:border-border"
+                }`}
               >
-                <option value="">Select a country</option>
-                {COUNTRIES.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
-              </select>
-            </div>
-            <FieldInput
-              label={form.tax_country === "US" ? "SSN / ITIN" : "Tax ID number"}
-              value={form.tax_id_number}
-              onChange={(v) => set("tax_id_number", v)}
-              placeholder="•••-••-••••"
-            />
-          </div>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
+                  <opt.icon size={22} />
+                </div>
+                <div className="flex-1">
+                  <div className="text-base font-semibold text-foreground">{opt.label}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
+                </div>
+                {active && <Check size={20} className="text-primary" strokeWidth={2.5} />}
+              </button>
+            );
+          })}
+        </div>
+      ),
+    });
+
+    // 2. Business name (only if business)
+    if (isBusiness) {
+      list.push({
+        id: "business_name",
+        kicker: kicker("Business"),
+        title: "What's your business called?",
+        subtitle: "Use the exact legal name on your registration.",
+        valid: () => form.business_name.trim().length > 1,
+        render: ({ next }) => (
+          <SingleInput
+            value={form.business_name}
+            onChange={(v) => set("business_name", v)}
+            onEnter={next}
+            placeholder="Acme, Inc."
+            autoComplete="organization"
+          />
         ),
       });
     }
 
-    s.push({
-      kicker: `${String(s.length + 1).padStart(2, "0")} · Agreements`,
+    // 3. Name (first + last, still a single-question screen — one topic)
+    list.push({
+      id: "name",
+      kicker: kicker("Name"),
+      title: "What's your legal name?",
+      subtitle: "Match your government-issued ID exactly.",
+      valid: () => form.first_name.trim().length > 0 && form.last_name.trim().length > 0,
+      render: ({ next }) => (
+        <div className="space-y-3">
+          <SingleInput
+            value={form.first_name}
+            onChange={(v) => set("first_name", v)}
+            onEnter={next}
+            placeholder="First name"
+            autoComplete="given-name"
+          />
+          <SingleInput
+            value={form.last_name}
+            onChange={(v) => set("last_name", v)}
+            onEnter={next}
+            placeholder="Last name"
+            autoComplete="family-name"
+            autoFocus={false}
+          />
+        </div>
+      ),
+    });
+
+    // 4. Phone
+    list.push({
+      id: "phone",
+      kicker: kicker("Phone"),
+      title: "What's your mobile number?",
+      subtitle: "We use it for security codes and account alerts.",
+      valid: () => form.phone.replace(/\D/g, "").length >= 7,
+      render: ({ next }) => (
+        <SingleInput
+          value={form.phone}
+          onChange={(v) => set("phone", v)}
+          onEnter={next}
+          placeholder="+1 555 123 4567"
+          type="tel"
+          autoComplete="tel"
+          inputMode="tel"
+        />
+      ),
+    });
+
+    // 5. Country
+    list.push({
+      id: "country",
+      kicker: kicker("Country"),
+      title: "Where do you live?",
+      valid: () => !!form.country,
+      autoAdvance: true,
+      render: ({ next }) => (
+        <ChoiceList
+          items={COUNTRIES.map(([c, l, flag]) => ({ id: c, label: l, prefix: flag }))}
+          value={form.country}
+          onChange={(v) => { set("country", v); setTimeout(next, 220); }}
+        />
+      ),
+    });
+
+    // 6. Currency
+    list.push({
+      id: "currency",
+      kicker: kicker("Currency"),
+      title: "Your primary currency?",
+      subtitle: "You can add other currencies later.",
+      valid: () => !!form.preferred_currency,
+      autoAdvance: true,
+      render: ({ next }) => (
+        <div className="grid grid-cols-2 gap-2.5">
+          {CURRENCIES.map(([c, sym, name]) => {
+            const active = form.preferred_currency === c;
+            return (
+              <button
+                key={c}
+                onClick={() => { set("preferred_currency", c); setTimeout(next, 220); }}
+                className={`p-4 rounded-2xl border-2 transition-all text-left ${
+                  active ? "border-primary bg-primary/5" : "border-border/60 bg-card"
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-semibold mb-2 ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
+                  {sym}
+                </div>
+                <div className="text-sm font-semibold text-foreground">{c}</div>
+                <div className="text-[11px] text-muted-foreground">{name}</div>
+              </button>
+            );
+          })}
+        </div>
+      ),
+    });
+
+    // 7-10. Address (one question per screen)
+    list.push({
+      id: "street",
+      kicker: kicker("Address"),
+      title: "Your street address?",
+      subtitle: "Where you receive mail today.",
+      valid: () => form.address_street.trim().length > 2,
+      render: ({ next }) => (
+        <SingleInput
+          value={form.address_street}
+          onChange={(v) => set("address_street", v)}
+          onEnter={next}
+          placeholder="123 Market St, Apt 4B"
+          autoComplete="street-address"
+        />
+      ),
+    });
+    list.push({
+      id: "city",
+      kicker: kicker("City"),
+      title: "Which city?",
+      valid: () => form.address_city.trim().length > 1,
+      render: ({ next }) => (
+        <SingleInput
+          value={form.address_city}
+          onChange={(v) => set("address_city", v)}
+          onEnter={next}
+          placeholder="San Francisco"
+          autoComplete="address-level2"
+        />
+      ),
+    });
+    list.push({
+      id: "region",
+      kicker: kicker("Region"),
+      title: "State or region?",
+      valid: () => form.address_region.trim().length > 0,
+      render: ({ next }) => (
+        <SingleInput
+          value={form.address_region}
+          onChange={(v) => set("address_region", v)}
+          onEnter={next}
+          placeholder="California"
+          autoComplete="address-level1"
+        />
+      ),
+    });
+    list.push({
+      id: "postal",
+      kicker: kicker("Postal code"),
+      title: "Postal code?",
+      valid: () => form.address_postal_code.trim().length > 2,
+      render: ({ next }) => (
+        <SingleInput
+          value={form.address_postal_code}
+          onChange={(v) => set("address_postal_code", v)}
+          onEnter={next}
+          placeholder="94103"
+          autoComplete="postal-code"
+          inputMode="text"
+        />
+      ),
+    });
+
+    // 11. Occupation
+    list.push({
+      id: "occupation",
+      kicker: kicker("Work"),
+      title: isBusiness ? "What does your business do?" : "What do you do for work?",
+      valid: () => form.occupation.trim().length > 1,
+      render: ({ next }) => (
+        <SingleInput
+          value={form.occupation}
+          onChange={(v) => set("occupation", v)}
+          onEnter={next}
+          placeholder={isBusiness ? "Retail, SaaS, Consulting…" : "Software Engineer"}
+        />
+      ),
+    });
+
+    // 12. Employer (optional, skippable)
+    list.push({
+      id: "employer",
+      kicker: kicker("Employer"),
+      title: isBusiness ? "Trading / doing-business-as name?" : "Who do you work for?",
+      subtitle: "Optional — tap Skip if you'd rather not say.",
+      valid: () => true,
+      render: ({ next }) => (
+        <SingleInput
+          value={form.employer}
+          onChange={(v) => set("employer", v)}
+          onEnter={next}
+          placeholder={isBusiness ? "DBA name" : "Acme Inc."}
+        />
+      ),
+    });
+
+    // 13. Income
+    list.push({
+      id: "income",
+      kicker: kicker("Income"),
+      title: "Estimated annual income?",
+      subtitle: "Ballpark is fine.",
+      valid: () => !!form.annual_income,
+      autoAdvance: true,
+      render: ({ next }) => (
+        <ChoiceList
+          items={INCOME_BANDS.map((b) => ({ id: b, label: b }))}
+          value={form.annual_income}
+          onChange={(v) => { set("annual_income", v); setTimeout(next, 220); }}
+        />
+      ),
+    });
+
+    // 14. Source of funds
+    list.push({
+      id: "source",
+      kicker: kicker("Source of funds"),
+      title: "Where will your money come from?",
+      subtitle: "Helps us keep everyone's accounts safe.",
+      valid: () => !!form.source_of_funds,
+      autoAdvance: true,
+      render: ({ next }) => (
+        <ChoiceList
+          items={SOURCES.map((s) => ({ id: s, label: s }))}
+          value={form.source_of_funds}
+          onChange={(v) => { set("source_of_funds", v); setTimeout(next, 220); }}
+        />
+      ),
+    });
+
+    // 15-16. Tax
+    if (needsTax) {
+      list.push({
+        id: "tax_country",
+        kicker: kicker("Tax residency"),
+        title: "Which country are you a tax resident of?",
+        valid: () => form.tax_country.trim().length === 2,
+        autoAdvance: true,
+        render: ({ next }) => (
+          <ChoiceList
+            items={COUNTRIES.map(([c, l, flag]) => ({ id: c, label: l, prefix: flag }))}
+            value={form.tax_country}
+            onChange={(v) => { set("tax_country", v); setTimeout(next, 220); }}
+          />
+        ),
+      });
+      list.push({
+        id: "tax_id",
+        kicker: kicker(form.tax_country === "US" ? "SSN" : "Tax ID"),
+        title: form.tax_country === "US" ? "What's your SSN or ITIN?" : "What's your tax ID number?",
+        subtitle: "Encrypted end-to-end. Used only for regulatory reporting.",
+        valid: () => form.tax_id_number.trim().length > 3,
+        render: ({ next }) => (
+          <SingleInput
+            value={form.tax_id_number}
+            onChange={(v) => set("tax_id_number", v)}
+            onEnter={next}
+            placeholder={form.tax_country === "US" ? "•••-••-••••" : "Tax ID"}
+            autoComplete="off"
+            secure
+          />
+        ),
+      });
+    }
+
+    // 17. Agreements
+    list.push({
+      id: "agreements",
+      kicker: kicker("Agreements"),
       title: "Review and agree",
+      subtitle: "One last step before we verify your identity.",
       valid: () => form.tos && form.privacy,
       render: () => (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">One last step before we verify your identity.</p>
           {[
             { key: "tos" as const, label: "Terms of Service", desc: "How Glass Bank works and what to expect from us." },
             { key: "privacy" as const, label: "Privacy Policy", desc: "How we collect, store, and protect your data." },
           ].map((it) => {
             const active = form[it.key];
             return (
-              <label
+              <button
                 key={it.key}
-                className={`flex items-start gap-3 p-4 rounded-2xl cursor-pointer border-2 transition-all ${
+                type="button"
+                onClick={() => set(it.key, !active)}
+                className={`w-full flex items-start gap-3 p-4 rounded-2xl text-left border-2 transition-all ${
                   active ? "border-primary bg-primary/5" : "border-border/60 bg-card"
                 }`}
               >
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={(e) => set(it.key, e.target.checked)}
-                  className="sr-only"
-                />
                 <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center mt-0.5 shrink-0 ${active ? "border-primary bg-primary" : "border-border"}`}>
                   {active && <Check size={14} className="text-primary-foreground" strokeWidth={3} />}
                 </div>
@@ -377,7 +485,7 @@ const Onboarding = () => {
                   <div className="text-sm font-semibold text-foreground">I agree to the {it.label}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">{it.desc}</div>
                 </div>
-              </label>
+              </button>
             );
           })}
           <div className="pt-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -387,10 +495,15 @@ const Onboarding = () => {
       ),
     });
 
-    return s;
-  }, [form, needsTax]);
+    return list;
+  }, [form, needsTax, isBusiness]);
 
-  const current = steps[step];
+  // Clamp step if flow shrinks (e.g. switched business→personal)
+  useEffect(() => {
+    if (step > steps.length - 1) setStep(steps.length - 1);
+  }, [steps.length, step]);
+
+  const current = steps[Math.min(step, steps.length - 1)];
 
   const finish = async () => {
     if (!user) return;
@@ -403,7 +516,7 @@ const Onboarding = () => {
       business_name: form.business_name || null,
       country: form.country,
       preferred_currency: form.preferred_currency,
-      preferred_name: form.preferred_name,
+      preferred_name: `${form.first_name} ${form.last_name}`.trim(),
       phone: form.phone,
       address_street: form.address_street,
       address_city: form.address_city,
@@ -426,10 +539,15 @@ const Onboarding = () => {
     setTimeout(() => navigate("/profile/verify", { replace: true }), 1600);
   };
 
-  const next = async () => {
+  const goNext = async () => {
     if (!current.valid()) { toast.error("Please complete this step to continue."); return; }
     if (step < steps.length - 1) setStep(step + 1);
     else await finish();
+  };
+
+  const goBack = () => {
+    if (step === 0) setShowIntro(true);
+    else setStep(step - 1);
   };
 
   if (loading) {
@@ -440,7 +558,6 @@ const Onboarding = () => {
     );
   }
 
-  // Success screen
   if (done) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center px-8">
@@ -458,7 +575,7 @@ const Onboarding = () => {
           transition={{ delay: 0.25 }}
           className="text-3xl font-display font-bold text-foreground text-center"
         >
-          You're all set{form.preferred_name ? `, ${form.preferred_name.split(" ")[0]}` : ""}
+          You're all set{form.first_name ? `, ${form.first_name}` : ""}
         </motion.h1>
         <motion.p
           initial={{ opacity: 0 }}
@@ -472,7 +589,6 @@ const Onboarding = () => {
     );
   }
 
-  // Intro / welcome screen (Chime / Revolut style)
   if (showIntro) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -480,22 +596,13 @@ const Onboarding = () => {
           <div className="absolute inset-0 gradient-hero" />
           <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_30%_20%,hsl(var(--accent))_0%,transparent_45%)]" />
           <div className="relative z-10 h-full flex flex-col justify-between p-8 pt-16">
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-2"
-            >
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl bg-primary-foreground/10 backdrop-blur border border-primary-foreground/20 flex items-center justify-center">
                 <span className="text-lg font-display font-bold text-primary-foreground">G</span>
               </div>
               <span className="text-sm font-semibold text-primary-foreground/90 tracking-wide">GLASS BANK</span>
             </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-            >
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-foreground/10 backdrop-blur border border-primary-foreground/20 mb-4">
                 <Sparkles size={12} className="text-primary-foreground" />
                 <span className="text-[11px] font-semibold text-primary-foreground uppercase tracking-wider">Takes 3 minutes</span>
@@ -504,12 +611,11 @@ const Onboarding = () => {
                 Let's set up<br />your account.
               </h1>
               <p className="text-base text-primary-foreground/75 mt-4 leading-relaxed max-w-sm">
-                A few quick questions so we can open your account and keep it secure.
+                We'll ask one quick question at a time. You can pause anytime — your answers save automatically.
               </p>
             </motion.div>
           </div>
         </div>
-
         <div className="bg-card px-6 pt-6 pb-8 rounded-t-3xl -mt-6 relative z-20 shadow-2xl">
           <div className="space-y-3 mb-5">
             {[
@@ -548,14 +654,16 @@ const Onboarding = () => {
     );
   }
 
-  const progress = ((step + 1) / steps.length) * 100;
+  const isLast = step === steps.length - 1;
+  const isOptional = current.id === "employer";
+  const canContinue = current.valid();
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="px-5 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur z-10">
         <div className="flex items-center gap-3 mb-3">
           <button
-            onClick={() => step === 0 ? setShowIntro(true) : setStep(step - 1)}
+            onClick={goBack}
             className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
             aria-label="Back"
           >
@@ -582,7 +690,7 @@ const Onboarding = () => {
       <div className="flex-1 px-5 pb-6">
         <AnimatePresence mode="wait">
           <motion.div
-            key={step}
+            key={current.id}
             initial={{ opacity: 0, x: 24 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -24 }}
@@ -591,45 +699,113 @@ const Onboarding = () => {
             <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-2">
               {current.kicker}
             </div>
-            <h1 className="text-[26px] font-display font-bold text-foreground leading-tight tracking-tight mb-6">
+            <h1 className="text-[28px] font-display font-bold text-foreground leading-[1.15] tracking-tight mb-2">
               {current.title}
             </h1>
-            {current.render()}
+            {current.subtitle && (
+              <p className="text-sm text-muted-foreground mb-6 leading-relaxed">{current.subtitle}</p>
+            )}
+            {!current.subtitle && <div className="mb-6" />}
+            {current.render({ next: goNext })}
           </motion.div>
         </AnimatePresence>
       </div>
 
-      <div className="px-5 pb-8 pt-3 sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0">
+      <div className="px-5 pb-8 pt-3 sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0 space-y-2">
         <button
-          onClick={next}
-          disabled={saving}
-          className="w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98] transition-transform shadow-lg shadow-primary/20"
+          onClick={goNext}
+          disabled={saving || !canContinue}
+          className="w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all shadow-lg shadow-primary/20"
         >
           {saving ? (
             <><Loader2 size={16} className="animate-spin" /> Saving…</>
-          ) : step === steps.length - 1 ? (
+          ) : isLast ? (
             <>Finish & verify identity <Check size={16} /></>
           ) : (
             <>Continue <ArrowRight size={16} /></>
           )}
         </button>
+        {isOptional && (
+          <button
+            onClick={() => setStep((s) => Math.min(s + 1, steps.length - 1))}
+            className="w-full py-3 rounded-2xl text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Skip for now
+          </button>
+        )}
       </div>
     </div>
   );
 };
 
-const FieldInput = ({ label, value, onChange, placeholder, type }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
-}) => (
-  <div>
-    <label className="text-xs text-muted-foreground font-semibold mb-1.5 block uppercase tracking-wide">{label}</label>
+// —— Reusable pieces ——
+
+const SingleInput = ({
+  value, onChange, onEnter, placeholder, type, autoComplete, inputMode, autoFocus = true, secure = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onEnter: () => void;
+  placeholder?: string;
+  type?: string;
+  autoComplete?: string;
+  inputMode?: "text" | "tel" | "email" | "numeric" | "search" | "url" | "none" | "decimal";
+  autoFocus?: boolean;
+  secure?: boolean;
+}) => {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocus) {
+      const t = setTimeout(() => ref.current?.focus(), 320);
+      return () => clearTimeout(t);
+    }
+  }, [autoFocus]);
+
+  const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); onEnter(); }
+  };
+
+  return (
     <input
-      type={type ?? "text"}
+      ref={ref}
+      type={secure ? "password" : (type ?? "text")}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onKeyDown={handleKey}
       placeholder={placeholder}
-      className="w-full p-3.5 rounded-xl bg-secondary text-foreground text-sm border-2 border-transparent outline-none focus:border-primary/40 focus:bg-card transition-colors"
+      autoComplete={autoComplete}
+      inputMode={inputMode}
+      className="w-full px-4 py-5 rounded-2xl bg-secondary text-foreground text-lg border-2 border-transparent outline-none focus:border-primary/50 focus:bg-card transition-all placeholder:text-muted-foreground/60"
     />
+  );
+};
+
+const ChoiceList = ({
+  items, value, onChange,
+}: {
+  items: { id: string; label: string; prefix?: string }[];
+  value: string;
+  onChange: (id: string) => void;
+}) => (
+  <div className="space-y-2 max-h-[440px] overflow-y-auto hide-scrollbar pr-1 -mr-1">
+    {items.map((it) => {
+      const active = value === it.id;
+      return (
+        <button
+          key={it.id}
+          onClick={() => onChange(it.id)}
+          className={`w-full p-4 rounded-xl text-left flex items-center gap-3 border-2 transition-all ${
+            active ? "border-primary bg-primary/5" : "border-transparent bg-secondary hover:bg-muted"
+          }`}
+        >
+          {it.prefix && <span className="text-2xl leading-none">{it.prefix}</span>}
+          <span className="flex-1 text-sm font-medium text-foreground">{it.label}</span>
+          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${active ? "border-primary bg-primary" : "border-border"}`}>
+            {active && <Check size={12} className="text-primary-foreground" strokeWidth={3} />}
+          </div>
+        </button>
+      );
+    })}
   </div>
 );
 
