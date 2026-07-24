@@ -2,139 +2,148 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap');
 
 /* ============================================================
-   LoanPro-inspired palette
-   Deep navy primary + bright emerald accent, warm neutral base.
+   Glass Bank — "Obsidian & Lime"
+   A signature palette: obsidian ink primary, electric lime
+   accent, warm porcelain neutrals. Serif display face for hero
+   numbers gives it a private-banking feel without going stuffy.
    ============================================================ */
 @layer base {
   :root {
-    --background: 40 24% 97%;
-    --foreground: 220 50% 10%;
+    /* Warm porcelain base — feels less clinical than pure white */
+    --background: 36 33% 96%;
+    --foreground: 224 42% 8%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 50% 10%;
+    --card-foreground: 224 42% 8%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 50% 10%;
+    --popover-foreground: 224 42% 8%;
 
-    /* Navy primary (LoanPro deep blue) */
-    --primary: 220 60% 14%;
-    --primary-foreground: 40 24% 97%;
-    --primary-glow: 220 55% 24%;
+    /* Obsidian primary — near-black with cool undertone */
+    --primary: 224 45% 8%;
+    --primary-foreground: 36 33% 96%;
+    --primary-glow: 224 38% 18%;
 
-    --secondary: 40 16% 93%;
-    --secondary-foreground: 220 50% 10%;
+    --secondary: 36 22% 92%;
+    --secondary-foreground: 224 42% 8%;
 
-    --muted: 40 16% 94%;
-    --muted-foreground: 220 12% 40%;
+    --muted: 36 20% 92%;
+    --muted-foreground: 224 14% 42%;
 
-    /* Emerald accent (LoanPro green) */
-    --accent: 152 78% 42%;
-    --accent-foreground: 220 60% 10%;
+    /* Electric lime accent — the signature */
+    --accent: 82 92% 62%;
+    --accent-foreground: 224 45% 8%;
 
-    --destructive: 8 78% 52%;
+    --destructive: 8 78% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 14% 88%;
-    --input: 220 14% 88%;
-    --ring: 152 78% 42%;
+    --border: 36 15% 88%;
+    --input: 36 15% 88%;
+    --ring: 82 92% 62%;
 
-    --radius: 1rem;
+    --radius: 1.125rem;
 
-    /* Surface glass tokens re-tuned for navy/warm base */
-    --glass-bg: 0 0% 100% / 0.78;
-    --glass-border: 220 30% 90% / 0.6;
-    --glass-shadow: 220 60% 12% / 0.08;
-    --glass-blur: 22px;
+    /* Glass surfaces re-tuned for warm base */
+    --glass-bg: 0 0% 100% / 0.82;
+    --glass-border: 36 25% 88% / 0.65;
+    --glass-shadow: 224 40% 10% / 0.06;
+    --glass-blur: 24px;
 
     --surface-primary: 0 0% 100%;
     --surface-elevated: 0 0% 100%;
-    --surface-sunken: 40 20% 95%;
+    --surface-sunken: 36 24% 94%;
 
-    --success: 152 78% 38%;
+    --success: 148 62% 42%;
     --success-foreground: 0 0% 100%;
-    --warning: 32 92% 48%;
+    --warning: 32 92% 52%;
     --warning-foreground: 0 0% 100%;
-    --info: 220 60% 14%;
-    --info-foreground: 0 0% 100%;
+    --info: 224 45% 8%;
+    --info-foreground: 36 33% 96%;
 
-    /* Signature LoanPro gradient: navy → emerald */
-    --gradient-hero: linear-gradient(135deg, hsl(220 60% 14%) 0%, hsl(220 55% 22%) 55%, hsl(152 78% 38%) 130%);
-    --gradient-card: linear-gradient(145deg, hsl(0 0% 100% / 0.92), hsl(0 0% 100% / 0.65));
-    --gradient-savings: linear-gradient(135deg, hsl(152 78% 38%), hsl(165 72% 44%));
-    --gradient-accent: linear-gradient(135deg, hsl(152 78% 42%), hsl(180 65% 40%));
-    --gradient-navy: linear-gradient(135deg, hsl(220 62% 10%), hsl(220 55% 22%));
+    /* Signature gradients: obsidian deepening, with lime kissed in */
+    --gradient-hero: linear-gradient(135deg, hsl(224 48% 6%) 0%, hsl(224 42% 12%) 55%, hsl(224 38% 18%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100% / 0.94), hsl(0 0% 100% / 0.7));
+    --gradient-savings: linear-gradient(135deg, hsl(224 45% 8%) 0%, hsl(224 38% 16%) 60%, hsl(82 82% 48%) 140%);
+    --gradient-accent: linear-gradient(135deg, hsl(82 92% 62%), hsl(72 82% 56%));
+    --gradient-lime: linear-gradient(135deg, hsl(82 92% 62%), hsl(96 78% 58%));
+    --gradient-navy: linear-gradient(135deg, hsl(224 48% 6%), hsl(224 38% 18%));
+    --gradient-card-face: linear-gradient(135deg, hsl(224 48% 6%) 0%, hsl(224 40% 14%) 45%, hsl(224 34% 20%) 100%);
 
     --font-display: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-serif: 'Instrument Serif', 'Cormorant Garamond', Georgia, serif;
     --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
-    --sidebar-background: 40 24% 97%;
-    --sidebar-foreground: 220 50% 12%;
-    --sidebar-primary: 220 60% 14%;
-    --sidebar-primary-foreground: 40 24% 97%;
-    --sidebar-accent: 40 16% 93%;
-    --sidebar-accent-foreground: 220 50% 10%;
-    --sidebar-border: 220 14% 88%;
-    --sidebar-ring: 152 78% 42%;
+    --sidebar-background: 36 33% 96%;
+    --sidebar-foreground: 224 42% 10%;
+    --sidebar-primary: 224 45% 8%;
+    --sidebar-primary-foreground: 36 33% 96%;
+    --sidebar-accent: 36 22% 92%;
+    --sidebar-accent-foreground: 224 42% 8%;
+    --sidebar-border: 36 15% 88%;
+    --sidebar-ring: 82 92% 62%;
   }
 
   .dark {
-    --background: 220 55% 6%;
-    --foreground: 40 24% 96%;
+    --background: 224 42% 5%;
+    --foreground: 36 30% 94%;
 
-    --card: 220 45% 10%;
-    --card-foreground: 40 24% 96%;
+    --card: 224 36% 8%;
+    --card-foreground: 36 30% 94%;
 
-    --popover: 220 45% 10%;
-    --popover-foreground: 40 24% 96%;
+    --popover: 224 36% 8%;
+    --popover-foreground: 36 30% 94%;
 
-    --primary: 152 78% 44%;
-    --primary-foreground: 220 60% 8%;
-    --primary-glow: 152 78% 55%;
+    /* In dark mode the accent lime becomes the primary action color
+       (obsidian has nowhere to go on a near-black background). */
+    --primary: 82 92% 62%;
+    --primary-foreground: 224 48% 6%;
+    --primary-glow: 82 92% 72%;
 
-    --secondary: 220 30% 14%;
-    --secondary-foreground: 40 24% 96%;
+    --secondary: 224 28% 12%;
+    --secondary-foreground: 36 30% 94%;
 
-    --muted: 220 30% 14%;
-    --muted-foreground: 220 15% 65%;
+    --muted: 224 26% 12%;
+    --muted-foreground: 36 12% 62%;
 
-    --accent: 152 78% 44%;
-    --accent-foreground: 220 60% 8%;
+    --accent: 82 92% 62%;
+    --accent-foreground: 224 48% 6%;
 
-    --destructive: 8 72% 50%;
+    --destructive: 8 72% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 30% 18%;
-    --input: 220 30% 18%;
-    --ring: 152 78% 44%;
+    --border: 224 24% 16%;
+    --input: 224 24% 16%;
+    --ring: 82 92% 62%;
 
-    --glass-bg: 220 45% 11% / 0.75;
-    --glass-border: 220 30% 22% / 0.5;
-    --glass-shadow: 220 80% 3% / 0.4;
+    --glass-bg: 224 36% 9% / 0.78;
+    --glass-border: 224 24% 20% / 0.55;
+    --glass-shadow: 224 80% 2% / 0.5;
 
-    --surface-primary: 220 45% 10%;
-    --surface-elevated: 220 40% 13%;
-    --surface-sunken: 220 55% 5%;
+    --surface-primary: 224 36% 8%;
+    --surface-elevated: 224 32% 11%;
+    --surface-sunken: 224 42% 4%;
 
-    --success: 152 78% 44%;
-    --warning: 32 92% 55%;
-    --info: 152 78% 44%;
+    --success: 148 62% 46%;
+    --warning: 32 92% 58%;
+    --info: 82 92% 62%;
 
-    --gradient-hero: linear-gradient(135deg, hsl(220 60% 8%), hsl(220 50% 16%) 55%, hsl(152 78% 38%) 130%);
-    --gradient-card: linear-gradient(145deg, hsl(220 45% 13% / 0.9), hsl(220 45% 10% / 0.6));
-    --gradient-savings: linear-gradient(135deg, hsl(152 70% 36%), hsl(165 60% 40%));
-    --gradient-navy: linear-gradient(135deg, hsl(220 60% 6%), hsl(220 50% 16%));
+    --gradient-hero: linear-gradient(135deg, hsl(224 48% 4%), hsl(224 36% 12%) 55%, hsl(224 30% 18%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(224 36% 11% / 0.92), hsl(224 36% 8% / 0.65));
+    --gradient-savings: linear-gradient(135deg, hsl(224 42% 6%) 0%, hsl(224 34% 14%) 60%, hsl(82 82% 48%) 140%);
+    --gradient-navy: linear-gradient(135deg, hsl(224 48% 4%), hsl(224 34% 16%));
+    --gradient-card-face: linear-gradient(135deg, hsl(224 50% 4%) 0%, hsl(224 40% 10%) 45%, hsl(224 32% 16%) 100%);
 
-    --sidebar-background: 220 45% 10%;
-    --sidebar-foreground: 40 24% 96%;
-    --sidebar-primary: 152 78% 44%;
-    --sidebar-primary-foreground: 220 60% 8%;
-    --sidebar-accent: 220 30% 14%;
-    --sidebar-accent-foreground: 40 24% 96%;
-    --sidebar-border: 220 30% 18%;
-    --sidebar-ring: 152 78% 44%;
+    --sidebar-background: 224 36% 8%;
+    --sidebar-foreground: 36 30% 94%;
+    --sidebar-primary: 82 92% 62%;
+    --sidebar-primary-foreground: 224 48% 6%;
+    --sidebar-accent: 224 28% 12%;
+    --sidebar-accent-foreground: 36 30% 94%;
+    --sidebar-border: 224 24% 16%;
+    --sidebar-ring: 82 92% 62%;
   }
 }
 
@@ -143,16 +152,28 @@
     @apply border-border;
   }
 
+  html {
+    /* Tighter default line-height for tighter-feeling UI */
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-body);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
-    letter-spacing: -0.015em;
+    letter-spacing: -0.02em;
+  }
+
+  /* Tabular numerics anywhere we render money — no jittery digits */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
   }
 }
 
@@ -162,38 +183,72 @@
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
     border: 1px solid hsl(var(--glass-border));
-    box-shadow: 0 4px 20px hsl(var(--glass-shadow));
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.6) inset,
+      0 4px 20px hsl(var(--glass-shadow));
+  }
+
+  .dark .glass-card {
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.04) inset,
+      0 4px 24px hsl(var(--glass-shadow));
   }
 
   .glass-card-elevated {
     background: hsl(var(--glass-bg));
-    backdrop-filter: blur(32px);
-    -webkit-backdrop-filter: blur(32px);
+    backdrop-filter: blur(36px);
+    -webkit-backdrop-filter: blur(36px);
     border: 1px solid hsl(var(--glass-border));
     box-shadow:
-      0 10px 40px hsl(var(--glass-shadow)),
+      0 1px 0 hsl(0 0% 100% / 0.7) inset,
+      0 12px 40px hsl(var(--glass-shadow)),
       0 2px 6px hsl(var(--glass-shadow));
+  }
+
+  .dark .glass-card-elevated {
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.05) inset,
+      0 12px 48px hsl(var(--glass-shadow));
   }
 
   .gradient-hero { background: var(--gradient-hero); }
   .gradient-savings { background: var(--gradient-savings); }
   .gradient-accent { background: var(--gradient-accent); }
+  .gradient-lime { background: var(--gradient-lime); }
   .gradient-navy { background: var(--gradient-navy); }
+  .gradient-card-face { background: var(--gradient-card-face); }
+
+  /* Signature display face — Instrument Serif for hero balance
+     numbers. Italic-optional; use sparingly. */
+  .text-serif-display {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    letter-spacing: -0.025em;
+    font-feature-settings: "tnum", "lnum";
+  }
 
   .text-balance-display {
-    font-family: var(--font-display);
-    font-weight: 700;
-    letter-spacing: -0.035em;
+    font-family: var(--font-serif);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
   }
 
   .text-section-title {
     font-family: var(--font-display);
     font-weight: 600;
-    letter-spacing: -0.01em;
     text-transform: uppercase;
     font-size: 0.68rem;
     color: hsl(var(--muted-foreground));
-    letter-spacing: 0.08em;
+    letter-spacing: 0.09em;
+  }
+
+  .kicker {
+    font-family: var(--font-display);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
   }
 
   .safe-bottom {
@@ -205,4 +260,97 @@
     scrollbar-width: none;
   }
   .hide-scrollbar::-webkit-scrollbar { display: none; }
+
+  /* Premium card material — subtle diagonal grain + inner highlight.
+     Compose over .gradient-card-face for the full effect. */
+  .card-material {
+    position: relative;
+    isolation: isolate;
+  }
+  .card-material::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      radial-gradient(120% 80% at 85% 15%, hsl(82 92% 62% / 0.22), transparent 55%),
+      radial-gradient(90% 60% at 15% 90%, hsl(224 60% 40% / 0.25), transparent 55%);
+    mix-blend-mode: screen;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .card-material::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-image:
+      repeating-linear-gradient(135deg,
+        hsl(0 0% 100% / 0.025) 0 1px,
+        transparent 1px 3px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .card-material > * { position: relative; z-index: 1; }
+
+  /* Embossed chip for card face */
+  .card-chip {
+    width: 42px;
+    height: 32px;
+    border-radius: 6px;
+    background:
+      linear-gradient(135deg, #d4c48a 0%, #f0e4a8 40%, #b8a86a 100%);
+    box-shadow:
+      inset 0 0 0 1px hsl(45 40% 40% / 0.5),
+      inset 0 1px 0 hsl(45 60% 90% / 0.6),
+      0 1px 2px hsl(0 0% 0% / 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+  .card-chip::before {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    border-radius: 3px;
+    background-image:
+      linear-gradient(90deg, transparent 45%, hsl(45 40% 30% / 0.5) 45%, hsl(45 40% 30% / 0.5) 55%, transparent 55%),
+      linear-gradient(0deg, transparent 45%, hsl(45 40% 30% / 0.5) 45%, hsl(45 40% 30% / 0.5) 55%, transparent 55%);
+  }
+
+  /* Ambient page glow behind hero surfaces */
+  .ambient-glow::before {
+    content: "";
+    position: absolute;
+    inset: -20% -10% auto -10%;
+    height: 320px;
+    background:
+      radial-gradient(60% 60% at 30% 20%, hsl(82 92% 62% / 0.12), transparent 70%),
+      radial-gradient(50% 50% at 80% 30%, hsl(224 60% 30% / 0.10), transparent 70%);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  /* Button press micro-interaction */
+  .press {
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+}
+
+/* Skeleton shimmer utility */
+@layer utilities {
+  .shimmer {
+    background: linear-gradient(90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--secondary)) 50%,
+      hsl(var(--muted)) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
 }

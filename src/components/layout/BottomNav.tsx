@@ -20,31 +20,33 @@ const BottomNav = () => {
   };
 
   return (
-    <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 glass-card-elevated rounded-full px-2 py-2 safe-bottom">
-      <div className="flex items-center justify-around gap-1 min-w-[320px] max-w-[90vw]">
+    <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 glass-card-elevated rounded-full px-1.5 py-1.5 safe-bottom">
+      <div className="flex items-center justify-around gap-0.5 min-w-[320px] max-w-[92vw]">
         {tabs.map((tab) => {
           const active = isActive(tab.path);
           return (
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
-              className="relative flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-0 flex-1 rounded-full"
+              className="relative flex flex-col items-center gap-0.5 px-3.5 py-1.5 min-w-0 flex-1 rounded-full press"
+              aria-label={tab.label}
+              aria-current={active ? "page" : undefined}
             >
               {active && (
                 <motion.div
                   layoutId="tab-bg"
-                  className="absolute inset-0 rounded-full bg-primary/10"
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  className="absolute inset-0 rounded-full bg-foreground"
+                  transition={{ type: "spring", stiffness: 500, damping: 38 }}
                 />
               )}
               <tab.icon
-                size={22}
-                className={`relative z-10 ${active ? "text-primary" : "text-muted-foreground"}`}
-                strokeWidth={active ? 2.2 : 1.5}
+                size={20}
+                className={`relative z-10 transition-colors ${active ? "text-background" : "text-muted-foreground"}`}
+                strokeWidth={active ? 2.2 : 1.6}
               />
               <span
-                className={`relative z-10 text-[10px] font-medium ${
-                  active ? "text-primary" : "text-muted-foreground"
+                className={`relative z-10 text-[10px] font-semibold tracking-tight transition-colors ${
+                  active ? "text-background" : "text-muted-foreground"
                 }`}
               >
                 {tab.label}
