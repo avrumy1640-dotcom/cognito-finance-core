@@ -54,6 +54,11 @@ const queryClient = new QueryClient();
 const Guarded = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute>{children}</ProtectedRoute>
 );
+// Banking-grade guard: signed-in + onboarded + KYC verified. Anything that
+// exposes balances, transactions, cards, or money movement must use this.
+const Banking = ({ children }: { children: React.ReactNode }) => (
+  <ProtectedRoute requireKyc>{children}</ProtectedRoute>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
