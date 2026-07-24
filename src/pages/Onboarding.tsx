@@ -408,22 +408,27 @@ const Onboarding = () => {
           ].map((it) => {
             const active = form[it.key];
             return (
-              <button
+              <label
                 key={it.key}
-                type="button"
-                onClick={() => set(it.key, !active)}
-                className={`w-full flex items-start gap-3 p-4 rounded-2xl text-left border-2 transition-all ${
+                className={`w-full flex items-start gap-3 p-4 rounded-2xl text-left border-2 transition-all cursor-pointer ${
                   active ? "border-primary bg-primary/5" : "border-border/60 bg-card"
                 }`}
               >
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center mt-0.5 shrink-0 ${active ? "border-primary bg-primary" : "border-border"}`}>
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={(e) => set(it.key, e.target.checked)}
+                  className="sr-only"
+                  aria-label={`I agree to the ${it.label}`}
+                />
+                <span className={`w-6 h-6 rounded-md border-2 flex items-center justify-center mt-0.5 shrink-0 ${active ? "border-primary bg-primary" : "border-border"}`}>
                   {active && <Check size={14} className="text-primary-foreground" strokeWidth={3} />}
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-foreground">I agree to the {it.label}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{it.desc}</div>
-                </div>
-              </button>
+                </span>
+                <span className="flex-1">
+                  <span className="block text-sm font-semibold text-foreground">I agree to the {it.label}</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">{it.desc}</span>
+                </span>
+              </label>
             );
           })}
           <div className="pt-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -451,6 +456,23 @@ const Onboarding = () => {
   stepsRef.current = steps;
   stepRef.current = step;
 
+  const validationMessage = (id: string) => {
+    switch (id) {
+      case "account_type": return "Choose Personal or Business to continue.";
+      case "business_name": return "Enter your legal business name.";
+      case "name": return "Enter both your first and last legal name.";
+      case "phone": return "Enter a valid mobile number.";
+      case "country": return "Choose your country of residence.";
+      case "address": return "Complete your street, city, state or region, and postal code.";
+      case "occupation": return "Enter your occupation.";
+      case "income": return "Choose an estimated income range.";
+      case "source": return "Choose your source of funds.";
+      case "tax_id": return "Enter your tax ID number.";
+      case "agreements": return "Agree to the Terms and Privacy Policy to finish.";
+      default: return "Please complete this step to continue.";
+    }
+  };
+
   const finish = async () => {
     if (!user) return;
     setSaving(true);
@@ -461,7 +483,7 @@ const Onboarding = () => {
       account_type: form.account_type,
       business_name: form.business_name || null,
       country: form.country,
-      preferred_currency: form.preferred_currency,
+      preferred_currency: form.preferred_currency || "USD",
       preferred_name: `${form.first_name} ${form.last_name}`.trim(),
       phone: form.phone,
       address_street: form.address_street,
@@ -472,7 +494,7 @@ const Onboarding = () => {
       employer: form.employer,
       annual_income: form.annual_income,
       source_of_funds: form.source_of_funds,
-      tax_country: form.tax_country || null,
+      tax_country: form.tax_country || form.country || null,
       tax_id_number: form.tax_id_number || null,
       onboarded_at: now,
       tos_accepted_at: now,
@@ -489,7 +511,7 @@ const Onboarding = () => {
     const list = stepsRef.current;
     const idx = stepRef.current;
     const cur = list[idx];
-    if (!cur.valid()) { toast.error("Please complete this step to continue."); return; }
+    if (!cur.valid()) { toast.error(validationMessage(cur.id)); return; }
     if (idx < list.length - 1) setStep(idx + 1);
     else await finish();
   };
@@ -664,8 +686,9 @@ const Onboarding = () => {
       <div className="px-5 pb-8 pt-3 sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0 space-y-2">
         <button
           onClick={goNext}
-          disabled={saving || !canContinue}
-          className="w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all shadow-lg shadow-primary/20"
+          disabled={saving}
+          aria-disabled={saving}
+          className={`w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all shadow-lg shadow-primary/20 ${!canContinue && !saving ? "opacity-85" : ""}`}
         >
           {saving ? (
             <><Loader2 size={16} className="animate-spin" /> Saving…</>
