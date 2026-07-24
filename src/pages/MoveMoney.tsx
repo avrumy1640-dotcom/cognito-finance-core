@@ -27,12 +27,11 @@ const actions = [
   { label: "Transfer", desc: "Between my accounts · Instant · Free", icon: ArrowLeftRight, id: "transfer" },
   { label: "Send Money", desc: "To another person · Instant · Free", icon: Send, id: "send" },
   { label: "Receive Money", desc: "Share account or QR", icon: QrCode, id: "receive" },
+  { label: "Add Money", desc: "Wire, SEPA, or debit card", icon: Plus, id: "add" },
   { label: "Scheduled Transfers", desc: "Automate future payments", icon: CalendarClock, id: "scheduled" },
-  { label: "Deposit Check", desc: "Mobile check · Next business day", icon: Camera, id: "deposit" },
   { label: "Pay Bills", desc: "One-time or recurring · 1–2 days", icon: Receipt, id: "bills" },
   { label: "External Transfer", desc: "ACH to/from bank · 1–3 days · Free", icon: Building2, id: "external" },
   { label: "Wire Transfer", desc: "Same-day domestic · $25 fee", icon: Globe, id: "wire" },
-  { label: "Add Money", desc: "Fund your account", icon: Plus, id: "add" },
 ];
 
 const MoveMoney = () => {
