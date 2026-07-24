@@ -23,15 +23,29 @@ import RequireKyc from "@/components/RequireKyc";
 import { FeesTimingCard, LimitsCheckPanel } from "@/components/money/FeesTimingCard";
 import { checkLimits } from "@/lib/txPolicy";
 
-const actions = [
-  { label: "Transfer", desc: "Between my accounts · Instant · Free", icon: ArrowLeftRight, id: "transfer" },
-  { label: "Send Money", desc: "To another person · Instant · Free", icon: Send, id: "send" },
-  { label: "Receive Money", desc: "Share account or QR", icon: QrCode, id: "receive" },
+// Primary tiles kept intentionally small (Chime/Revolut pattern). Send is now
+// a hub screen with a method selector (P2P, ACH, Wire). Advanced actions
+// (Scheduled, Bill Pay, Beneficiaries) live behind the More sheet so the
+// first-time user isn't overwhelmed.
+const primaryActions = [
+  { label: "Send", desc: "Person, bank, or wire", icon: Send, id: "send" },
   { label: "Add Money", desc: "Wire, SEPA, or debit card", icon: Plus, id: "add" },
-  { label: "Scheduled Transfers", desc: "Automate future payments", icon: CalendarClock, id: "scheduled" },
-  { label: "Pay Bills", desc: "One-time or recurring · 1–2 days", icon: Receipt, id: "bills" },
-  { label: "External Transfer", desc: "ACH to/from bank · 1–3 days · Free", icon: Building2, id: "external" },
-  { label: "Wire Transfer", desc: "Same-day domestic · $25 fee", icon: Globe, id: "wire" },
+  { label: "Request", desc: "Ask someone to pay you", icon: QrCode, id: "receive" },
+  { label: "More", desc: "Scheduled, bills, beneficiaries", icon: ChevronRight, id: "more" },
+];
+
+const sendMethods = [
+  { label: "Between my accounts", desc: "Instant · Free", icon: ArrowLeftRight, id: "transfer" },
+  { label: "To another person", desc: "By email or phone · Instant", icon: Send, id: "send" },
+  { label: "Bank transfer (ACH)", desc: "1–3 business days · Free", icon: Building2, id: "external" },
+  { label: "Wire transfer", desc: "Same-day domestic · $25 fee", icon: Globe, id: "wire" },
+];
+
+const moreActions = [
+  { label: "Scheduled Transfers", desc: "Automate future payments", icon: CalendarClock, path: "/scheduled" },
+  { label: "Pay Bills", desc: "One-time or recurring · 1–2 days", icon: Receipt, path: null, id: "bills" as const },
+  { label: "Beneficiaries", desc: "Manage saved recipients", icon: Building2, path: "/beneficiaries" },
+  { label: "Payment Requests", desc: "Track incoming requests", icon: QrCode, path: "/payment-requests" },
 ];
 
 const MoveMoney = () => {
@@ -39,9 +53,10 @@ const MoveMoney = () => {
   const { action: routeAction } = useParams();
   const { recipients } = useBank();
   const { canMoveMoney } = useKyc();
-  const [selected, setSelected] = useState<string | null>(
-    routeAction && actions.some((a) => a.id === routeAction) ? routeAction : null
-  );
+  const initial = routeAction && ["transfer", "send", "external", "wire", "add", "bills"].includes(routeAction) ? routeAction : null;
+  const [selected, setSelected] = useState<string | null>(initial);
+  const [sendPickerOpen, setSendPickerOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   if (!canMoveMoney) {
     return (
@@ -51,6 +66,13 @@ const MoveMoney = () => {
     );
   }
 
+  const handlePrimary = (id: string) => {
+    if (id === "receive") { navigate("/receive"); return; }
+    if (id === "more") { setMoreOpen(true); return; }
+    if (id === "send") { setSendPickerOpen(true); return; }
+    if (id === "add") { setSelected("add"); return; }
+  };
+
   return (
     <AppLayout>
       <div className="px-5 pt-14 space-y-5 pb-8">
@@ -59,64 +81,140 @@ const MoveMoney = () => {
           <p className="text-sm text-muted-foreground mt-1">Transfer, send, or deposit funds</p>
         </motion.div>
 
-        <div>
-          <h2 className="text-section-title mb-3">Recent Recipients</h2>
-          <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
-            {recipients.map((r) => (
+        {recipients.length > 0 && (
+          <div>
+            <h2 className="text-section-title mb-3">Recent Recipients</h2>
+            <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
+              {recipients.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => setSelected("send")}
+                  className="flex flex-col items-center gap-1.5 min-w-[60px]"
+                >
+                  <div className="w-12 h-12 rounded-full gradient-hero flex items-center justify-center">
+                    <span className="text-primary-foreground font-semibold text-sm">{r.initial}</span>
+                  </div>
+                  <span className="text-xs text-foreground font-medium truncate max-w-[60px]">{r.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{r.lastSent}</span>
+                </button>
+              ))}
               <button
-                key={r.id}
                 onClick={() => setSelected("send")}
                 className="flex flex-col items-center gap-1.5 min-w-[60px]"
               >
-                <div className="w-12 h-12 rounded-full gradient-hero flex items-center justify-center">
-                  <span className="text-primary-foreground font-semibold text-sm">{r.initial}</span>
+                <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
+                  <Plus size={20} className="text-muted-foreground" />
                 </div>
-                <span className="text-xs text-foreground font-medium truncate max-w-[60px]">{r.name}</span>
-                <span className="text-[10px] text-muted-foreground">{r.lastSent}</span>
+                <span className="text-xs text-muted-foreground font-medium">New</span>
               </button>
-            ))}
-            <button
-              onClick={() => setSelected("send")}
-              className="flex flex-col items-center gap-1.5 min-w-[60px]"
-            >
-              <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
-                <Plus size={20} className="text-muted-foreground" />
-              </div>
-              <span className="text-xs text-muted-foreground font-medium">New</span>
-            </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="space-y-2">
-          {actions.map((action, i) => (
-            <motion.div
+        <div className="grid grid-cols-2 gap-3">
+          {primaryActions.map((action, i) => (
+            <motion.button
               key={action.id}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.05 + i * 0.04 }}
+              onClick={() => handlePrimary(action.id)}
+              className="text-left"
             >
-              <GlassCard
-                onClick={() => {
-                  if (action.id === "receive") navigate("/receive");
-                  else if (action.id === "scheduled") navigate("/scheduled");
-                  else setSelected(action.id);
-                }}
-                className="flex items-center justify-between py-3.5"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
-                    <action.icon size={20} className="text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{action.label}</p>
-                    <p className="text-xs text-muted-foreground">{action.desc}</p>
-                  </div>
+              <GlassCard className="flex flex-col gap-3 py-4 h-full">
+                <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <action.icon size={22} className="text-primary" />
                 </div>
-                <ChevronRight size={18} className="text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{action.label}</p>
+                  <p className="text-xs text-muted-foreground leading-tight mt-0.5">{action.desc}</p>
+                </div>
               </GlassCard>
-            </motion.div>
+            </motion.button>
           ))}
         </div>
+
+        {/* Send method picker */}
+        <AnimatePresence>
+          {sendPickerOpen && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+              onClick={() => setSendPickerOpen(false)}
+            >
+              <motion.div
+                initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
+                className="w-full max-w-md bg-card rounded-3xl border border-border p-5 space-y-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div>
+                  <h3 className="text-lg font-display font-bold text-foreground">How do you want to send?</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Pick the method that fits your recipient.</p>
+                </div>
+                {sendMethods.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => { setSendPickerOpen(false); setSelected(m.id); }}
+                    className="w-full flex items-center gap-3 p-3 rounded-2xl bg-secondary/60 active:bg-secondary transition-colors text-left"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <m.icon size={20} className="text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-foreground">{m.label}</p>
+                      <p className="text-xs text-muted-foreground">{m.desc}</p>
+                    </div>
+                    <ChevronRight size={16} className="text-muted-foreground" />
+                  </button>
+                ))}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* More sheet */}
+        <AnimatePresence>
+          {moreOpen && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+              onClick={() => setMoreOpen(false)}
+            >
+              <motion.div
+                initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
+                className="w-full max-w-md bg-card rounded-3xl border border-border p-5 space-y-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div>
+                  <h3 className="text-lg font-display font-bold text-foreground">More options</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Advanced tools for power users.</p>
+                </div>
+                {moreActions.map((m) => (
+                  <button
+                    key={m.label}
+                    onClick={() => {
+                      setMoreOpen(false);
+                      if (m.path) navigate(m.path);
+                      else if ("id" in m && m.id) setSelected(m.id);
+                    }}
+                    className="w-full flex items-center gap-3 p-3 rounded-2xl bg-secondary/60 active:bg-secondary transition-colors text-left"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <m.icon size={20} className="text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-foreground">{m.label}</p>
+                      <p className="text-xs text-muted-foreground">{m.desc}</p>
+                    </div>
+                    <ChevronRight size={16} className="text-muted-foreground" />
+                  </button>
+                ))}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+
 
         <AnimatePresence>
           {selected === "transfer" && <TransferSheet onClose={() => setSelected(null)} />}

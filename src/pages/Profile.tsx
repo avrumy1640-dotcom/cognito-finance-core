@@ -3,19 +3,16 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
-import { user } from "@/data/mockData";
 import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
 import {
   User,
-  MapPin,
   Shield,
   FileText,
-  Link2,
   Bell,
   HelpCircle,
   LogOut,
   ChevronRight,
-  Briefcase,
   CreditCard,
   Settings,
   MessageCircle,
@@ -28,16 +25,13 @@ const sections = [
     title: "Account",
     items: [
       { icon: User, label: "Personal Information", path: "/profile/personal" },
-      { icon: MapPin, label: "Address", path: "/profile/address" },
       { icon: BadgeCheck, label: "Identity & Verification", path: "/profile/verify" },
-      { icon: Briefcase, label: "Employment & Income", path: "/profile/employment" },
     ],
   },
   {
     title: "Banking",
     items: [
       { icon: FileText, label: "Statements & Documents", path: "/profile/documents" },
-      { icon: Link2, label: "Linked Accounts", path: "/profile/linked" },
       { icon: CreditCard, label: "Account Details", path: "/account/checking" },
     ],
   },
@@ -53,7 +47,7 @@ const sections = [
     title: "Support",
     items: [
       { icon: HelpCircle, label: "Help Center", path: "/help" },
-      { icon: MessageCircle, label: "Contact Support", path: "/help/contact" },
+      { icon: MessageCircle, label: "Contact Support", path: "/support" },
       { icon: Star, label: "Rate Glass Bank", path: "#" },
     ],
   },
@@ -62,6 +56,7 @@ const sections = [
 const ProfilePage = () => {
   const navigate = useNavigate();
   const { signOut, user: authUser } = useAuth();
+  const { fullName, initials, memberSince, loading } = useProfile();
 
   return (
     <AppLayout>
@@ -71,18 +66,21 @@ const ProfilePage = () => {
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full gradient-hero flex items-center justify-center">
               <span className="text-2xl font-bold text-primary-foreground">
-                {user.firstName[0]}{user.lastName[0]}
+                {loading ? "…" : (initials || "?")}
               </span>
             </div>
-            <div>
-              <h1 className="text-xl font-display font-bold text-foreground">
-                {user.firstName} {user.lastName}
+            <div className="min-w-0">
+              <h1 className="text-xl font-display font-bold text-foreground truncate">
+                {loading ? "Loading…" : (fullName || authUser?.email || "Your account")}
               </h1>
-              <p className="text-sm text-muted-foreground">{authUser?.email ?? `Member since ${user.memberSince}`}</p>
-              <p className="text-xs text-muted-foreground">{user.customerId}</p>
+              <p className="text-sm text-muted-foreground truncate">{authUser?.email}</p>
+              {memberSince && (
+                <p className="text-xs text-muted-foreground">Member since {memberSince}</p>
+              )}
             </div>
           </div>
         </motion.div>
+
 
         {/* Sections */}
         {sections.map((section, si) => (
