@@ -443,6 +443,14 @@ const Onboarding = () => {
 
   const current = steps[Math.min(step, steps.length - 1)];
 
+  // Keep refs to the latest step/steps so callbacks fired from setTimeout
+  // (auto-advance handlers) read fresh validity instead of a stale closure
+  // over the pre-update form.
+  const stepsRef = useRef(steps);
+  const stepRef = useRef(step);
+  stepsRef.current = steps;
+  stepRef.current = step;
+
   const finish = async () => {
     if (!user) return;
     setSaving(true);
@@ -478,10 +486,14 @@ const Onboarding = () => {
   };
 
   const goNext = async () => {
-    if (!current.valid()) { toast.error("Please complete this step to continue."); return; }
-    if (step < steps.length - 1) setStep(step + 1);
+    const list = stepsRef.current;
+    const idx = stepRef.current;
+    const cur = list[idx];
+    if (!cur.valid()) { toast.error("Please complete this step to continue."); return; }
+    if (idx < list.length - 1) setStep(idx + 1);
     else await finish();
   };
+
 
   const goBack = () => {
     if (step === 0) setShowIntro(true);
