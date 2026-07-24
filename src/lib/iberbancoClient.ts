@@ -192,14 +192,26 @@ export function mapIberAccount(a: IberAccount) {
     id: acct,
     name: a.reference || `${CURRENCY_LABEL[a.currency] ?? "Iber"} Account`,
     accountNumber: acct ? `••••${acct.slice(-4)}` : "••••0000",
-    routingNumber: a.main_iban || "",
+    // routingNumber doubles as the primary display "route" for external
+    // deposits: IBAN if we have one (SEPA), else fall back to the account
+    // reference number itself.
+    routingNumber: a.main_iban || acct || "",
     availableBalance: parseAmount(a.available_balance ?? a.balance),
     currentBalance: parseAmount(a.balance),
     pendingAmount: parseAmount(a.pending_incoming_transactions_sum),
     status: a.status === 2 ? "Active" : a.status === 1 ? "Requested" : "Inactive",
     openedDate: "",
+    // Real deposit-in details that the receive / add-money screens surface.
+    depositDetails: {
+      accountNumber: acct || "",          // Iberbanco special number
+      iban: a.main_iban || "",             // present for EUR / SEPA accounts
+      holderName: a.account_holder_name || `${a.user?.first_name ?? ""} ${a.user?.last_name ?? ""}`.trim(),
+      currency: CURRENCY_LABEL[a.currency] ?? "USD",
+      reference: acct || "",               // wire memo/reference so funds route back
+    },
   };
 }
+
 
 // Iberbanco transaction direction: 1 = outgoing (debit), 2 = incoming (credit).
 export function mapIberTransaction(t: IberTransaction, accountLabel: string, myAccountNumber?: string) {
