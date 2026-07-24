@@ -231,16 +231,16 @@ const Onboarding = () => {
       kicker: kicker("Phone"),
       title: "What's your mobile number?",
       subtitle: "We use it for security codes and account alerts.",
-      valid: () => form.phone.replace(/\D/g, "").length >= 7,
+      valid: () => {
+        const digits = form.phone.replace(/\D/g, "");
+        return digits.length >= 8 && digits.length <= 15;
+      },
       render: ({ next }) => (
-        <SingleInput
+        <PhoneInput
           value={form.phone}
+          defaultCountry={form.country || "US"}
           onChange={(v) => set("phone", v)}
           onEnter={next}
-          placeholder="+1 555 123 4567"
-          type="tel"
-          autoComplete="tel"
-          inputMode="tel"
         />
       ),
     });
