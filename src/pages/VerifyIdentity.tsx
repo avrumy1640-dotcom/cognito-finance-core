@@ -51,7 +51,7 @@ const schema = z.object({
   occupation: z.string().trim().min(1, "Occupation is required").max(80),
   income: z.string().regex(/^\d+$/, "Annual income (digits only)"),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  confirm: z.literal(true, { errorMap: () => ({ message: "You must confirm the information is accurate" }) }),
+  confirm: z.literal(true, { message: "You must confirm the information is accurate" }),
 });
 
 type FormState = Omit<z.infer<typeof schema>, "confirm"> & { confirm: boolean };
@@ -160,7 +160,7 @@ const VerifyIdentity = () => {
     }
     const parsed = schema.safeParse(form);
     if (!parsed.success) {
-      const msg = parsed.error.errors[0]?.message ?? "Please review the form";
+      const msg = parsed.error.issues[0]?.message ?? "Please review the form";
       setSubmitError({ kind: "validation", message: msg, retryable: true });
       toast.error(msg);
       return;
