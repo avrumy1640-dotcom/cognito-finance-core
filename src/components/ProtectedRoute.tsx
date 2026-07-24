@@ -18,10 +18,12 @@ const ProtectedRoute = ({ children, requireKyc = false }: Props) => {
   const [mfaCheck, setMfaCheck] = useState<CheckState>("pending");
   const [onboardCheck, setOnboardCheck] = useState<CheckState>("pending");
   const [kycCheck, setKycCheck] = useState<CheckState>("pending");
+  const [checkedPath, setCheckedPath] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session || !user) {
       setMfaCheck("pending"); setOnboardCheck("pending"); setKycCheck("pending");
+      setCheckedPath(null);
       return;
     }
     let cancelled = false;
@@ -36,11 +38,12 @@ const ProtectedRoute = ({ children, requireKyc = false }: Props) => {
       else setMfaCheck("ok");
       setOnboardCheck(prof?.onboarded_at ? "ok" : "required");
       setKycCheck((kyc?.status ?? "unverified") === "verified" ? "ok" : "required");
+      setCheckedPath(location.pathname);
     })();
     return () => { cancelled = true; };
-  }, [session, user]);
+  }, [session, user, location.pathname]);
 
-  if (loading || (session && (mfaCheck === "pending" || onboardCheck === "pending" || kycCheck === "pending"))) {
+  if (loading || (session && (checkedPath !== location.pathname || mfaCheck === "pending" || onboardCheck === "pending" || kycCheck === "pending"))) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
