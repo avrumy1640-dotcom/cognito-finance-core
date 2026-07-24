@@ -102,7 +102,7 @@ const HomePage = () => {
     for (const tx of transactions) {
       const t = new Date(tx.date).getTime();
       if (Number.isNaN(t) || t < startOfMonth) continue;
-      if (tx.status === "failed") continue;
+      if (tx.status !== "posted") continue;
       if (tx.amount > 0) inSum += tx.amount;
       else outSum += Math.abs(tx.amount);
     }
