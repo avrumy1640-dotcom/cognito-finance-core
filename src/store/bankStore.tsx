@@ -53,6 +53,14 @@ type Account = {
   openedDate: string;
   apy?: number;
   interestEarned?: number;
+  // Real deposit-in details (present after live Iberbanco sync).
+  depositDetails?: {
+    accountNumber: string;
+    iban: string;
+    holderName: string;
+    currency: string;
+    reference: string;
+  };
 };
 
 interface CardControls {

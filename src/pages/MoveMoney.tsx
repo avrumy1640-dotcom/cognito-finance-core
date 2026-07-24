@@ -7,7 +7,6 @@ import GlassCard from "@/components/glass/GlassCard";
 import {
   ArrowLeftRight,
   Send,
-  Camera,
   Receipt,
   Plus,
   Globe,
@@ -17,6 +16,7 @@ import {
   QrCode,
   CalendarClock,
 } from "lucide-react";
+import AddMoneyPanel from "@/components/money/AddMoneyPanel";
 import { useBank } from "@/store/bankStore";
 import { useKyc } from "@/hooks/useKyc";
 import RequireKyc from "@/components/RequireKyc";
@@ -27,12 +27,11 @@ const actions = [
   { label: "Transfer", desc: "Between my accounts · Instant · Free", icon: ArrowLeftRight, id: "transfer" },
   { label: "Send Money", desc: "To another person · Instant · Free", icon: Send, id: "send" },
   { label: "Receive Money", desc: "Share account or QR", icon: QrCode, id: "receive" },
+  { label: "Add Money", desc: "Wire, SEPA, or debit card", icon: Plus, id: "add" },
   { label: "Scheduled Transfers", desc: "Automate future payments", icon: CalendarClock, id: "scheduled" },
-  { label: "Deposit Check", desc: "Mobile check · Next business day", icon: Camera, id: "deposit" },
   { label: "Pay Bills", desc: "One-time or recurring · 1–2 days", icon: Receipt, id: "bills" },
   { label: "External Transfer", desc: "ACH to/from bank · 1–3 days · Free", icon: Building2, id: "external" },
   { label: "Wire Transfer", desc: "Same-day domestic · $25 fee", icon: Globe, id: "wire" },
-  { label: "Add Money", desc: "Fund your account", icon: Plus, id: "add" },
 ];
 
 const MoveMoney = () => {
@@ -122,11 +121,14 @@ const MoveMoney = () => {
         <AnimatePresence>
           {selected === "transfer" && <TransferSheet onClose={() => setSelected(null)} />}
           {selected === "send" && <SendMoneySheet onClose={() => setSelected(null)} />}
-          {selected === "deposit" && <DepositSheet onClose={() => setSelected(null)} />}
           {selected === "bills" && <BillPaySheet onClose={() => setSelected(null)} />}
           {selected === "external" && <ExternalTransferSheet onClose={() => setSelected(null)} />}
           {selected === "wire" && <WireSheet onClose={() => setSelected(null)} />}
-          {selected === "add" && <AddMoneySheet onClose={() => setSelected(null)} onPick={(id) => setSelected(id)} />}
+          {selected === "add" && (
+            <Sheet onClose={() => setSelected(null)}>
+              <AddMoneyPanel onDone={() => setSelected(null)} />
+            </Sheet>
+          )}
         </AnimatePresence>
       </div>
     </AppLayout>
@@ -372,86 +374,11 @@ const SendMoneySheet = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const DepositSheet = ({ onClose }: { onClose: () => void }) => {
-  const { depositCheck } = useBank();
-  const [step, setStep] = useState(0);
-  const [to, setTo] = useState<"checking" | "savings">("checking");
-  const [amount, setAmount] = useState("");
-  const num = Number(amount);
+// Mobile check deposit and the old "AddMoneySheet" stub have been removed —
+// mobile deposit isn't exposed by Iberbanco v2, and Add Money is now handled
+// by the real AddMoneyPanel component (Bank Transfer / Debit Card / ACH).
 
-  const submit = () => {
-    const ok = depositCheck({ to, amount: num });
-    if (!ok) {
-      toast.error("Deposit failed");
-      return;
-    }
-    toast.success("Check submitted", { description: `$${num.toFixed(2)} pending — available next business day` });
-    setStep(3);
-  };
 
-  return (
-    <Sheet onClose={onClose}>
-      {step === 0 && (
-        <>
-          <h2 className="text-xl font-display font-bold text-foreground mb-2">Deposit a Check</h2>
-          <p className="text-sm text-muted-foreground mb-5">Endorse with "For mobile deposit only".</p>
-          <GlassCard className="mb-4">
-            <Row label="Daily limit" value="$10,000.00" />
-            <div className="h-2" />
-            <Row label="Monthly limit" value="$25,000.00" />
-          </GlassCard>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Deposit to</label>
-              <select value={to} onChange={(e) => setTo(e.target.value as "checking" | "savings")} className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none">
-                <option value="checking">Everyday Checking — ****4821</option>
-                <option value="savings">High Yield Savings — ****7392</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Amount</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">$</span>
-                <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full p-3 pl-8 rounded-xl bg-secondary text-foreground text-2xl font-bold border-0 outline-none text-balance-display" />
-              </div>
-            </div>
-          </div>
-          <button disabled={!num} onClick={() => setStep(1)} className="w-full mt-5 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Capture Front of Check</button>
-          <button onClick={onClose} className="w-full mt-2 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-        </>
-      )}
-      {step === 1 && (
-        <CaptureStep label="Front of check" onNext={() => setStep(2)} onBack={() => setStep(0)} nextLabel="Capture Back" />
-      )}
-      {step === 2 && (
-        <CaptureStep label="Back of check" onNext={submit} onBack={() => setStep(1)} nextLabel="Submit Deposit" />
-      )}
-      {step === 3 && (
-        <SuccessView
-          title="Deposit Submitted"
-          subtitle={`$${num.toFixed(2)} pending — available by next business day`}
-          onDone={onClose}
-        />
-      )}
-    </Sheet>
-  );
-};
-
-const CaptureStep = ({ label, onNext, onBack, nextLabel }: { label: string; onNext: () => void; onBack: () => void; nextLabel: string }) => (
-  <div className="text-center py-4">
-    <div className="w-full h-48 rounded-2xl bg-secondary border-2 border-dashed border-border flex items-center justify-center mb-4">
-      <div className="text-center">
-        <Camera size={40} className="text-muted-foreground mx-auto mb-2" />
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="text-xs text-muted-foreground">Tap to capture</p>
-      </div>
-    </div>
-    <div className="flex gap-3">
-      <button onClick={onBack} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Back</button>
-      <button onClick={onNext} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">{nextLabel}</button>
-    </div>
-  </div>
-);
 
 const BillPaySheet = ({ onClose }: { onClose: () => void }) => {
   const { payBill, accounts } = useBank();
@@ -630,40 +557,6 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const AddMoneySheet = ({ onClose, onPick }: { onClose: () => void; onPick: (id: string) => void }) => (
-  <Sheet onClose={onClose}>
-    <h2 className="text-xl font-display font-bold text-foreground mb-2">Add Money</h2>
-    <p className="text-sm text-muted-foreground mb-5">Fund your Glass Bank account.</p>
-    <div className="space-y-2">
-      {[
-        { id: "direct", label: "Direct Deposit", desc: "Set up recurring paycheck", icon: "💰",
-          run: () => toast.success("Direct deposit form", { description: "Routing 121145307 · Account ending in your linked account" }) },
-        { id: "external", label: "Link External Bank", desc: "ACH pull from another bank", icon: "🏦",
-          run: () => onPick("external") },
-        { id: "deposit", label: "Deposit a Check", desc: "Mobile check deposit", icon: "📸",
-          run: () => onPick("deposit") },
-        { id: "cash", label: "Cash at Retail", desc: "Green Dot locations nationwide", icon: "🧾",
-          run: () => toast.success("Barcode ready", { description: "Show at any Green Dot register to deposit up to $500" }) },
-      ].map((m) => (
-        <GlassCard
-          key={m.label}
-          onClick={m.run}
-          className="flex items-center justify-between py-3"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-xl w-8 text-center">{m.icon}</span>
-            <div>
-              <p className="text-sm font-semibold text-foreground">{m.label}</p>
-              <p className="text-xs text-muted-foreground">{m.desc}</p>
-            </div>
-          </div>
-          <ChevronRight size={16} className="text-muted-foreground" />
-        </GlassCard>
-      ))}
-    </div>
-    <button onClick={onClose} className="w-full mt-5 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Close</button>
-  </Sheet>
-);
 
 const Field = ({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) => (
   <div>
