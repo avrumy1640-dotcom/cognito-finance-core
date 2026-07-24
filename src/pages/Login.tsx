@@ -30,7 +30,9 @@ const Login = ({ initialMode = "signin" }: Props) => {
 
   const setModeAndUrl = (m: Mode) => {
     setMode(m);
-    navigate(m === "signin" ? "/login" : "/signup", { replace: true, state: location.state });
+    const base = m === "signin" ? "/login" : "/signup";
+    const url = safeNext ? `${base}?next=${encodeURIComponent(safeNext)}` : base;
+    navigate(url, { replace: true, state: location.state });
   };
 
   const submit = async () => {
