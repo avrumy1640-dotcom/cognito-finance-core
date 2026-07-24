@@ -72,6 +72,10 @@ const INCOME_BANDS = [
   "$100,000 – $250,000", "$250,000 – $500,000", "Over $500,000",
 ];
 const REQUIRES_TAX_ID = new Set(["US", "CA", "GB", "DE", "FR", "ES", "IT", "NL", "AU"]);
+const DIAL_CODES: Record<string, string> = {
+  US: "+1", CA: "+1", GB: "+44", DE: "+49", FR: "+33", ES: "+34", IT: "+39",
+  NL: "+31", MX: "+52", BR: "+55", AU: "+61", JP: "+81", SG: "+65", AE: "+971",
+};
 
 type StepDef = {
   id: string;
@@ -227,16 +231,16 @@ const Onboarding = () => {
       kicker: kicker("Phone"),
       title: "What's your mobile number?",
       subtitle: "We use it for security codes and account alerts.",
-      valid: () => form.phone.replace(/\D/g, "").length >= 7,
+      valid: () => {
+        const digits = form.phone.replace(/\D/g, "");
+        return digits.length >= 8 && digits.length <= 15;
+      },
       render: ({ next }) => (
-        <SingleInput
+        <PhoneInput
           value={form.phone}
+          defaultCountry={form.country || "US"}
           onChange={(v) => set("phone", v)}
           onEnter={next}
-          placeholder="+1 555 123 4567"
-          type="tel"
-          autoComplete="tel"
-          inputMode="tel"
         />
       ),
     });
@@ -808,5 +812,108 @@ const ChoiceList = ({
     })}
   </div>
 );
+
+const PhoneInput = ({
+  value, defaultCountry, onChange, onEnter,
+}: {
+  value: string;
+  defaultCountry: string;
+  onChange: (v: string) => void;
+  onEnter: () => void;
+}) => {
+  const ref = useRef<HTMLInputElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Parse existing value into dial code + local digits, or fall back to defaultCountry.
+  const parsed = useMemo(() => {
+    const raw = (value || "").trim();
+    if (raw.startsWith("+")) {
+      const digits = raw.replace(/\D/g, "");
+      // Try longest matching dial code first (up to 4 digits incl. leading char).
+      const entries = Object.entries(DIAL_CODES).sort((a, b) => b[1].length - a[1].length);
+      for (const [cc, dial] of entries) {
+        const d = dial.replace(/\D/g, "");
+        if (digits.startsWith(d)) {
+          return { country: cc, dial, local: digits.slice(d.length) };
+        }
+      }
+      return { country: defaultCountry, dial: DIAL_CODES[defaultCountry] || "+1", local: digits };
+    }
+    return {
+      country: defaultCountry,
+      dial: DIAL_CODES[defaultCountry] || "+1",
+      local: raw.replace(/\D/g, ""),
+    };
+  }, [value, defaultCountry]);
+
+  useEffect(() => {
+    const t = setTimeout(() => ref.current?.focus(), 320);
+    return () => clearTimeout(t);
+  }, []);
+
+  const emit = (country: string, local: string) => {
+    const dial = DIAL_CODES[country] || "+1";
+    const cleaned = local.replace(/\D/g, "").slice(0, 15);
+    onChange(cleaned ? `${dial}${cleaned}` : "");
+  };
+
+  const digits = parsed.local;
+  const totalDigits = parsed.dial.replace(/\D/g, "").length + digits.length;
+  const showError = digits.length > 0 && (digits.length < 7 || totalDigits > 15);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setPickerOpen((o) => !o)}
+          className="px-3 py-5 rounded-2xl bg-secondary text-foreground text-base font-semibold border-2 border-transparent hover:bg-muted transition-colors flex items-center gap-1.5 shrink-0"
+          aria-label="Select country code"
+        >
+          <span className="text-xl leading-none">
+            {COUNTRIES.find((c) => c[0] === parsed.country)?.[2] || "🌐"}
+          </span>
+          <span className="tabular-nums">{parsed.dial}</span>
+        </button>
+        <input
+          ref={ref}
+          type="tel"
+          inputMode="numeric"
+          autoComplete="tel-national"
+          value={digits}
+          onChange={(e) => emit(parsed.country, e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onEnter(); } }}
+          placeholder="555 123 4567"
+          className="flex-1 min-w-0 px-4 py-5 rounded-2xl bg-secondary text-foreground text-lg border-2 border-transparent outline-none focus:border-primary/50 focus:bg-card transition-all placeholder:text-muted-foreground/60"
+        />
+      </div>
+      {pickerOpen && (
+        <div className="max-h-56 overflow-y-auto rounded-2xl border border-border bg-card shadow-lg divide-y divide-border">
+          {COUNTRIES.filter((c) => DIAL_CODES[c[0]]).map(([code, name, flag]) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => { emit(code, digits); setPickerOpen(false); ref.current?.focus(); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted transition-colors"
+            >
+              <span className="text-lg">{flag}</span>
+              <span className="flex-1 text-sm text-foreground">{name}</span>
+              <span className="text-xs text-muted-foreground tabular-nums">{DIAL_CODES[code]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {showError ? (
+        <p className="text-xs text-destructive px-1">
+          Enter a valid mobile number (7–14 digits after the country code).
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground px-1">
+          We'll text a verification code to this number.
+        </p>
+      )}
+    </div>
+  );
+};
 
 export default Onboarding;
