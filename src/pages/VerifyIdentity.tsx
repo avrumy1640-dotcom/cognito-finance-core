@@ -107,15 +107,19 @@ const VerifyIdentity = () => {
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   // Hydrate any prior draft so a refresh, session expiry, or crash doesn't
-  // force the user to start over.
+  // force the user to start over. Sensitive fields (password, selfie, ID number,
+  // SSN, DOB) are intentionally NOT persisted — they stay in memory only.
   useEffect(() => {
     if (hydratedRef.current) return;
     try {
       const raw = localStorage.getItem(draftKey(user?.id));
       if (raw) {
-        const parsed = JSON.parse(raw) as { form?: FormState; selfie?: string | null; step?: number; showIntro?: boolean };
-        if (parsed.form) setForm((f) => ({ ...f, ...parsed.form }));
-        if (parsed.selfie) setSelfie(parsed.selfie);
+        const parsed = JSON.parse(raw) as { form?: Partial<FormState>; step?: number; showIntro?: boolean };
+        if (parsed.form) {
+          const { password: _p, id_number: _i, ssn_last4: _s, date_of_birth: _d, ...safe } =
+            parsed.form as Partial<FormState> & Record<string, unknown>;
+          setForm((f) => ({ ...f, ...(safe as Partial<FormState>) }));
+        }
         if (typeof parsed.step === "number") setStep(parsed.step);
         if (parsed.showIntro === false) setShowIntro(false);
       }
@@ -123,13 +127,15 @@ const VerifyIdentity = () => {
     hydratedRef.current = true;
   }, [user?.id]);
 
-  // Persist draft as the user progresses.
+  // Persist only non-sensitive progress. Password, selfie, government ID number,
+  // SSN, and DOB are kept in memory only so they never land in localStorage.
   useEffect(() => {
     if (!hydratedRef.current) return;
     try {
-      localStorage.setItem(draftKey(user?.id), JSON.stringify({ form, selfie, step, showIntro }));
+      const { password: _p, id_number: _i, ssn_last4: _s, date_of_birth: _d, ...safeForm } = form;
+      localStorage.setItem(draftKey(user?.id), JSON.stringify({ form: safeForm, step, showIntro }));
     } catch { /* quota — ignore */ }
-  }, [form, selfie, step, showIntro, user?.id]);
+  }, [form, step, showIntro, user?.id]);
 
   useEffect(() => {
     if (profile) {
