@@ -178,54 +178,66 @@ const CardsPage = () => {
           </motion.div>
         )}
 
-        {/* Card visual hero */}
-        <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.05 }}>
+        {/* Card visual hero — premium material with embossed chip,
+            holographic sheen, and paper-fiber grain for depth. */}
+        <motion.div
+          initial={{ opacity: 0, y: 12, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ delay: 0.05, type: "spring", damping: 22, stiffness: 240 }}
+          whileTap={{ scale: 0.985 }}
+        >
           <div
-            className={`relative rounded-3xl p-6 overflow-hidden transition-opacity shadow-xl shadow-primary/20 ${card.isLocked ? "opacity-75" : ""}`}
-            style={{ background: "var(--gradient-hero)", minHeight: 220 }}
+            className={`card-material gradient-card-face relative rounded-[26px] p-6 overflow-hidden transition-opacity ${card.isLocked ? "opacity-80" : ""}`}
+            style={{
+              minHeight: 232,
+              boxShadow:
+                "0 24px 60px -20px hsl(224 60% 6% / 0.55), 0 8px 20px -8px hsl(224 60% 6% / 0.4), inset 0 1px 0 hsl(0 0% 100% / 0.08)",
+            }}
           >
-            <div
-              className="absolute inset-0 opacity-25"
-              style={{
-                background:
-                  "radial-gradient(circle at 80% 20%, rgba(255,255,255,0.35), transparent 50%), radial-gradient(circle at 20% 80%, rgba(0,230,140,0.25), transparent 55%)",
-              }}
-            />
-            <div className="relative">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <p className="text-primary-foreground/70 text-[10px] font-semibold tracking-[0.22em]">GLASS BANK</p>
-                  <p className="text-primary-foreground text-xs font-semibold mt-0.5">{card.nickname}</p>
-                </div>
-                <div className="flex items-center gap-1.5 bg-primary-foreground/15 rounded-full px-2.5 py-1 backdrop-blur-sm">
-                  {card.isLocked ? <Lock size={11} className="text-primary-foreground" /> : <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />}
-                  <span className="text-[10px] text-primary-foreground font-semibold uppercase tracking-wider">{statusLabel}</span>
-                </div>
+            <div className="flex items-start justify-between mb-10">
+              <div>
+                <p className="text-primary-foreground/60 text-[10px] font-semibold tracking-[0.28em] uppercase">Glass Bank</p>
+                <p className="text-serif-display text-primary-foreground text-[22px] leading-none mt-2">{card.nickname}</p>
+                <p className="text-primary-foreground/50 text-[10px] font-medium mt-1 uppercase tracking-widest">Private client</p>
               </div>
-              <div className="mb-6">
-                <p className="text-primary-foreground/60 text-[10px] font-semibold tracking-widest uppercase mb-1">Card number</p>
-                <p className="text-primary-foreground text-lg font-mono tracking-[0.2em]">
+              <div className="flex items-center gap-1.5 bg-primary-foreground/12 border border-primary-foreground/15 rounded-full px-2.5 py-1 backdrop-blur-md">
+                {card.isLocked ? (
+                  <Lock size={11} className="text-primary-foreground" />
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent shadow-[0_0_8px_hsl(82_92%_62%_/_0.8)]" />
+                )}
+                <span className="text-[10px] text-primary-foreground font-semibold uppercase tracking-wider">{statusLabel}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 mb-6">
+              <div className="card-chip" aria-hidden />
+              <div className="flex-1">
+                <p className="text-primary-foreground/50 text-[9px] font-semibold tracking-[0.2em] uppercase">Card number</p>
+                <p className="text-primary-foreground text-[17px] font-mono tracking-[0.18em] tabular-nums mt-0.5">
                   {showDetails ? fullNumber : "•••• •••• •••• " + card.last4}
                 </p>
               </div>
-              <div className="flex items-end justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-primary-foreground/60 text-[10px] font-semibold tracking-widest uppercase">Card holder</p>
-                  <p className="text-primary-foreground text-sm font-medium truncate">Alexandra Chen</p>
-                </div>
-                <div>
-                  <p className="text-primary-foreground/60 text-[10px] font-semibold tracking-widest uppercase">Expires</p>
-                  <p className="text-primary-foreground text-sm font-medium">{card.expiresAt}</p>
-                </div>
-                <div>
-                  <p className="text-primary-foreground/60 text-[10px] font-semibold tracking-widest uppercase">CVV</p>
-                  <p className="text-primary-foreground text-sm font-mono">{showDetails ? "329" : cvv}</p>
-                </div>
-                <div className="text-primary-foreground font-bold text-lg tracking-tight ml-auto">{card.network}</div>
+            </div>
+
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-primary-foreground/50 text-[9px] font-semibold tracking-[0.2em] uppercase">Card holder</p>
+                <p className="text-primary-foreground text-sm font-medium truncate mt-0.5">Alexandra Chen</p>
               </div>
+              <div>
+                <p className="text-primary-foreground/50 text-[9px] font-semibold tracking-[0.2em] uppercase">Expires</p>
+                <p className="text-primary-foreground text-sm font-medium tabular-nums mt-0.5">{card.expiresAt}</p>
+              </div>
+              <div>
+                <p className="text-primary-foreground/50 text-[9px] font-semibold tracking-[0.2em] uppercase">CVV</p>
+                <p className="text-primary-foreground text-sm font-mono tabular-nums mt-0.5">{showDetails ? "329" : cvv}</p>
+              </div>
+              <div className="text-serif-display text-primary-foreground text-xl tracking-tight ml-auto italic">{card.network}</div>
             </div>
           </div>
         </motion.div>
+
 
         {/* Spend & trust chips */}
         <div className="grid grid-cols-2 gap-2">

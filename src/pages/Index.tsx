@@ -177,14 +177,14 @@ const HomePage = () => {
           </motion.button>
         )}
 
-        {/* Total Balance */}
+        {/* Total Balance — hero moment. Serif display for the number,
+            ambient glow behind, restrained. */}
         <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible">
-          <GlassCard elevated className="relative overflow-hidden">
-            <div className="absolute inset-0 gradient-hero opacity-[0.08] rounded-2xl" />
+          <GlassCard elevated className="relative overflow-hidden ambient-glow">
             <div className="relative">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-semibold text-primary uppercase tracking-widest">Total available</span>
+                  <span className="kicker text-primary">Total available</span>
                   {kycStatus === "verified" && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-success bg-success/10 rounded-full px-2 py-0.5">
                       <ShieldCheck size={10} /> Insured
@@ -193,7 +193,7 @@ const HomePage = () => {
                 </div>
                 <button
                   onClick={() => setBalanceVisible(!balanceVisible)}
-                  className="p-1 rounded-full"
+                  className="p-1 rounded-full press"
                   aria-label={balanceVisible ? "Hide balance" : "Show balance"}
                 >
                   {balanceVisible ? (
@@ -204,20 +204,26 @@ const HomePage = () => {
                 </button>
               </div>
               {hydrating ? (
-                <Skeleton className="h-10 w-56 mt-1" />
+                <Skeleton className="h-12 w-64 mt-1" />
               ) : (
-                <p className="text-balance-display text-4xl text-foreground mt-1">
+                <motion.p
+                  key={balanceVisible ? "shown" : "hidden"}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="text-serif-display text-[46px] leading-[1.05] text-foreground mt-1 tabular-nums"
+                >
                   {formatCurrency(totalBalance)}
-                </p>
+                </motion.p>
               )}
               {!hydrating && cashFlow.net !== 0 && (
-                <div className="flex items-center gap-1.5 mt-2">
+                <div className="flex items-center gap-1.5 mt-2.5">
                   {cashFlow.net > 0 ? (
                     <TrendingUp size={14} className="text-success" />
                   ) : (
                     <ArrowUpRight size={14} className="text-destructive" />
                   )}
-                  <span className={`text-xs font-medium ${cashFlow.net > 0 ? "text-success" : "text-destructive"}`}>
+                  <span className={`text-xs font-medium tabular-nums ${cashFlow.net > 0 ? "text-success" : "text-destructive"}`}>
                     {cashFlow.net > 0 ? "+" : "−"}
                     {formatCurrency(Math.abs(cashFlow.net))} this month
                   </span>
@@ -226,6 +232,7 @@ const HomePage = () => {
             </div>
           </GlassCard>
         </motion.div>
+
 
         {/* Account Cards */}
         <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
