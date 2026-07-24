@@ -282,7 +282,9 @@ const Onboarding = () => {
           <SingleInput
             value={form.address_street}
             onChange={(v) => set("address_street", v)}
+            onEnter={next}
             placeholder="Street address"
+
             autoComplete="street-address"
           />
           <SingleInput
