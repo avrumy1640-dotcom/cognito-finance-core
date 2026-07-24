@@ -72,6 +72,10 @@ const INCOME_BANDS = [
   "$100,000 – $250,000", "$250,000 – $500,000", "Over $500,000",
 ];
 const REQUIRES_TAX_ID = new Set(["US", "CA", "GB", "DE", "FR", "ES", "IT", "NL", "AU"]);
+const DIAL_CODES: Record<string, string> = {
+  US: "+1", CA: "+1", GB: "+44", DE: "+49", FR: "+33", ES: "+34", IT: "+39",
+  NL: "+31", MX: "+52", BR: "+55", AU: "+61", JP: "+81", SG: "+65", AE: "+971",
+};
 
 type StepDef = {
   id: string;
