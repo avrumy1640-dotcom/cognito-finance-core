@@ -512,6 +512,7 @@ const Onboarding = () => {
     const idx = stepRef.current;
     const cur = list[idx];
     if (!cur.valid()) { toast.error(validationMessage(cur.id)); return; }
+    toast.dismiss();
     if (idx < list.length - 1) setStep(idx + 1);
     else await finish();
   };
