@@ -116,7 +116,7 @@ const VerifyIdentity = () => {
       if (raw) {
         const parsed = JSON.parse(raw) as { form?: Partial<FormState>; step?: number; showIntro?: boolean };
         if (parsed.form) {
-          const { password: _p, id_number: _i, ssn_last4: _s, date_of_birth: _d, ...safe } =
+          const { password: _p, id_number: _i, date_of_birth: _d, ...safe } =
             parsed.form as Partial<FormState> & Record<string, unknown>;
           setForm((f) => ({ ...f, ...(safe as Partial<FormState>) }));
         }
@@ -132,7 +132,7 @@ const VerifyIdentity = () => {
   useEffect(() => {
     if (!hydratedRef.current) return;
     try {
-      const { password: _p, id_number: _i, ssn_last4: _s, date_of_birth: _d, ...safeForm } = form;
+      const { password: _p, id_number: _i, date_of_birth: _d, ...safeForm } = form;
       localStorage.setItem(draftKey(user?.id), JSON.stringify({ form: safeForm, step, showIntro }));
     } catch { /* quota — ignore */ }
   }, [form, step, showIntro, user?.id]);
