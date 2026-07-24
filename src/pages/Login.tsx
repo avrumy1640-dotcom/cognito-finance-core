@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Eye, EyeOff, HelpCircle, ArrowRight, ArrowLeft } from "lucide-react";
@@ -15,6 +15,7 @@ interface Props {
 const Login = ({ initialMode = "signin" }: Props) => {
   const navigate = useNavigate();
   const location = useLocation() as { state?: { from?: string } };
+  const [searchParams] = useSearchParams();
   const { signIn, signUp, sendPasswordReset } = useAuth();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
@@ -22,11 +23,16 @@ const Login = ({ initialMode = "signin" }: Props) => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const redirectTarget = location.state?.from && location.state.from !== "/login" ? location.state.from : "/";
+  // Preserve the OAuth consent URL (or any other same-origin next) through login.
+  const nextParam = searchParams.get("next");
+  const safeNext = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
+  const redirectTarget = safeNext ?? (location.state?.from && location.state.from !== "/login" ? location.state.from : "/");
 
   const setModeAndUrl = (m: Mode) => {
     setMode(m);
-    navigate(m === "signin" ? "/login" : "/signup", { replace: true, state: location.state });
+    const base = m === "signin" ? "/login" : "/signup";
+    const url = safeNext ? `${base}?next=${encodeURIComponent(safeNext)}` : base;
+    navigate(url, { replace: true, state: location.state });
   };
 
   const submit = async () => {

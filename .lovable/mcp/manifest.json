@@ -1,0 +1,244 @@
+{
+  "version": 1,
+  "sdk_version": "0.24.0",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://bbifvngdfeloitfubcnh.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "glass-bank-mcp",
+      "version": "0.1.0",
+      "title": "Glass Bank"
+    },
+    "tools": [
+      {
+        "name": "get_profile",
+        "title": "Get my profile",
+        "description": "Fetch the signed-in user's banking profile (name, contact, address, account type).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_kyc_status",
+        "title": "Get KYC status",
+        "description": "Return the signed-in user's identity-verification (KYC) status and submitted details.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_beneficiaries",
+        "title": "List beneficiaries",
+        "description": "List the signed-in user's saved beneficiaries (people and accounts they send money to).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "favorites_only": {
+              "description": "Only return favorite beneficiaries.",
+              "type": "boolean"
+            },
+            "limit": {
+              "description": "Max rows to return (default 50).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_payment_requests",
+        "title": "List payment requests",
+        "description": "List payment requests the signed-in user created, optionally filtered by status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "paid",
+                "cancelled",
+                "expired"
+              ]
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_payment_request",
+        "title": "Create payment request",
+        "description": "Create a new payment request (invoice) from the signed-in user to a payer.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "amount_cents": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Amount in minor currency units (e.g. cents)."
+            },
+            "currency": {
+              "description": "ISO currency code, defaults to USD.",
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3
+            },
+            "payer_email": {
+              "type": "string",
+              "format": "email",
+              "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            },
+            "payer_name": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "expires_at": {
+              "description": "ISO timestamp when the request expires.",
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            }
+          },
+          "required": [
+            "amount_cents"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_scheduled_transfers",
+        "title": "List scheduled transfers",
+        "description": "List the signed-in user's upcoming and past scheduled transfers.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_support_tickets",
+        "title": "List support tickets",
+        "description": "List the signed-in user's support tickets with status and priority.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_support_ticket",
+        "title": "Create support ticket",
+        "description": "Open a new support ticket on behalf of the signed-in user.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 200
+            },
+            "body": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 4000
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "account",
+                "payments",
+                "cards",
+                "kyc",
+                "security",
+                "other"
+              ]
+            },
+            "priority": {
+              "type": "string",
+              "enum": [
+                "low",
+                "normal",
+                "high",
+                "urgent"
+              ]
+            }
+          },
+          "required": [
+            "subject",
+            "body"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
