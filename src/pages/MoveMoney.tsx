@@ -121,11 +121,14 @@ const MoveMoney = () => {
         <AnimatePresence>
           {selected === "transfer" && <TransferSheet onClose={() => setSelected(null)} />}
           {selected === "send" && <SendMoneySheet onClose={() => setSelected(null)} />}
-          {selected === "deposit" && <DepositSheet onClose={() => setSelected(null)} />}
           {selected === "bills" && <BillPaySheet onClose={() => setSelected(null)} />}
           {selected === "external" && <ExternalTransferSheet onClose={() => setSelected(null)} />}
           {selected === "wire" && <WireSheet onClose={() => setSelected(null)} />}
-          {selected === "add" && <AddMoneySheet onClose={() => setSelected(null)} onPick={(id) => setSelected(id)} />}
+          {selected === "add" && (
+            <Sheet onClose={() => setSelected(null)}>
+              <AddMoneyPanel onDone={() => setSelected(null)} />
+            </Sheet>
+          )}
         </AnimatePresence>
       </div>
     </AppLayout>
