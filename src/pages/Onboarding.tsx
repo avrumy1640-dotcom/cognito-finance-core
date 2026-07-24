@@ -701,8 +701,9 @@ const SingleInput = ({
   }, [autoFocus]);
 
   const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") { e.preventDefault(); onEnter(); }
+    if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); }
   };
+
 
   return (
     <input
