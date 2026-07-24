@@ -261,103 +261,59 @@ const Onboarding = () => {
       ),
     });
 
-    // 6. Currency
+    // Currency defaults to USD and is editable later in Settings — no longer
+    // asked here to shave a step off the pre-KYC path.
+
+    // Address — combined into one screen (street/city/region/postal). Multiple
+    // inputs on the same topic is the Chime/Revolut standard; still one topic
+    // per screen.
     list.push({
-      id: "currency",
-      kicker: kicker("Currency"),
-      title: "Your primary currency?",
-      subtitle: "You can add other currencies later.",
-      valid: () => !!form.preferred_currency,
-      autoAdvance: true,
+      id: "address",
+      kicker: kicker("Address"),
+      title: "Where do you live?",
+      subtitle: "Where you receive mail today.",
+      valid: () =>
+        form.address_street.trim().length > 2 &&
+        form.address_city.trim().length > 1 &&
+        form.address_region.trim().length > 0 &&
+        form.address_postal_code.trim().length > 2,
       render: ({ next }) => (
-        <div className="grid grid-cols-2 gap-2.5">
-          {CURRENCIES.map(([c, sym, name]) => {
-            const active = form.preferred_currency === c;
-            return (
-              <button
-                key={c}
-                onClick={() => { set("preferred_currency", c); setTimeout(next, 220); }}
-                className={`p-4 rounded-2xl border-2 transition-all text-left ${
-                  active ? "border-primary bg-primary/5" : "border-border/60 bg-card"
-                }`}
-              >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-semibold mb-2 ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
-                  {sym}
-                </div>
-                <div className="text-sm font-semibold text-foreground">{c}</div>
-                <div className="text-[11px] text-muted-foreground">{name}</div>
-              </button>
-            );
-          })}
+        <div className="space-y-3">
+          <SingleInput
+            value={form.address_street}
+            onChange={(v) => set("address_street", v)}
+            placeholder="Street address"
+            autoComplete="street-address"
+          />
+          <SingleInput
+            value={form.address_city}
+            onChange={(v) => set("address_city", v)}
+            placeholder="City"
+            autoComplete="address-level2"
+            autoFocus={false}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <SingleInput
+              value={form.address_region}
+              onChange={(v) => set("address_region", v)}
+              placeholder="State / region"
+              autoComplete="address-level1"
+              autoFocus={false}
+            />
+            <SingleInput
+              value={form.address_postal_code}
+              onChange={(v) => set("address_postal_code", v)}
+              onEnter={next}
+              placeholder="Postal code"
+              autoComplete="postal-code"
+              autoFocus={false}
+            />
+          </div>
         </div>
       ),
     });
 
-    // 7-10. Address (one question per screen)
-    list.push({
-      id: "street",
-      kicker: kicker("Address"),
-      title: "Your street address?",
-      subtitle: "Where you receive mail today.",
-      valid: () => form.address_street.trim().length > 2,
-      render: ({ next }) => (
-        <SingleInput
-          value={form.address_street}
-          onChange={(v) => set("address_street", v)}
-          onEnter={next}
-          placeholder="123 Market St, Apt 4B"
-          autoComplete="street-address"
-        />
-      ),
-    });
-    list.push({
-      id: "city",
-      kicker: kicker("City"),
-      title: "Which city?",
-      valid: () => form.address_city.trim().length > 1,
-      render: ({ next }) => (
-        <SingleInput
-          value={form.address_city}
-          onChange={(v) => set("address_city", v)}
-          onEnter={next}
-          placeholder="San Francisco"
-          autoComplete="address-level2"
-        />
-      ),
-    });
-    list.push({
-      id: "region",
-      kicker: kicker("Region"),
-      title: "State or region?",
-      valid: () => form.address_region.trim().length > 0,
-      render: ({ next }) => (
-        <SingleInput
-          value={form.address_region}
-          onChange={(v) => set("address_region", v)}
-          onEnter={next}
-          placeholder="California"
-          autoComplete="address-level1"
-        />
-      ),
-    });
-    list.push({
-      id: "postal",
-      kicker: kicker("Postal code"),
-      title: "Postal code?",
-      valid: () => form.address_postal_code.trim().length > 2,
-      render: ({ next }) => (
-        <SingleInput
-          value={form.address_postal_code}
-          onChange={(v) => set("address_postal_code", v)}
-          onEnter={next}
-          placeholder="94103"
-          autoComplete="postal-code"
-          inputMode="text"
-        />
-      ),
-    });
-
-    // 11. Occupation
+    // Occupation
     list.push({
       id: "occupation",
       kicker: kicker("Work"),
@@ -373,24 +329,9 @@ const Onboarding = () => {
       ),
     });
 
-    // 12. Employer (optional, skippable)
-    list.push({
-      id: "employer",
-      kicker: kicker("Employer"),
-      title: isBusiness ? "Trading / doing-business-as name?" : "Who do you work for?",
-      subtitle: "Optional — tap Skip if you'd rather not say.",
-      valid: () => true,
-      render: ({ next }) => (
-        <SingleInput
-          value={form.employer}
-          onChange={(v) => set("employer", v)}
-          onEnter={next}
-          placeholder={isBusiness ? "DBA name" : "Acme Inc."}
-        />
-      ),
-    });
+    // Employer moved to Settings > Personal Info — not required pre-KYC.
 
-    // 13. Income
+    // Income
     list.push({
       id: "income",
       kicker: kicker("Income"),
@@ -407,7 +348,7 @@ const Onboarding = () => {
       ),
     });
 
-    // 14. Source of funds
+    // Source of funds
     list.push({
       id: "source",
       kicker: kicker("Source of funds"),
@@ -424,26 +365,16 @@ const Onboarding = () => {
       ),
     });
 
-    // 15-16. Tax
+    // Tax ID — tax residency defaults to residence country. Users with
+    // multi-jurisdiction obligations can edit it later in Settings.
     if (needsTax) {
-      list.push({
-        id: "tax_country",
-        kicker: kicker("Tax residency"),
-        title: "Which country are you a tax resident of?",
-        valid: () => form.tax_country.trim().length === 2,
-        autoAdvance: true,
-        render: ({ next }) => (
-          <ChoiceList
-            items={COUNTRIES.map(([c, l, flag]) => ({ id: c, label: l, prefix: flag }))}
-            value={form.tax_country}
-            onChange={(v) => { set("tax_country", v); setTimeout(next, 220); }}
-          />
-        ),
-      });
+      const taxCountry = form.tax_country || form.country || "US";
+      // Persist the inferred tax country so downstream KYC has it.
+      if (form.tax_country !== taxCountry) set("tax_country", taxCountry);
       list.push({
         id: "tax_id",
-        kicker: kicker(form.tax_country === "US" ? "SSN" : "Tax ID"),
-        title: form.tax_country === "US" ? "What's your SSN or ITIN?" : "What's your tax ID number?",
+        kicker: kicker(taxCountry === "US" ? "SSN" : "Tax ID"),
+        title: taxCountry === "US" ? "What's your SSN or ITIN?" : "What's your tax ID number?",
         subtitle: "Encrypted end-to-end. Used only for regulatory reporting.",
         valid: () => form.tax_id_number.trim().length > 3,
         render: ({ next }) => (
@@ -451,13 +382,14 @@ const Onboarding = () => {
             value={form.tax_id_number}
             onChange={(v) => set("tax_id_number", v)}
             onEnter={next}
-            placeholder={form.tax_country === "US" ? "•••-••-••••" : "Tax ID"}
+            placeholder={taxCountry === "US" ? "•••-••-••••" : "Tax ID"}
             autoComplete="off"
             secure
           />
         ),
       });
     }
+
 
     // 17. Agreements
     list.push({
