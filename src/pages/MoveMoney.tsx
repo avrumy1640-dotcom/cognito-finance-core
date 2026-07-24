@@ -557,40 +557,6 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const AddMoneySheet = ({ onClose, onPick }: { onClose: () => void; onPick: (id: string) => void }) => (
-  <Sheet onClose={onClose}>
-    <h2 className="text-xl font-display font-bold text-foreground mb-2">Add Money</h2>
-    <p className="text-sm text-muted-foreground mb-5">Fund your Glass Bank account.</p>
-    <div className="space-y-2">
-      {[
-        { id: "direct", label: "Direct Deposit", desc: "Set up recurring paycheck", icon: "💰",
-          run: () => toast.success("Direct deposit form", { description: "Routing 121145307 · Account ending in your linked account" }) },
-        { id: "external", label: "Link External Bank", desc: "ACH pull from another bank", icon: "🏦",
-          run: () => onPick("external") },
-        { id: "deposit", label: "Deposit a Check", desc: "Mobile check deposit", icon: "📸",
-          run: () => onPick("deposit") },
-        { id: "cash", label: "Cash at Retail", desc: "Green Dot locations nationwide", icon: "🧾",
-          run: () => toast.success("Barcode ready", { description: "Show at any Green Dot register to deposit up to $500" }) },
-      ].map((m) => (
-        <GlassCard
-          key={m.label}
-          onClick={m.run}
-          className="flex items-center justify-between py-3"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-xl w-8 text-center">{m.icon}</span>
-            <div>
-              <p className="text-sm font-semibold text-foreground">{m.label}</p>
-              <p className="text-xs text-muted-foreground">{m.desc}</p>
-            </div>
-          </div>
-          <ChevronRight size={16} className="text-muted-foreground" />
-        </GlassCard>
-      ))}
-    </div>
-    <button onClick={onClose} className="w-full mt-5 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Close</button>
-  </Sheet>
-);
 
 const Field = ({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) => (
   <div>
