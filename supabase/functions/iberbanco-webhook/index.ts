@@ -138,9 +138,23 @@ export async function handleWebhook(req: Request): Promise<Response> {
     return json({ error: "storage failed" }, 500);
   }
 
+  // ---- Domain handling -----------------------------------------------------
+  // Only mutate app state after signature + idempotency have passed.
+  let handlerError: string | null = null;
+  try {
+    await applyDomainEffects(supabase, eventType, payload);
+  } catch (err) {
+    handlerError = err instanceof Error ? err.message : String(err);
+    console.error("webhook handler error", handlerError);
+  }
+
   await supabase
     .from("webhook_events")
-    .update({ status: "processed", processed_at: new Date().toISOString() })
+    .update({
+      status: handlerError ? "failed" : "processed",
+      processed_at: new Date().toISOString(),
+      error: handlerError,
+    })
     .eq("id", inserted!.id);
 
   // Audit trail: record that the webhook was processed. actor_id is null
@@ -148,13 +162,92 @@ export async function handleWebhook(req: Request): Promise<Response> {
   await supabase.from("audit_logs").insert({
     actor_id: null,
     actor_email: `webhook:${PROVIDER}`,
-    action: "webhook.processed",
+    action: handlerError ? "webhook.failed" : "webhook.processed",
     entity_type: "webhook_event",
     entity_id: inserted!.id,
-    metadata: { provider: PROVIDER, event_id: eventId, event_type: eventType },
+    metadata: { provider: PROVIDER, event_id: eventId, event_type: eventType, error: handlerError },
   });
 
-  return json({ ok: true, id: inserted!.id });
+  return json({ ok: !handlerError, id: inserted!.id, error: handlerError });
+}
+
+// ---- Domain effect handlers ------------------------------------------------
+// Iberbanco delivers events for KYC status changes, account balance updates,
+// card status changes, and transaction posts. We update the tables the UI
+// reads from, then broadcast on the shared "iberbanco-events" channel so any
+// live client re-syncs immediately instead of waiting for the next poll.
+
+type SupabaseClientLike = ReturnType<typeof createClient>;
+
+async function applyDomainEffects(
+  supabase: SupabaseClientLike,
+  eventType: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const data = (payload.data && typeof payload.data === "object")
+    ? payload.data as Record<string, unknown>
+    : payload;
+  const userNumber = str(data.user_number ?? (data as Record<string, unknown>).userNumber);
+  const t = eventType.toLowerCase();
+
+  if (t.includes("kyc") || t.includes("user.status") || t.includes("user_status")) {
+    const raw = str(data.status ?? data.kyc_status);
+    if (userNumber && raw) {
+      const dbStatus = mapKycStatus(raw);
+      const patch: Record<string, unknown> = {
+        iberbanco_status_raw: raw,
+        status: dbStatus,
+      };
+      if (dbStatus === "verified" || dbStatus === "rejected") {
+        patch.reviewed_at = new Date().toISOString();
+      }
+      if (dbStatus === "rejected") {
+        patch.rejection_reason = str(data.reason ?? data.message) || "Verification denied";
+      } else {
+        patch.rejection_reason = null;
+      }
+      await supabase
+        .from("kyc_profiles")
+        .update(patch)
+        .eq("iberbanco_user_number", userNumber);
+    }
+  }
+
+  // Any transaction / account / card event — fan out to live clients so they
+  // re-pull fresh state from Iberbanco. We don't cache Iberbanco's ledger in
+  // Postgres, so the ledger stays authoritative on their side; the broadcast
+  // just tells the app to refresh instead of waiting on the poll interval.
+  if (
+    t.includes("transaction") ||
+    t.includes("account") ||
+    t.includes("card") ||
+    t.includes("balance")
+  ) {
+    try {
+      const channel = supabase.channel("iberbanco-events");
+      await channel.send({
+        type: "broadcast",
+        event: eventType,
+        payload: { user_number: userNumber, data },
+      });
+      await supabase.removeChannel(channel);
+    } catch (err) {
+      console.warn("broadcast failed", err);
+    }
+  }
+}
+
+function str(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  return typeof v === "string" ? v : String(v);
+}
+
+function mapKycStatus(raw: string): "verified" | "pending" | "rejected" | "unverified" {
+  const r = raw.toLowerCase();
+  if (r.includes("approv") || r.includes("verif") || r.includes("active") || r.includes("success")) return "verified";
+  if (r.includes("reject") || r.includes("denied") || r.includes("declin") || r.includes("fail")) return "rejected";
+  if (r.includes("pending") || r.includes("review")) return "pending";
+  return "unverified";
 }
 
 if (import.meta.main) Deno.serve(handleWebhook);
