@@ -7,8 +7,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
-const DEFAULT_BASE = "https://api.iberbanco.dev/api/v2";
-const BASE = Deno.env.get("IBERBANCO_BASE_URL") || DEFAULT_BASE;
+// Base URL must be provided per environment — no hardcoded default so going
+// live is a secrets swap, not a code change.
+const BASE = Deno.env.get("IBERBANCO_BASE_URL") || "";
 
 let cachedToken: string | null = null;
 let cachedUsername: string | null = null;
@@ -21,6 +22,7 @@ async function sha256Hex(input: string): Promise<string> {
 }
 
 async function auth(): Promise<{ token: string; username: string }> {
+  if (!BASE) throw new Error("IBERBANCO_BASE_URL not configured");
   const username = Deno.env.get("IBERBANCO_AGENT_USERNAME") || "";
   const password = Deno.env.get("IBERBANCO_AGENT_PASSWORD") || "";
   if (!username || !password) throw new Error("IBERBANCO_AGENT_USERNAME / IBERBANCO_AGENT_PASSWORD not configured");
