@@ -77,12 +77,12 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
               <Route path="/onboarding" element={<Guarded><Onboarding /></Guarded>} />
-              <Route path="/" element={<Guarded><Index /></Guarded>} />
-              <Route path="/receive" element={<Guarded><ReceiveMoney /></Guarded>} />
-              <Route path="/move-money" element={<Guarded><MoveMoney /></Guarded>} />
-              <Route path="/move-money/:action" element={<Guarded><MoveMoney /></Guarded>} />
-              <Route path="/cards" element={<Guarded><Cards /></Guarded>} />
-              <Route path="/activity" element={<Guarded><Activity /></Guarded>} />
+              <Route path="/" element={<Banking><Index /></Banking>} />
+              <Route path="/receive" element={<Banking><ReceiveMoney /></Banking>} />
+              <Route path="/move-money" element={<Banking><MoveMoney /></Banking>} />
+              <Route path="/move-money/:action" element={<Banking><MoveMoney /></Banking>} />
+              <Route path="/cards" element={<Banking><Cards /></Banking>} />
+              <Route path="/activity" element={<Banking><Activity /></Banking>} />
               <Route path="/profile" element={<Guarded><Profile /></Guarded>} />
               <Route path="/profile/personal" element={<Guarded><PersonalInfo /></Guarded>} />
               <Route path="/profile/verify" element={<Guarded><VerifyIdentity /></Guarded>} />
@@ -91,20 +91,20 @@ const App = () => (
               <Route path="/profile/identity" element={<Guarded><PersonalInfo /></Guarded>} />
               <Route path="/profile/employment" element={<Guarded><PersonalInfo /></Guarded>} />
               <Route path="/profile/linked" element={<Guarded><PersonalInfo /></Guarded>} />
-              <Route path="/transaction/:id" element={<Guarded><TransactionDetail /></Guarded>} />
-              <Route path="/account/:type" element={<Guarded><AccountDetail /></Guarded>} />
+              <Route path="/transaction/:id" element={<Banking><TransactionDetail /></Banking>} />
+              <Route path="/account/:type" element={<Banking><AccountDetail /></Banking>} />
               <Route path="/security" element={<Guarded><SecurityCenter /></Guarded>} />
               <Route path="/notifications" element={<Guarded><Notifications /></Guarded>} />
               <Route path="/notifications/settings" element={<Guarded><Notifications /></Guarded>} />
               <Route path="/help" element={<Guarded><HelpCenter /></Guarded>} />
               <Route path="/help/contact" element={<Guarded><HelpCenter /></Guarded>} />
-              <Route path="/insights" element={<Guarded><SpendingInsights /></Guarded>} />
+              <Route path="/insights" element={<Banking><SpendingInsights /></Banking>} />
               <Route path="/settings" element={<Guarded><Settings /></Guarded>} />
               <Route path="/support" element={<Guarded><Support /></Guarded>} />
               <Route path="/support/:id" element={<Guarded><SupportTicket /></Guarded>} />
-              <Route path="/beneficiaries" element={<Guarded><Beneficiaries /></Guarded>} />
-              <Route path="/payment-requests" element={<Guarded><PaymentRequests /></Guarded>} />
-              <Route path="/scheduled" element={<Guarded><ScheduledTransfers /></Guarded>} />
+              <Route path="/beneficiaries" element={<Banking><Beneficiaries /></Banking>} />
+              <Route path="/payment-requests" element={<Banking><PaymentRequests /></Banking>} />
+              <Route path="/scheduled" element={<Banking><ScheduledTransfers /></Banking>} />
               <Route path="/admin" element={<Guarded><RequireAdmin allow={["admin","support","compliance"]}><AdminLayout /></RequireAdmin></Guarded>}>
                 <Route index element={<AdminDashboard />} />
                 <Route path="customers" element={<AdminCustomers />} />
