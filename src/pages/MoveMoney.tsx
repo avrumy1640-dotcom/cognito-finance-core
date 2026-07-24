@@ -7,7 +7,6 @@ import GlassCard from "@/components/glass/GlassCard";
 import {
   ArrowLeftRight,
   Send,
-  Camera,
   Receipt,
   Plus,
   Globe,
@@ -17,6 +16,7 @@ import {
   QrCode,
   CalendarClock,
 } from "lucide-react";
+import AddMoneyPanel from "@/components/money/AddMoneyPanel";
 import { useBank } from "@/store/bankStore";
 import { useKyc } from "@/hooks/useKyc";
 import RequireKyc from "@/components/RequireKyc";
