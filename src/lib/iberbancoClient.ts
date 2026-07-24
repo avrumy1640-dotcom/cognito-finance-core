@@ -172,6 +172,24 @@ export const iberbancoApi = {
     delivery_method?: "Standard" | "Registered";
     product_type?: string;
   }) => call<IberCard>({ path: "/cards/create", method: "POST", body: args }),
+
+  // Debit-card / hosted-payment funding via Iberbanco's payment gateway.
+  // When the gateway feature is enabled on the agent, the response carries a
+  // hosted checkout URL the client must open. If Iberbanco returns an error
+  // (feature disabled, unsupported currency, KYC gap) we surface it as-is so
+  // the UI can tell the user honestly.
+  createGatewayDeposit: (args: {
+    user_number: string;
+    account_number: string;   // destination account_special_number
+    amount: number;           // whole units
+    currency: number;         // Iberbanco currency id (1=USD, 2=EUR)
+    reference?: string;
+    return_url?: string;
+  }) => call<{ redirect_url?: string; payment_url?: string; url?: string; status?: string; reference?: string }>({
+    path: "/gateway/deposit",
+    method: "POST",
+    body: args,
+  }),
 };
 
 // ---- Currency helpers ----
