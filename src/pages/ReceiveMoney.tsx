@@ -144,26 +144,47 @@ const ReceiveMoney = () => {
 
         <GlassCard className="space-y-3">
           <DetailRow
-            label="Account number"
-            value={fullAccountNumber}
-            onCopy={() => copy(fullAccountNumber, "account")}
-            copied={copied === "account"}
-          />
-          <DetailRow
-            label="Routing number"
-            value={acc.routingNumber}
-            onCopy={() => copy(acc.routingNumber, "routing")}
-            copied={copied === "routing"}
-          />
-          <DetailRow
-            label="Account type"
-            value={acc.name}
-          />
-          <DetailRow
             label="Beneficiary"
-            value={user?.email ?? "Glass Bank customer"}
+            value={beneficiaryName}
+          />
+          {iban ? (
+            <DetailRow
+              label="IBAN"
+              value={iban}
+              onCopy={() => copy(iban, "iban")}
+              copied={copied === "iban"}
+            />
+          ) : (
+            <DetailRow
+              label="Account number"
+              value={fullAccountNumber}
+              onCopy={() => copy(fullAccountNumber, "account")}
+              copied={copied === "account"}
+            />
+          )}
+          {!iban && (
+            <DetailRow
+              label="Routing number"
+              value={acc.routingNumber}
+              onCopy={() => copy(acc.routingNumber, "routing")}
+              copied={copied === "routing"}
+            />
+          )}
+          <DetailRow
+            label="Currency"
+            value={currency}
+          />
+          <DetailRow
+            label="Reference (required)"
+            value={details?.reference || fullAccountNumber}
+            onCopy={() => copy(details?.reference || fullAccountNumber, "reference")}
+            copied={copied === "reference"}
           />
         </GlassCard>
+
+        <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+          The sender must include the reference exactly as shown — that's how the deposit gets credited to your account.
+        </p>
 
         <div>
           <h2 className="text-section-title mb-3">Request a specific amount (optional)</h2>
