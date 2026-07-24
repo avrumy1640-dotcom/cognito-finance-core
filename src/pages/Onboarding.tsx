@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, KeyboardEvent, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, ReactNode, KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -16,38 +16,60 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
+/* ============================================================================
+ * Onboarding — reducer-driven state machine.
+ *
+ * Design contract (to prevent the class of bug we hit before):
+ *   1. ONE reducer owns everything: step index, form data, saving flag,
+ *      hydration flag. Nothing outside the reducer can mutate step index.
+ *   2. Steps only advance on an explicit user action: Continue click or Enter
+ *      submit on the form. No setTimeout auto-advance from option selection.
+ *   3. Selecting an option (radio/choice) ONLY writes the field. It never
+ *      dispatches NEXT.
+ *   4. The Continue button is disabled unless the current step's validator
+ *      returns null. That's the single source of truth for advance-ability.
+ *   5. Data persists to `profiles` on every NEXT (best-effort) so a refresh
+ *      resumes at the last completed step, hydrated from the row.
+ * ========================================================================== */
+
 type AccountType = "personal" | "business";
 
-interface FormState {
+interface Data {
   account_type: AccountType | "";
   business_name: string;
   first_name: string;
   last_name: string;
   phone: string;
   country: string;
-  preferred_currency: string;
   address_street: string;
   address_city: string;
   address_region: string;
   address_postal_code: string;
   occupation: string;
-  employer: string;
   annual_income: string;
   source_of_funds: string;
-  tax_country: string;
   tax_id_number: string;
   tos: boolean;
   privacy: boolean;
 }
 
-const EMPTY: FormState = {
-  account_type: "", business_name: "",
-  first_name: "", last_name: "", phone: "",
-  country: "", preferred_currency: "",
-  address_street: "", address_city: "", address_region: "", address_postal_code: "",
-  occupation: "", employer: "", annual_income: "", source_of_funds: "",
-  tax_country: "", tax_id_number: "",
-  tos: false, privacy: false,
+const EMPTY: Data = {
+  account_type: "",
+  business_name: "",
+  first_name: "",
+  last_name: "",
+  phone: "",
+  country: "",
+  address_street: "",
+  address_city: "",
+  address_region: "",
+  address_postal_code: "",
+  occupation: "",
+  annual_income: "",
+  source_of_funds: "",
+  tax_id_number: "",
+  tos: false,
+  privacy: false,
 };
 
 const COUNTRIES: [string, string, string][] = [
@@ -56,12 +78,6 @@ const COUNTRIES: [string, string, string][] = [
   ["IT", "Italy", "🇮🇹"], ["NL", "Netherlands", "🇳🇱"], ["MX", "Mexico", "🇲🇽"],
   ["BR", "Brazil", "🇧🇷"], ["AU", "Australia", "🇦🇺"], ["JP", "Japan", "🇯🇵"],
   ["SG", "Singapore", "🇸🇬"], ["AE", "United Arab Emirates", "🇦🇪"],
-];
-const CURRENCIES: [string, string, string][] = [
-  ["USD", "$", "US Dollar"], ["EUR", "€", "Euro"], ["GBP", "£", "British Pound"],
-  ["CAD", "$", "Canadian Dollar"], ["AUD", "$", "Australian Dollar"], ["JPY", "¥", "Japanese Yen"],
-  ["SGD", "$", "Singapore Dollar"], ["AED", "د.إ", "UAE Dirham"], ["BRL", "R$", "Brazilian Real"],
-  ["MXN", "$", "Mexican Peso"],
 ];
 const SOURCES = [
   "Employment income", "Business income", "Investment income", "Savings",
@@ -77,454 +93,531 @@ const DIAL_CODES: Record<string, string> = {
   NL: "+31", MX: "+52", BR: "+55", AU: "+61", JP: "+81", SG: "+65", AE: "+971",
 };
 
-type StepDef = {
+/* ------------------------- Step config ------------------------------------ */
+
+type Step = {
   id: string;
   kicker: string;
   title: string;
   subtitle?: string;
-  valid: () => boolean;
-  autoAdvance?: boolean;
-  render: (helpers: { next: () => void }) => ReactNode;
+  /** Return null if the step's data is valid, else an error message. */
+  validate: (d: Data) => string | null;
+  render: (ctx: {
+    data: Data;
+    setField: <K extends keyof Data>(k: K, v: Data[K]) => void;
+    submit: () => void;
+  }) => ReactNode;
 };
+
+function buildSteps(data: Data): Step[] {
+  const isBusiness = data.account_type === "business";
+  const needsTax = REQUIRES_TAX_ID.has(data.country);
+  const list: Step[] = [];
+  let n = 0;
+  const kicker = (label: string) => `${String(++n).padStart(2, "0")} · ${label}`;
+
+  list.push({
+    id: "account_type",
+    kicker: kicker("Account"),
+    title: "How will you use Glass Bank?",
+    validate: (d) => (d.account_type ? null : "Choose Personal or Business to continue."),
+    render: ({ data, setField }) => (
+      <div className="space-y-3">
+        {([
+          { key: "personal", label: "Personal", icon: UserIcon, desc: "Everyday spending, saving, transfers" },
+          { key: "business", label: "Business", icon: Building2, desc: "Company payments, payroll, invoicing" },
+        ] as const).map((opt) => {
+          const active = data.account_type === opt.key;
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setField("account_type", opt.key)}
+              className={`w-full p-5 rounded-2xl text-left border-2 transition-all flex items-center gap-4 ${
+                active ? "border-primary bg-primary/5" : "border-border/60 bg-card hover:border-border"
+              }`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
+                <opt.icon size={22} />
+              </div>
+              <div className="flex-1">
+                <div className="text-base font-semibold text-foreground">{opt.label}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
+              </div>
+              {active && <Check size={20} className="text-primary" strokeWidth={2.5} />}
+            </button>
+          );
+        })}
+      </div>
+    ),
+  });
+
+  if (isBusiness) {
+    list.push({
+      id: "business_name",
+      kicker: kicker("Business"),
+      title: "What's your business called?",
+      subtitle: "Use the exact legal name on your registration.",
+      validate: (d) => (d.business_name.trim().length > 1 ? null : "Enter your legal business name."),
+      render: ({ data, setField, submit }) => (
+        <TextInput
+          value={data.business_name}
+          onChange={(v) => setField("business_name", v)}
+          onEnter={submit}
+          placeholder="Acme, Inc."
+          autoComplete="organization"
+        />
+      ),
+    });
+  }
+
+  list.push({
+    id: "name",
+    kicker: kicker("Name"),
+    title: "What's your legal name?",
+    subtitle: "Match your government-issued ID exactly.",
+    validate: (d) =>
+      d.first_name.trim().length > 0 && d.last_name.trim().length > 0
+        ? null
+        : "Enter both your first and last legal name.",
+    render: ({ data, setField, submit }) => (
+      <div className="space-y-3">
+        <TextInput
+          value={data.first_name}
+          onChange={(v) => setField("first_name", v)}
+          placeholder="First name"
+          autoComplete="given-name"
+        />
+        <TextInput
+          value={data.last_name}
+          onChange={(v) => setField("last_name", v)}
+          onEnter={submit}
+          placeholder="Last name"
+          autoComplete="family-name"
+          autoFocus={false}
+        />
+      </div>
+    ),
+  });
+
+  list.push({
+    id: "phone",
+    kicker: kicker("Phone"),
+    title: "What's your mobile number?",
+    subtitle: "We use it for security codes and account alerts.",
+    validate: (d) => {
+      const digits = d.phone.replace(/\D/g, "");
+      return digits.length >= 8 && digits.length <= 15 ? null : "Enter a valid mobile number.";
+    },
+    render: ({ data, setField, submit }) => (
+      <PhoneInput
+        value={data.phone}
+        defaultCountry={data.country || "US"}
+        onChange={(v) => setField("phone", v)}
+        onEnter={submit}
+      />
+    ),
+  });
+
+  list.push({
+    id: "country",
+    kicker: kicker("Country"),
+    title: "Where do you live?",
+    validate: (d) => (d.country ? null : "Choose your country of residence."),
+    render: ({ data, setField }) => (
+      <ChoiceList
+        items={COUNTRIES.map(([c, l, flag]) => ({ id: c, label: l, prefix: flag }))}
+        value={data.country}
+        onChange={(v) => setField("country", v)}
+      />
+    ),
+  });
+
+  list.push({
+    id: "address",
+    kicker: kicker("Address"),
+    title: "What's your address?",
+    subtitle: "Where you receive mail today.",
+    validate: (d) =>
+      d.address_street.trim().length > 2 &&
+      d.address_city.trim().length > 1 &&
+      d.address_region.trim().length > 0 &&
+      d.address_postal_code.trim().length > 2
+        ? null
+        : "Complete your street, city, state or region, and postal code.",
+    render: ({ data, setField, submit }) => (
+      <div className="space-y-3">
+        <TextInput
+          value={data.address_street}
+          onChange={(v) => setField("address_street", v)}
+          placeholder="Street address"
+          autoComplete="street-address"
+        />
+        <TextInput
+          value={data.address_city}
+          onChange={(v) => setField("address_city", v)}
+          placeholder="City"
+          autoComplete="address-level2"
+          autoFocus={false}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <TextInput
+            value={data.address_region}
+            onChange={(v) => setField("address_region", v)}
+            placeholder="State / region"
+            autoComplete="address-level1"
+            autoFocus={false}
+          />
+          <TextInput
+            value={data.address_postal_code}
+            onChange={(v) => setField("address_postal_code", v)}
+            onEnter={submit}
+            placeholder="Postal code"
+            autoComplete="postal-code"
+            autoFocus={false}
+          />
+        </div>
+      </div>
+    ),
+  });
+
+  list.push({
+    id: "occupation",
+    kicker: kicker("Work"),
+    title: isBusiness ? "What does your business do?" : "What do you do for work?",
+    validate: (d) => (d.occupation.trim().length > 1 ? null : "Enter your occupation."),
+    render: ({ data, setField, submit }) => (
+      <TextInput
+        value={data.occupation}
+        onChange={(v) => setField("occupation", v)}
+        onEnter={submit}
+        placeholder={isBusiness ? "Retail, SaaS, Consulting…" : "Software Engineer"}
+      />
+    ),
+  });
+
+  list.push({
+    id: "income",
+    kicker: kicker("Income"),
+    title: "Estimated annual income?",
+    subtitle: "Ballpark is fine.",
+    validate: (d) => (d.annual_income ? null : "Choose an estimated income range."),
+    render: ({ data, setField }) => (
+      <ChoiceList
+        items={INCOME_BANDS.map((b) => ({ id: b, label: b }))}
+        value={data.annual_income}
+        onChange={(v) => setField("annual_income", v)}
+      />
+    ),
+  });
+
+  list.push({
+    id: "source",
+    kicker: kicker("Source of funds"),
+    title: "Where will your money come from?",
+    subtitle: "Helps us keep everyone's accounts safe.",
+    validate: (d) => (d.source_of_funds ? null : "Choose your source of funds."),
+    render: ({ data, setField }) => (
+      <ChoiceList
+        items={SOURCES.map((s) => ({ id: s, label: s }))}
+        value={data.source_of_funds}
+        onChange={(v) => setField("source_of_funds", v)}
+      />
+    ),
+  });
+
+  if (needsTax) {
+    const isUs = data.country === "US";
+    list.push({
+      id: "tax_id",
+      kicker: kicker(isUs ? "SSN" : "Tax ID"),
+      title: isUs ? "What's your SSN or ITIN?" : "What's your tax ID number?",
+      subtitle: "Encrypted end-to-end. Used only for regulatory reporting.",
+      validate: (d) => (d.tax_id_number.trim().length > 3 ? null : "Enter your tax ID number."),
+      render: ({ data, setField, submit }) => (
+        <TextInput
+          value={data.tax_id_number}
+          onChange={(v) => setField("tax_id_number", v)}
+          onEnter={submit}
+          placeholder={isUs ? "•••-••-••••" : "Tax ID"}
+          autoComplete="off"
+          secure
+        />
+      ),
+    });
+  }
+
+  list.push({
+    id: "agreements",
+    kicker: kicker("Agreements"),
+    title: "Review and agree",
+    subtitle: "One last step before we verify your identity.",
+    validate: (d) => (d.tos && d.privacy ? null : "Agree to the Terms and Privacy Policy to finish."),
+    render: ({ data, setField }) => (
+      <div className="space-y-3">
+        {[
+          { key: "tos" as const, label: "Terms of Service", desc: "How Glass Bank works and what to expect from us." },
+          { key: "privacy" as const, label: "Privacy Policy", desc: "How we collect, store, and protect your data." },
+        ].map((it) => {
+          const active = data[it.key];
+          return (
+            <label
+              key={it.key}
+              className={`w-full flex items-start gap-3 p-4 rounded-2xl text-left border-2 transition-all cursor-pointer ${
+                active ? "border-primary bg-primary/5" : "border-border/60 bg-card"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={active}
+                onChange={(e) => setField(it.key, e.target.checked)}
+                className="sr-only"
+                aria-label={`I agree to the ${it.label}`}
+              />
+              <span className={`w-6 h-6 rounded-md border-2 flex items-center justify-center mt-0.5 shrink-0 ${active ? "border-primary bg-primary" : "border-border"}`}>
+                {active && <Check size={14} className="text-primary-foreground" strokeWidth={3} />}
+              </span>
+              <span className="flex-1">
+                <span className="block text-sm font-semibold text-foreground">I agree to the {it.label}</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">{it.desc}</span>
+              </span>
+            </label>
+          );
+        })}
+        <div className="pt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <Shield size={13} /> Bank-grade encryption. Your data stays yours.
+        </div>
+      </div>
+    ),
+  });
+
+  return list;
+}
+
+/* ------------------------- Reducer ---------------------------------------- */
+
+interface State {
+  hydrated: boolean;
+  showIntro: boolean;
+  stepIndex: number;
+  data: Data;
+  saving: boolean;
+  done: boolean;
+}
+
+type Action =
+  | { type: "HYDRATE"; data: Partial<Data>; stepIndex: number; skipIntro: boolean }
+  | { type: "DISMISS_INTRO" }
+  | { type: "SET_FIELD"; key: keyof Data; value: Data[keyof Data] }
+  | { type: "GOTO"; index: number }
+  | { type: "SAVING"; on: boolean }
+  | { type: "DONE" };
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "HYDRATE":
+      return {
+        ...state,
+        hydrated: true,
+        data: { ...state.data, ...action.data },
+        stepIndex: Math.max(0, action.stepIndex),
+        showIntro: !action.skipIntro,
+      };
+    case "DISMISS_INTRO":
+      return { ...state, showIntro: false };
+    case "SET_FIELD":
+      return { ...state, data: { ...state.data, [action.key]: action.value } };
+    case "GOTO":
+      return { ...state, stepIndex: Math.max(0, action.index) };
+    case "SAVING":
+      return { ...state, saving: action.on };
+    case "DONE":
+      return { ...state, done: true, saving: false };
+    default:
+      return state;
+  }
+}
+
+/* ------------------------- Component -------------------------------------- */
 
 const Onboarding = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [showIntro, setShowIntro] = useState(true);
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState<FormState>(EMPTY);
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [done, setDone] = useState(false);
+  const [state, dispatch] = useReducer(reducer, {
+    hydrated: false,
+    showIntro: true,
+    stepIndex: 0,
+    data: EMPTY,
+    saving: false,
+    done: false,
+  });
 
+  const stepKey = user ? `gb:onboarding:step:${user.id}` : null;
+
+  // Hydrate from profiles + saved step. Runs once per user.
   useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
     (async () => {
-      if (!user) return;
-      const { data } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
-      if (data) {
-        const pn: string = (data.preferred_name || "").trim();
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (cancelled) return;
+
+      let hydrated: Partial<Data> = {};
+      if (prof) {
+        const pn: string = (prof.preferred_name || "").trim();
         const [first, ...rest] = pn.split(/\s+/);
-        setForm((f) => ({
-          ...f,
-          account_type: (data.account_type as AccountType) || "",
-          business_name: data.business_name || "",
+        hydrated = {
+          account_type: (prof.account_type as AccountType) || "",
+          business_name: prof.business_name || "",
           first_name: first || "",
           last_name: rest.join(" ") || "",
-          phone: data.phone || "",
-          country: data.country || "",
-          preferred_currency: data.preferred_currency || "",
-          address_street: data.address_street || "",
-          address_city: data.address_city || "",
-          address_region: data.address_region || "",
-          address_postal_code: data.address_postal_code || "",
-          occupation: data.occupation || "",
-          employer: data.employer || "",
-          annual_income: data.annual_income || "",
-          source_of_funds: data.source_of_funds || "",
-          tax_country: data.tax_country || data.country || "",
-          tax_id_number: data.tax_id_number || "",
-          tos: !!data.tos_accepted_at,
-          privacy: !!data.privacy_accepted_at,
-        }));
+          phone: prof.phone || "",
+          country: prof.country || "",
+          address_street: prof.address_street || "",
+          address_city: prof.address_city || "",
+          address_region: prof.address_region || "",
+          address_postal_code: prof.address_postal_code || "",
+          occupation: prof.occupation || "",
+          annual_income: prof.annual_income || "",
+          source_of_funds: prof.source_of_funds || "",
+          tax_id_number: prof.tax_id_number || "",
+          tos: !!prof.tos_accepted_at,
+          privacy: !!prof.privacy_accepted_at,
+        };
       }
-      setLoading(false);
+
+      // Resume where they were.
+      const stored = stepKey ? Number(localStorage.getItem(stepKey) || "0") : 0;
+      const hasAnyData = Object.values(hydrated).some((v) => v !== "" && v !== false && v != null);
+      dispatch({
+        type: "HYDRATE",
+        data: hydrated,
+        stepIndex: isFinite(stored) ? stored : 0,
+        skipIntro: hasAnyData || stored > 0,
+      });
     })();
+    return () => { cancelled = true; };
+  }, [user, stepKey]);
+
+  const steps = useMemo(() => buildSteps(state.data), [state.data]);
+  const clampedIndex = Math.min(state.stepIndex, steps.length - 1);
+  const current = steps[clampedIndex];
+  const validationError = current?.validate(state.data) ?? null;
+  const canContinue = validationError == null;
+  const isLast = clampedIndex === steps.length - 1;
+
+  // Persist step index whenever it changes.
+  useEffect(() => {
+    if (stepKey && state.hydrated) {
+      localStorage.setItem(stepKey, String(clampedIndex));
+    }
+  }, [stepKey, clampedIndex, state.hydrated]);
+
+  const setField = useCallback(<K extends keyof Data>(key: K, value: Data[K]) => {
+    dispatch({ type: "SET_FIELD", key, value });
+  }, []);
+
+  const saveDraft = useCallback(async (d: Data) => {
+    if (!user) return;
+    // Best-effort partial save; ignore errors so a network blip doesn't block progress.
+    await supabase.from("profiles").upsert(
+      {
+        user_id: user.id,
+        email: user.email,
+        account_type: d.account_type || null,
+        business_name: d.business_name || null,
+        preferred_name: `${d.first_name} ${d.last_name}`.trim() || null,
+        phone: d.phone || null,
+        country: d.country || null,
+        address_street: d.address_street || null,
+        address_city: d.address_city || null,
+        address_region: d.address_region || null,
+        address_postal_code: d.address_postal_code || null,
+        occupation: d.occupation || null,
+        annual_income: d.annual_income || null,
+        source_of_funds: d.source_of_funds || null,
+        tax_country: d.country || null,
+        tax_id_number: d.tax_id_number || null,
+      },
+      { onConflict: "user_id" },
+    );
   }, [user]);
 
-  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
-  const needsTax = useMemo(() => REQUIRES_TAX_ID.has(form.country), [form.country]);
-  const isBusiness = form.account_type === "business";
-
-  const steps = useMemo<StepDef[]>(() => {
-    const list: StepDef[] = [];
-    let n = 0;
-    const kicker = (label: string) => `${String(++n).padStart(2, "0")} · ${label}`;
-
-    // 1. Account type
-    list.push({
-      id: "account_type",
-      kicker: kicker("Account"),
-      title: "How will you use Glass Bank?",
-      valid: () => form.account_type !== "",
-      autoAdvance: true,
-      render: ({ next }) => (
-        <div className="space-y-3">
-          {([
-            { key: "personal", label: "Personal", icon: UserIcon, desc: "Everyday spending, saving, transfers" },
-            { key: "business", label: "Business", icon: Building2, desc: "Company payments, payroll, invoicing" },
-          ] as const).map((opt) => {
-            const active = form.account_type === opt.key;
-            return (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => set("account_type", opt.key)}
-                className={`w-full p-5 rounded-2xl text-left border-2 transition-all flex items-center gap-4 ${
-                  active ? "border-primary bg-primary/5" : "border-border/60 bg-card hover:border-border"
-                }`}
-              >
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
-                  <opt.icon size={22} />
-                </div>
-                <div className="flex-1">
-                  <div className="text-base font-semibold text-foreground">{opt.label}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
-                </div>
-                {active && <Check size={20} className="text-primary" strokeWidth={2.5} />}
-              </button>
-            );
-          })}
-        </div>
-      ),
-    });
-
-    // 2. Business name (only if business)
-    if (isBusiness) {
-      list.push({
-        id: "business_name",
-        kicker: kicker("Business"),
-        title: "What's your business called?",
-        subtitle: "Use the exact legal name on your registration.",
-        valid: () => form.business_name.trim().length > 1,
-        render: ({ next }) => (
-          <SingleInput
-            value={form.business_name}
-            onChange={(v) => set("business_name", v)}
-            onEnter={next}
-            placeholder="Acme, Inc."
-            autoComplete="organization"
-          />
-        ),
-      });
-    }
-
-    // 3. Name (first + last, still a single-question screen — one topic)
-    list.push({
-      id: "name",
-      kicker: kicker("Name"),
-      title: "What's your legal name?",
-      subtitle: "Match your government-issued ID exactly.",
-      valid: () => form.first_name.trim().length > 0 && form.last_name.trim().length > 0,
-      render: ({ next }) => (
-        <div className="space-y-3">
-          <SingleInput
-            value={form.first_name}
-            onChange={(v) => set("first_name", v)}
-            onEnter={next}
-            placeholder="First name"
-            autoComplete="given-name"
-          />
-          <SingleInput
-            value={form.last_name}
-            onChange={(v) => set("last_name", v)}
-            onEnter={next}
-            placeholder="Last name"
-            autoComplete="family-name"
-            autoFocus={false}
-          />
-        </div>
-      ),
-    });
-
-    // 4. Phone
-    list.push({
-      id: "phone",
-      kicker: kicker("Phone"),
-      title: "What's your mobile number?",
-      subtitle: "We use it for security codes and account alerts.",
-      valid: () => {
-        const digits = form.phone.replace(/\D/g, "");
-        return digits.length >= 8 && digits.length <= 15;
-      },
-      render: ({ next }) => (
-        <PhoneInput
-          value={form.phone}
-          defaultCountry={form.country || "US"}
-          onChange={(v) => set("phone", v)}
-          onEnter={next}
-        />
-      ),
-    });
-
-    // 5. Country
-    list.push({
-      id: "country",
-      kicker: kicker("Country"),
-      title: "Where do you live?",
-      valid: () => !!form.country,
-      autoAdvance: true,
-      render: ({ next }) => (
-        <ChoiceList
-          items={COUNTRIES.map(([c, l, flag]) => ({ id: c, label: l, prefix: flag }))}
-          value={form.country}
-          onChange={(v) => set("country", v)}
-        />
-      ),
-    });
-
-    // Currency defaults to USD and is editable later in Settings — no longer
-    // asked here to shave a step off the pre-KYC path.
-
-    // Address — combined into one screen (street/city/region/postal). Multiple
-    // inputs on the same topic is the Chime/Revolut standard; still one topic
-    // per screen.
-    list.push({
-      id: "address",
-      kicker: kicker("Address"),
-      title: "Where do you live?",
-      subtitle: "Where you receive mail today.",
-      valid: () =>
-        form.address_street.trim().length > 2 &&
-        form.address_city.trim().length > 1 &&
-        form.address_region.trim().length > 0 &&
-        form.address_postal_code.trim().length > 2,
-      render: ({ next }) => (
-        <div className="space-y-3">
-          <SingleInput
-            value={form.address_street}
-            onChange={(v) => set("address_street", v)}
-            onEnter={next}
-            placeholder="Street address"
-
-            autoComplete="street-address"
-          />
-          <SingleInput
-            value={form.address_city}
-            onChange={(v) => set("address_city", v)}
-            placeholder="City"
-            autoComplete="address-level2"
-            autoFocus={false}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <SingleInput
-              value={form.address_region}
-              onChange={(v) => set("address_region", v)}
-              placeholder="State / region"
-              autoComplete="address-level1"
-              autoFocus={false}
-            />
-            <SingleInput
-              value={form.address_postal_code}
-              onChange={(v) => set("address_postal_code", v)}
-              onEnter={next}
-              placeholder="Postal code"
-              autoComplete="postal-code"
-              autoFocus={false}
-            />
-          </div>
-        </div>
-      ),
-    });
-
-    // Occupation
-    list.push({
-      id: "occupation",
-      kicker: kicker("Work"),
-      title: isBusiness ? "What does your business do?" : "What do you do for work?",
-      valid: () => form.occupation.trim().length > 1,
-      render: ({ next }) => (
-        <SingleInput
-          value={form.occupation}
-          onChange={(v) => set("occupation", v)}
-          onEnter={next}
-          placeholder={isBusiness ? "Retail, SaaS, Consulting…" : "Software Engineer"}
-        />
-      ),
-    });
-
-    // Employer moved to Settings > Personal Info — not required pre-KYC.
-
-    // Income
-    list.push({
-      id: "income",
-      kicker: kicker("Income"),
-      title: "Estimated annual income?",
-      subtitle: "Ballpark is fine.",
-      valid: () => !!form.annual_income,
-      autoAdvance: true,
-      render: ({ next }) => (
-        <ChoiceList
-          items={INCOME_BANDS.map((b) => ({ id: b, label: b }))}
-          value={form.annual_income}
-          onChange={(v) => set("annual_income", v)}
-        />
-      ),
-    });
-
-    // Source of funds
-    list.push({
-      id: "source",
-      kicker: kicker("Source of funds"),
-      title: "Where will your money come from?",
-      subtitle: "Helps us keep everyone's accounts safe.",
-      valid: () => !!form.source_of_funds,
-      autoAdvance: true,
-      render: ({ next }) => (
-        <ChoiceList
-          items={SOURCES.map((s) => ({ id: s, label: s }))}
-          value={form.source_of_funds}
-          onChange={(v) => set("source_of_funds", v)}
-        />
-      ),
-    });
-
-    // Tax ID — tax residency defaults to residence country. Users with
-    // multi-jurisdiction obligations can edit it later in Settings.
-    if (needsTax) {
-      const taxCountry = form.tax_country || form.country || "US";
-      list.push({
-        id: "tax_id",
-        kicker: kicker(taxCountry === "US" ? "SSN" : "Tax ID"),
-        title: taxCountry === "US" ? "What's your SSN or ITIN?" : "What's your tax ID number?",
-        subtitle: "Encrypted end-to-end. Used only for regulatory reporting.",
-        valid: () => form.tax_id_number.trim().length > 3,
-        render: ({ next }) => (
-          <SingleInput
-            value={form.tax_id_number}
-            onChange={(v) => set("tax_id_number", v)}
-            onEnter={next}
-            placeholder={taxCountry === "US" ? "•••-••-••••" : "Tax ID"}
-            autoComplete="off"
-            secure
-          />
-        ),
-      });
-    }
-
-
-    // 17. Agreements
-    list.push({
-      id: "agreements",
-      kicker: kicker("Agreements"),
-      title: "Review and agree",
-      subtitle: "One last step before we verify your identity.",
-      valid: () => form.tos && form.privacy,
-      render: () => (
-        <div className="space-y-3">
-          {[
-            { key: "tos" as const, label: "Terms of Service", desc: "How Glass Bank works and what to expect from us." },
-            { key: "privacy" as const, label: "Privacy Policy", desc: "How we collect, store, and protect your data." },
-          ].map((it) => {
-            const active = form[it.key];
-            return (
-              <label
-                key={it.key}
-                className={`w-full flex items-start gap-3 p-4 rounded-2xl text-left border-2 transition-all cursor-pointer ${
-                  active ? "border-primary bg-primary/5" : "border-border/60 bg-card"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={(e) => set(it.key, e.target.checked)}
-                  className="sr-only"
-                  aria-label={`I agree to the ${it.label}`}
-                />
-                <span className={`w-6 h-6 rounded-md border-2 flex items-center justify-center mt-0.5 shrink-0 ${active ? "border-primary bg-primary" : "border-border"}`}>
-                  {active && <Check size={14} className="text-primary-foreground" strokeWidth={3} />}
-                </span>
-                <span className="flex-1">
-                  <span className="block text-sm font-semibold text-foreground">I agree to the {it.label}</span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">{it.desc}</span>
-                </span>
-              </label>
-            );
-          })}
-          <div className="pt-2 flex items-center gap-2 text-xs text-muted-foreground">
-            <Shield size={13} /> Bank-grade encryption. Your data stays yours.
-          </div>
-        </div>
-      ),
-    });
-
-    return list;
-  }, [form, needsTax, isBusiness]);
-
-  // Clamp step if flow shrinks (e.g. switched business→personal)
-  useEffect(() => {
-    if (step > steps.length - 1) setStep(steps.length - 1);
-  }, [steps.length, step]);
-
-  const current = steps[Math.min(step, steps.length - 1)];
-
-  // Keep refs to the latest step/steps so callbacks fired from setTimeout
-  // (auto-advance handlers) read fresh validity instead of a stale closure
-  // over the pre-update form.
-  const stepsRef = useRef(steps);
-  const stepRef = useRef(step);
-  stepsRef.current = steps;
-  stepRef.current = step;
-
-  const validationMessage = (id: string) => {
-    switch (id) {
-      case "account_type": return "Choose Personal or Business to continue.";
-      case "business_name": return "Enter your legal business name.";
-      case "name": return "Enter both your first and last legal name.";
-      case "phone": return "Enter a valid mobile number.";
-      case "country": return "Choose your country of residence.";
-      case "address": return "Complete your street, city, state or region, and postal code.";
-      case "occupation": return "Enter your occupation.";
-      case "income": return "Choose an estimated income range.";
-      case "source": return "Choose your source of funds.";
-      case "tax_id": return "Enter your tax ID number.";
-      case "agreements": return "Agree to the Terms and Privacy Policy to finish.";
-      default: return "Please complete this step to continue.";
-    }
-  };
-
-  const finish = async () => {
+  const finish = useCallback(async () => {
     if (!user) return;
-    setSaving(true);
+    dispatch({ type: "SAVING", on: true });
     const now = new Date().toISOString();
-    const payload = {
-      user_id: user.id,
-      email: user.email,
-      account_type: form.account_type,
-      business_name: form.business_name || null,
-      country: form.country,
-      preferred_currency: form.preferred_currency || "USD",
-      preferred_name: `${form.first_name} ${form.last_name}`.trim(),
-      phone: form.phone,
-      address_street: form.address_street,
-      address_city: form.address_city,
-      address_region: form.address_region,
-      address_postal_code: form.address_postal_code,
-      occupation: form.occupation,
-      employer: form.employer,
-      annual_income: form.annual_income,
-      source_of_funds: form.source_of_funds,
-      tax_country: form.tax_country || form.country || null,
-      tax_id_number: form.tax_id_number || null,
-      onboarded_at: now,
-      tos_accepted_at: now,
-      privacy_accepted_at: now,
-    };
-    const { error } = await supabase.from("profiles").upsert(payload, { onConflict: "user_id" });
-    setSaving(false);
-    if (error) { toast.error(error.message); return; }
-    setDone(true);
-    setTimeout(() => navigate("/profile/verify", { replace: true }), 1600);
-  };
+    const d = state.data;
+    const { error } = await supabase.from("profiles").upsert(
+      {
+        user_id: user.id,
+        email: user.email,
+        account_type: d.account_type,
+        business_name: d.business_name || null,
+        preferred_name: `${d.first_name} ${d.last_name}`.trim(),
+        phone: d.phone,
+        country: d.country,
+        preferred_currency: "USD",
+        address_street: d.address_street,
+        address_city: d.address_city,
+        address_region: d.address_region,
+        address_postal_code: d.address_postal_code,
+        occupation: d.occupation,
+        annual_income: d.annual_income,
+        source_of_funds: d.source_of_funds,
+        tax_country: d.country || null,
+        tax_id_number: d.tax_id_number || null,
+        onboarded_at: now,
+        tos_accepted_at: now,
+        privacy_accepted_at: now,
+      },
+      { onConflict: "user_id" },
+    );
+    if (error) {
+      dispatch({ type: "SAVING", on: false });
+      toast.error(error.message);
+      return;
+    }
+    if (stepKey) localStorage.removeItem(stepKey);
+    dispatch({ type: "DONE" });
+    setTimeout(() => navigate("/profile/verify", { replace: true }), 1400);
+  }, [user, state.data, stepKey, navigate]);
 
-  const goNext = async () => {
-    if (saving) return;
-    const list = stepsRef.current;
-    const idx = stepRef.current;
-    const cur = list[idx];
-    if (!cur) return;
-    if (!cur.valid()) { toast.error(validationMessage(cur.id)); return; }
-    toast.dismiss();
-    if (idx < list.length - 1) setStep(idx + 1);
-    else await finish();
-  };
+  // The ONE and only advance handler. Called from Continue click or Enter key.
+  const submit = useCallback(() => {
+    if (state.saving) return;
+    const step = steps[Math.min(state.stepIndex, steps.length - 1)];
+    if (!step) return;
+    const err = step.validate(state.data);
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    if (state.stepIndex >= steps.length - 1) {
+      void finish();
+      return;
+    }
+    void saveDraft(state.data);
+    dispatch({ type: "GOTO", index: state.stepIndex + 1 });
+  }, [state.saving, state.stepIndex, state.data, steps, finish, saveDraft]);
 
+  const back = useCallback(() => {
+    if (state.saving) return;
+    if (state.stepIndex === 0) {
+      // From step 0, back returns to intro if we haven't yet started.
+      navigate("/welcome");
+      return;
+    }
+    dispatch({ type: "GOTO", index: state.stepIndex - 1 });
+  }, [state.saving, state.stepIndex, navigate]);
 
-  const goBack = () => {
-    if (step === 0) setShowIntro(true);
-    else setStep(step - 1);
-  };
+  /* ------- render states ------- */
 
-  if (loading) {
+  if (!state.hydrated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="animate-spin text-primary" />
@@ -532,7 +625,7 @@ const Onboarding = () => {
     );
   }
 
-  if (done) {
+  if (state.done) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center px-8">
         <motion.div
@@ -543,40 +636,30 @@ const Onboarding = () => {
         >
           <Check size={44} className="text-primary-foreground" strokeWidth={3} />
         </motion.div>
-        <motion.h1
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="text-3xl font-display font-bold text-foreground text-center"
-        >
-          You're all set{form.first_name ? `, ${form.first_name}` : ""}
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
-          className="text-sm text-muted-foreground mt-2 text-center max-w-xs"
-        >
+        <h1 className="text-3xl font-display font-bold text-foreground text-center">
+          You're all set{state.data.first_name ? `, ${state.data.first_name}` : ""}
+        </h1>
+        <p className="text-sm text-muted-foreground mt-2 text-center max-w-xs">
           Taking you to identity verification to unlock your account…
-        </motion.p>
+        </p>
       </div>
     );
   }
 
-  if (showIntro) {
+  if (state.showIntro) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <div className="flex-1 relative overflow-hidden">
           <div className="absolute inset-0 gradient-hero" />
           <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_30%_20%,hsl(var(--accent))_0%,transparent_45%)]" />
           <div className="relative z-10 h-full flex flex-col justify-between p-8 pt-16">
-            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl bg-primary-foreground/10 backdrop-blur border border-primary-foreground/20 flex items-center justify-center">
                 <span className="text-lg font-display font-bold text-primary-foreground">G</span>
               </div>
               <span className="text-sm font-semibold text-primary-foreground/90 tracking-wide">GLASS BANK</span>
-            </motion.div>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            </div>
+            <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-foreground/10 backdrop-blur border border-primary-foreground/20 mb-4">
                 <Sparkles size={12} className="text-primary-foreground" />
                 <span className="text-[11px] font-semibold text-primary-foreground uppercase tracking-wider">Takes 3 minutes</span>
@@ -587,7 +670,7 @@ const Onboarding = () => {
               <p className="text-base text-primary-foreground/75 mt-4 leading-relaxed max-w-sm">
                 We'll ask one quick question at a time. You can pause anytime — your answers save automatically.
               </p>
-            </motion.div>
+            </div>
           </div>
         </div>
         <div className="bg-card px-6 pt-6 pb-8 rounded-t-3xl -mt-6 relative z-20 shadow-2xl">
@@ -596,14 +679,8 @@ const Onboarding = () => {
               { icon: UserIcon, label: "Tell us about yourself", desc: "Name, contact, and address" },
               { icon: Building2, label: "A bit about your work", desc: "Occupation and income" },
               { icon: Shield, label: "Verify your identity", desc: "Fast, encrypted, and secure" },
-            ].map((it, i) => (
-              <motion.div
-                key={it.label}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 + i * 0.08 }}
-                className="flex items-center gap-3"
-              >
+            ].map((it) => (
+              <div key={it.label} className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
                   <it.icon size={18} className="text-primary" />
                 </div>
@@ -611,12 +688,13 @@ const Onboarding = () => {
                   <div className="text-sm font-semibold text-foreground">{it.label}</div>
                   <div className="text-xs text-muted-foreground">{it.desc}</div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
           <button
             type="button"
-            onClick={() => setShowIntro(false)}
+            onClick={() => dispatch({ type: "DISMISS_INTRO" })}
+            data-testid="intro-start"
             className="w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-lg shadow-primary/20"
           >
             Get started <ArrowRight size={16} />
@@ -629,17 +707,16 @@ const Onboarding = () => {
     );
   }
 
-  const isLast = step === steps.length - 1;
-  const isOptional = current.id === "employer";
-  const canContinue = current.valid();
-
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <form
+      onSubmit={(e) => { e.preventDefault(); submit(); }}
+      className="min-h-screen bg-background flex flex-col"
+    >
       <div className="px-5 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur z-10">
         <div className="flex items-center gap-3 mb-3">
           <button
             type="button"
-            onClick={goBack}
+            onClick={back}
             className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
             aria-label="Back"
           >
@@ -651,14 +728,14 @@ const Onboarding = () => {
                 <motion.div
                   className="h-full bg-primary"
                   initial={false}
-                  animate={{ width: i <= step ? "100%" : "0%" }}
+                  animate={{ width: i <= clampedIndex ? "100%" : "0%" }}
                   transition={{ duration: 0.4, ease: "easeOut" }}
                 />
               </div>
             ))}
           </div>
           <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
-            {step + 1}/{steps.length}
+            {clampedIndex + 1}/{steps.length}
           </span>
         </div>
       </div>
@@ -682,20 +759,20 @@ const Onboarding = () => {
               <p className="text-sm text-muted-foreground mb-6 leading-relaxed">{current.subtitle}</p>
             )}
             {!current.subtitle && <div className="mb-6" />}
-            {current.render({ next: goNext })}
+            {current.render({ data: state.data, setField, submit })}
           </motion.div>
         </AnimatePresence>
       </div>
 
       <div className="px-5 pb-8 pt-3 sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0 space-y-2">
         <button
-          type="button"
-          onClick={goNext}
-          disabled={saving}
-          aria-disabled={saving}
-          className={`w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all shadow-lg shadow-primary/20 ${!canContinue && !saving ? "opacity-85" : ""}`}
+          type="submit"
+          data-testid="onboarding-continue"
+          disabled={!canContinue || state.saving}
+          aria-disabled={!canContinue || state.saving}
+          className="w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all shadow-lg shadow-primary/20"
         >
-          {saving ? (
+          {state.saving ? (
             <><Loader2 size={16} className="animate-spin" /> Saving…</>
           ) : isLast ? (
             <>Finish & verify identity <Check size={16} /></>
@@ -703,33 +780,21 @@ const Onboarding = () => {
             <>Continue <ArrowRight size={16} /></>
           )}
         </button>
-        {isOptional && (
-          <button
-            type="button"
-            onClick={() => setStep((s) => Math.min(s + 1, steps.length - 1))}
-            className="w-full py-3 rounded-2xl text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Skip for now
-          </button>
-        )}
       </div>
-    </div>
+    </form>
   );
 };
 
-// —— Reusable pieces ——
+/* ------------------------- Reusable inputs -------------------------------- */
 
-const SingleInput = ({
-  value, onChange, onEnter, placeholder, type, autoComplete, inputMode, autoFocus = true, secure = false,
+const TextInput = ({
+  value, onChange, onEnter, placeholder, autoComplete, autoFocus = true, secure = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   onEnter?: () => void;
-
   placeholder?: string;
-  type?: string;
   autoComplete?: string;
-  inputMode?: "text" | "tel" | "email" | "numeric" | "search" | "url" | "none" | "decimal";
   autoFocus?: boolean;
   secure?: boolean;
 }) => {
@@ -742,20 +807,23 @@ const SingleInput = ({
   }, [autoFocus]);
 
   const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); }
+    if (e.key === "Enter") {
+      // Let the enclosing <form> handle submission via its onSubmit; we call
+      // onEnter as a hint when the last input on a multi-field step should
+      // advance. For a single-input step, both paths converge on submit().
+      if (onEnter) { e.preventDefault(); onEnter(); }
+    }
   };
-
 
   return (
     <input
       ref={ref}
-      type={secure ? "password" : (type ?? "text")}
+      type={secure ? "password" : "text"}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={handleKey}
       placeholder={placeholder}
       autoComplete={autoComplete}
-      inputMode={inputMode}
       className="w-full px-4 py-5 rounded-2xl bg-secondary text-foreground text-lg border-2 border-transparent outline-none focus:border-primary/50 focus:bg-card transition-all placeholder:text-muted-foreground/60"
     />
   );
@@ -775,6 +843,7 @@ const ChoiceList = ({
         <button
           type="button"
           key={it.id}
+          data-testid={`choice-${it.id}`}
           onClick={() => onChange(it.id)}
           className={`w-full p-4 rounded-xl text-left flex items-center gap-3 border-2 transition-all ${
             active ? "border-primary bg-primary/5" : "border-transparent bg-secondary hover:bg-muted"
@@ -800,28 +869,18 @@ const PhoneInput = ({
   onEnter: () => void;
 }) => {
   const ref = useRef<HTMLInputElement>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  // Parse existing value into dial code + local digits, or fall back to defaultCountry.
   const parsed = useMemo(() => {
     const raw = (value || "").trim();
     if (raw.startsWith("+")) {
       const digits = raw.replace(/\D/g, "");
-      // Try longest matching dial code first (up to 4 digits incl. leading char).
       const entries = Object.entries(DIAL_CODES).sort((a, b) => b[1].length - a[1].length);
       for (const [cc, dial] of entries) {
         const d = dial.replace(/\D/g, "");
-        if (digits.startsWith(d)) {
-          return { country: cc, dial, local: digits.slice(d.length) };
-        }
+        if (digits.startsWith(d)) return { country: cc, dial, local: digits.slice(d.length) };
       }
       return { country: defaultCountry, dial: DIAL_CODES[defaultCountry] || "+1", local: digits };
     }
-    return {
-      country: defaultCountry,
-      dial: DIAL_CODES[defaultCountry] || "+1",
-      local: raw.replace(/\D/g, ""),
-    };
+    return { country: defaultCountry, dial: DIAL_CODES[defaultCountry] || "+1", local: raw.replace(/\D/g, "") };
   }, [value, defaultCountry]);
 
   useEffect(() => {
@@ -835,61 +894,30 @@ const PhoneInput = ({
     onChange(cleaned ? `${dial}${cleaned}` : "");
   };
 
-  const digits = parsed.local;
-  const totalDigits = parsed.dial.replace(/\D/g, "").length + digits.length;
-  const showError = digits.length > 0 && (digits.length < 7 || totalDigits > 15);
-
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setPickerOpen((o) => !o)}
-          className="px-3 py-5 rounded-2xl bg-secondary text-foreground text-base font-semibold border-2 border-transparent hover:bg-muted transition-colors flex items-center gap-1.5 shrink-0"
-          aria-label="Select country code"
-        >
+        <div className="px-3 py-5 rounded-2xl bg-secondary text-foreground text-base font-semibold flex items-center gap-1.5 shrink-0">
           <span className="text-xl leading-none">
             {COUNTRIES.find((c) => c[0] === parsed.country)?.[2] || "🌐"}
           </span>
           <span className="tabular-nums">{parsed.dial}</span>
-        </button>
+        </div>
         <input
           ref={ref}
           type="tel"
           inputMode="numeric"
           autoComplete="tel-national"
-          value={digits}
+          value={parsed.local}
           onChange={(e) => emit(parsed.country, e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onEnter(); } }}
           placeholder="555 123 4567"
           className="flex-1 min-w-0 px-4 py-5 rounded-2xl bg-secondary text-foreground text-lg border-2 border-transparent outline-none focus:border-primary/50 focus:bg-card transition-all placeholder:text-muted-foreground/60"
         />
       </div>
-      {pickerOpen && (
-        <div className="max-h-56 overflow-y-auto rounded-2xl border border-border bg-card shadow-lg divide-y divide-border">
-          {COUNTRIES.filter((c) => DIAL_CODES[c[0]]).map(([code, name, flag]) => (
-            <button
-              key={code}
-              type="button"
-              onClick={() => { emit(code, digits); setPickerOpen(false); ref.current?.focus(); }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted transition-colors"
-            >
-              <span className="text-lg">{flag}</span>
-              <span className="flex-1 text-sm text-foreground">{name}</span>
-              <span className="text-xs text-muted-foreground tabular-nums">{DIAL_CODES[code]}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      {showError ? (
-        <p className="text-xs text-destructive px-1">
-          Enter a valid mobile number (7–14 digits after the country code).
-        </p>
-      ) : (
-        <p className="text-xs text-muted-foreground px-1">
-          We'll text a verification code to this number.
-        </p>
-      )}
+      <p className="text-xs text-muted-foreground px-1">
+        We'll text a verification code to this number.
+      </p>
     </div>
   );
 };

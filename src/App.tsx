@@ -20,7 +20,8 @@ import HelpCenter from "./pages/HelpCenter";
 import PersonalInfo from "./pages/PersonalInfo";
 import Documents from "./pages/Documents";
 import SpendingInsights from "./pages/SpendingInsights";
-import Login from "./pages/Login";
+import SignIn from "./pages/SignIn";
+import SignUp from "./pages/SignUp";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyIdentity from "./pages/VerifyIdentity";
 import Welcome from "./pages/Welcome";
@@ -70,8 +71,8 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/welcome" element={<Welcome />} />
-              <Route path="/login" element={<Login initialMode="signin" />} />
-              <Route path="/signup" element={<Login initialMode="signup" />} />
+              <Route path="/login" element={<SignIn />} />
+              <Route path="/signup" element={<SignUp />} />
               <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/mfa-challenge" element={<MfaChallenge />} />
               <Route path="/reset-password" element={<ResetPassword />} />
