@@ -26,6 +26,7 @@ import VerifyIdentity from "./pages/VerifyIdentity";
 import Welcome from "./pages/Welcome";
 import VerifyEmail from "./pages/VerifyEmail";
 import MfaChallenge from "./pages/MfaChallenge";
+import OAuthConsent from "./pages/OAuthConsent";
 import Onboarding from "./pages/Onboarding";
 import ReceiveMoney from "./pages/ReceiveMoney";
 import Settings from "./pages/Settings";
@@ -69,6 +70,7 @@ const App = () => (
               <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/mfa-challenge" element={<MfaChallenge />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
               <Route path="/onboarding" element={<Guarded><Onboarding /></Guarded>} />
               <Route path="/" element={<Guarded><Index /></Guarded>} />
               <Route path="/receive" element={<Guarded><ReceiveMoney /></Guarded>} />
