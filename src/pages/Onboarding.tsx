@@ -683,7 +683,8 @@ const SingleInput = ({
 }: {
   value: string;
   onChange: (v: string) => void;
-  onEnter: () => void;
+  onEnter?: () => void;
+
   placeholder?: string;
   type?: string;
   autoComplete?: string;
