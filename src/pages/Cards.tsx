@@ -99,37 +99,27 @@ const CardsPage = () => {
     }
   };
 
+  // Iberbanco v2 does not expose card lock/replace/report-stolen/PIN change/
+  // travel-notice/control endpoints. We surface these as "not available" in
+  // the UI so users can't be misled by fake success toasts.
+  const CARD_CONTROLS_LIVE = false;
+
   const doReplace = () => {
-    if (confirm("Order a replacement card? Your current card will be locked.")) {
-      replaceCard();
-      toast.success("Replacement card ordered", { description: "Arrives in 5–7 business days" });
-    }
+    replaceCard(); // store now shows an honest "not available" toast
   };
 
   const doStolen = () => {
-    if (confirm("Report this card as stolen? A new card will be issued.")) {
-      reportStolen();
-      toast.error("Card reported stolen", { description: "New card will be shipped overnight" });
-    }
+    if (!confirm("Report this card as stolen? A support agent will call you back to arrange a replacement.")) return;
+    reportStolen();
   };
 
   const doLock = () => {
     toggleCardLock();
-    const nowLocked = !card.isLocked;
-    if (columnLive) {
-      toast[nowLocked ? "warning" : "success"](
-        nowLocked ? "Card locked in this app" : "Card unlocked in this app",
-        { description: "Lock is enforced in-app. Contact support to freeze at the network." },
-      );
-    } else {
-      toast[nowLocked ? "warning" : "success"](nowLocked ? "Card locked" : "Card unlocked");
-    }
   };
 
   const toggleTravel = () => {
-    setTravelActive((v) => !v);
-    toast.success(travelActive ? "Travel notice removed" : "Travel notice set", {
-      description: travelActive ? undefined : "International transactions enabled for 30 days",
+    toast.error("Travel notice isn't available yet", {
+      description: "Contact support to enable international use before you travel.",
     });
   };
 

@@ -600,36 +600,56 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Money movement now waits for the real Iberbanco API to acknowledge the
+  // request before touching local state. No more optimistic mock ledger updates
+  // that made a failed transfer look successful. If the backend isn't linked,
+  // the mutation is refused with a clear error instead of quietly "succeeding".
+
+  const requireLive = (label: string): boolean => {
+    if (!columnLive || !userNumberRef.current) {
+      toast.error(`${label} unavailable`, {
+        description: "Your Iberbanco account isn't linked yet. Complete identity verification to move real money.",
+      });
+      return false;
+    }
+    return true;
+  };
+
   const transfer = useCallback((args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => {
     if (args.amount <= 0 || args.from === args.to) return false;
     const s = stateRef.current;
     if (s.accounts[args.from].availableBalance < args.amount) return false;
-    dispatch({ type: "TRANSFER", ...args });
-    if (columnLive && userNumberRef.current) {
-      runIber("Internal transfer", () =>
-        iberbancoApi.createInternalTransfer({
-          user_number: userNumberRef.current!,
-          account_number_from: s.accounts[args.from].id,
-          account_number_to: s.accounts[args.to].id,
-          amount: Math.round(args.amount),
-          reference: (args.memo || "Internal transfer").slice(0, 60),
-        }),
-      ).then((res) => { if (res) void refreshColumn({ silent: true }); });
-    }
+    if (!requireLive("Internal transfer")) return false;
+    runIber("Internal transfer", () =>
+      iberbancoApi.createInternalTransfer({
+        user_number: userNumberRef.current!,
+        account_number_from: s.accounts[args.from].id,
+        account_number_to: s.accounts[args.to].id,
+        amount: Math.round(args.amount),
+        reference: (args.memo || "Internal transfer").slice(0, 60),
+      }),
+    ).then((res) => { if (res) void refreshColumn({ silent: true }); });
     return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columnLive, refreshColumn]);
 
-  const send = useCallback((args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => {
-    if (args.amount <= 0 || !args.recipient.trim()) return false;
-    if (stateRef.current.accounts[args.from].availableBalance < args.amount) return false;
-    dispatch({ type: "SEND", ...args });
-    return true;
+  const send = useCallback((_args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => {
+    // Peer-to-peer send is not exposed by Iberbanco v2. Refuse the request
+    // instead of writing a fake ledger entry, and tell the user honestly.
+    toast.error("Send Money is coming soon", {
+      description: "Peer-to-peer payments aren't available on this account yet. Use External Transfer, Wire, or Bill Pay to send funds.",
+    });
+    return false;
   }, []);
 
   const depositCheck = useCallback((args: { to: "checking" | "savings"; amount: number }) => {
     if (args.amount <= 0) return false;
-    dispatch({ type: "DEPOSIT_CHECK", ...args });
-    return true;
+    // Mobile check deposit is not supported by Iberbanco v2 either. Keep the
+    // UI honest instead of writing a fake pending credit.
+    toast.error("Mobile check deposit is coming soon", {
+      description: "Fund your account via ACH or wire in the meantime.",
+    });
+    return false;
   }, []);
 
   const payBill = useCallback((args: {
@@ -642,22 +662,25 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0 || !args.biller.trim()) return false;
     const s = stateRef.current;
     if (s.accounts[args.from].availableBalance < args.amount) return false;
-    dispatch({ type: "PAY_BILL", from: args.from, amount: args.amount, biller: args.biller });
-    if (columnLive && userNumberRef.current && args.accountNumber) {
-      runIber(`Bill pay — ${args.biller}`, () =>
-        iberbancoApi.createBillPayment({
-          user_number: userNumberRef.current!,
-          account_number: s.accounts[args.from].id,
-          amount: Math.round(args.amount),
-          reference: args.biller.slice(0, 60),
-          payee_name: args.biller,
-          payee_code: (args.routingNumber || "BILL").slice(0, 20),
-          payee_account_number: args.accountNumber!,
-          beneficiary_email: `noreply+${args.biller.toLowerCase().replace(/\s+/g, "")}@example.com`,
-        }),
-      ).then((res) => { if (res) void refreshColumn({ silent: true }); });
+    if (!args.accountNumber) {
+      toast.error("Bill pay failed", { description: "A payee account number is required." });
+      return false;
     }
+    if (!requireLive("Bill pay")) return false;
+    runIber(`Bill pay — ${args.biller}`, () =>
+      iberbancoApi.createBillPayment({
+        user_number: userNumberRef.current!,
+        account_number: s.accounts[args.from].id,
+        amount: Math.round(args.amount),
+        reference: args.biller.slice(0, 60),
+        payee_name: args.biller,
+        payee_code: (args.routingNumber || "BILL").slice(0, 20),
+        payee_account_number: args.accountNumber,
+        beneficiary_email: `noreply+${args.biller.toLowerCase().replace(/\s+/g, "")}@example.com`,
+      }),
+    ).then((res) => { if (res) void refreshColumn({ silent: true }); });
     return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columnLive, refreshColumn]);
 
   const externalTransfer = useCallback((args: {
@@ -671,27 +694,26 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0) return false;
     const s = stateRef.current;
     if (s.accounts[args.from].availableBalance < args.amount) return false;
-    dispatch({ type: "PAY_BILL", from: args.from, amount: args.amount, biller: `External ACH — ${args.bank}` });
-    if (columnLive && userNumberRef.current) {
-      runIber(`ACH transfer to ${args.bank}`, () =>
-        iberbancoApi.createAchTransfer({
-          user_number: userNumberRef.current!,
-          account_number: s.accounts[args.from].id,
-          amount: Math.round(args.amount),
-          reference: (args.memo || args.bank).slice(0, 60),
-          beneficiary_name: args.bank,
-          beneficiary_address: "N/A",
-          beneficiary_email: `noreply+${args.bank.toLowerCase().replace(/\s+/g, "")}@example.com`,
-          bank_name: args.bank,
-          bank_country: "United States",
-          bank_address: "N/A",
-          beneficiary_account_number: args.accountNumber,
-          institution_number: args.routingNumber.slice(0, 3),
-          transit_number: args.routingNumber.slice(-5),
-        }),
-      ).then((res) => { if (res) void refreshColumn({ silent: true }); });
-    }
+    if (!requireLive("ACH transfer")) return false;
+    runIber(`ACH transfer to ${args.bank}`, () =>
+      iberbancoApi.createAchTransfer({
+        user_number: userNumberRef.current!,
+        account_number: s.accounts[args.from].id,
+        amount: Math.round(args.amount),
+        reference: (args.memo || args.bank).slice(0, 60),
+        beneficiary_name: args.bank,
+        beneficiary_address: "N/A",
+        beneficiary_email: `noreply+${args.bank.toLowerCase().replace(/\s+/g, "")}@example.com`,
+        bank_name: args.bank,
+        bank_country: "United States",
+        bank_address: "N/A",
+        beneficiary_account_number: args.accountNumber,
+        institution_number: args.routingNumber.slice(0, 3),
+        transit_number: args.routingNumber.slice(-5),
+      }),
+    ).then((res) => { if (res) void refreshColumn({ silent: true }); });
     return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columnLive, refreshColumn]);
 
   const wireTransfer = useCallback((args: {
@@ -708,50 +730,55 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0) return false;
     const s = stateRef.current;
     if (s.accounts[args.from].availableBalance < total) return false;
-    dispatch({ type: "PAY_BILL", from: args.from, amount: total, biller: `Wire — ${args.beneficiaryName}` });
-    if (columnLive && userNumberRef.current) {
-      runIber(`Wire to ${args.beneficiaryName}`, () =>
-        iberbancoApi.createSwiftTransfer({
-          user_number: userNumberRef.current!,
-          account_number: s.accounts[args.from].id,
-          amount: Math.round(args.amount),
-          reference: (args.memo || args.beneficiaryName).slice(0, 60),
-          iban_code: args.accountNumber,
-          beneficiary_name: args.beneficiaryName,
-          beneficiary_country: "United States",
-          beneficiary_state: "N/A",
-          beneficiary_city: "N/A",
-          beneficiary_address: "N/A",
-          beneficiary_zip_code: "00000",
-          swift_code: args.routingNumber,
-          bank_name: "Beneficiary Bank",
-          bank_country: "United States",
-          bank_state: "N/A",
-          bank_city: "N/A",
-          bank_address: "N/A",
-          bank_zip_code: "00000",
-        }),
-      ).then((res) => { if (res) void refreshColumn({ silent: true }); });
-    }
+    if (!requireLive("Wire transfer")) return false;
+    runIber(`Wire to ${args.beneficiaryName}`, () =>
+      iberbancoApi.createSwiftTransfer({
+        user_number: userNumberRef.current!,
+        account_number: s.accounts[args.from].id,
+        amount: Math.round(args.amount),
+        reference: (args.memo || args.beneficiaryName).slice(0, 60),
+        iban_code: args.accountNumber,
+        beneficiary_name: args.beneficiaryName,
+        beneficiary_country: "United States",
+        beneficiary_state: "N/A",
+        beneficiary_city: "N/A",
+        beneficiary_address: "N/A",
+        beneficiary_zip_code: "00000",
+        swift_code: args.routingNumber,
+        bank_name: "Beneficiary Bank",
+        bank_country: "United States",
+        bank_state: "N/A",
+        bank_city: "N/A",
+        bank_address: "N/A",
+        bank_zip_code: "00000",
+      }),
+    ).then((res) => { if (res) void refreshColumn({ silent: true }); });
     return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columnLive, refreshColumn]);
 
-  // Iberbanco does not expose card lock/unlock/reissue/controls in v2 — keep
-  // local state changes for UX. When the API adds them, wire them here.
+  // Iberbanco v2 does not expose card lock/unlock/reissue/controls/PIN. We
+  // refuse these actions in-store rather than pretending they succeeded — the
+  // UI is expected to show them as "unavailable" too.
+  const cardCapabilityUnavailable = (feature: string) => {
+    toast.error(`${feature} isn't available yet`, {
+      description: "Your card issuer doesn't expose this control on the current API. Contact support to change it.",
+    });
+  };
   const toggleCardLock = useCallback(async () => {
-    dispatch({ type: "TOGGLE_CARD_LOCK" });
+    cardCapabilityUnavailable("Card lock");
   }, []);
 
-  const toggleCardControl = useCallback(async (key: keyof CardControls) => {
-    dispatch({ type: "TOGGLE_CARD_CONTROL", key });
+  const toggleCardControl = useCallback(async (_key: keyof CardControls) => {
+    cardCapabilityUnavailable("Card controls");
   }, []);
 
   const replaceCard = useCallback(async () => {
-    dispatch({ type: "REPLACE_CARD" });
+    cardCapabilityUnavailable("Card replacement");
   }, []);
 
   const reportStolen = useCallback(async () => {
-    dispatch({ type: "REPORT_STOLEN" });
+    cardCapabilityUnavailable("Report lost/stolen");
   }, []);
 
   const issueCard = useCallback(async (args?: { type?: "physical" | "virtual" }) => {
