@@ -29,35 +29,42 @@ const ReceiveMoney = () => {
   const [copied, setCopied] = useState<string | null>(null);
 
   const acc = accounts[account];
+  // Prefer real Iberbanco deposit details (populated on live sync). Fall back
+  // to the local placeholder when the account hasn't been hydrated yet.
+  const details = acc.depositDetails;
   const fullAccountNumber = useMemo(() => {
-    // Existing store stores a masked value ("****4821") — pair with a
-    // deterministic prefix so the shared payload always looks complete.
+    if (details?.accountNumber) return details.accountNumber;
     const tail = acc.accountNumber.replace(/[^0-9]/g, "");
     return tail.length >= 10 ? tail : `100${tail.padStart(7, "0")}`;
-  }, [acc.accountNumber]);
+  }, [acc.accountNumber, details]);
+  const iban = details?.iban || "";
+  const beneficiaryName = details?.holderName || user?.email || "Glass Bank customer";
+  const currency = details?.currency || "USD";
+  const routeLine = iban || acc.routingNumber;
 
   const shareText = useMemo(() => {
     const lines = [
-      `Send money to ${user?.email ?? "me"} at Glass Bank`,
-      `Account: ${fullAccountNumber}`,
-      `Routing: ${acc.routingNumber}`,
-      `Type: ${acc.name}`,
+      `Send money to ${beneficiaryName} at Glass Bank`,
+      iban ? `IBAN: ${iban}` : `Account: ${fullAccountNumber}`,
+      iban ? `Currency: ${currency}` : `Routing: ${acc.routingNumber}`,
+      `Reference (required): ${details?.reference || fullAccountNumber}`,
     ];
-    if (amount) lines.push(`Amount: $${Number(amount).toFixed(2)}`);
+    if (amount) lines.push(`Amount: ${currency} ${Number(amount).toFixed(2)}`);
     if (note) lines.push(`Note: ${note}`);
     return lines.join("\n");
-  }, [acc, fullAccountNumber, amount, note, user]);
+  }, [acc, fullAccountNumber, amount, note, beneficiaryName, iban, currency, details]);
 
   const qrPayload = useMemo(() => {
     const params = new URLSearchParams({
       account: fullAccountNumber,
-      routing: acc.routingNumber,
+      routing: routeLine,
+      reference: details?.reference || fullAccountNumber,
     });
     if (amount) params.set("amount", Number(amount).toFixed(2));
     if (note) params.set("note", note);
     if (user?.email) params.set("to", user.email);
     return `glassbank://pay?${params.toString()}`;
-  }, [fullAccountNumber, acc.routingNumber, amount, note, user]);
+  }, [fullAccountNumber, routeLine, amount, note, user, details]);
 
   const copy = async (value: string, key: string) => {
     try {
