@@ -157,7 +157,8 @@ const Onboarding = () => {
             return (
               <button
                 key={opt.key}
-                onClick={() => { set("account_type", opt.key); setTimeout(next, 220); }}
+                type="button"
+                onClick={() => set("account_type", opt.key)}
                 className={`w-full p-5 rounded-2xl text-left border-2 transition-all flex items-center gap-4 ${
                   active ? "border-primary bg-primary/5" : "border-border/60 bg-card hover:border-border"
                 }`}
@@ -256,7 +257,7 @@ const Onboarding = () => {
         <ChoiceList
           items={COUNTRIES.map(([c, l, flag]) => ({ id: c, label: l, prefix: flag }))}
           value={form.country}
-          onChange={(v) => { set("country", v); setTimeout(next, 220); }}
+          onChange={(v) => set("country", v)}
         />
       ),
     });
@@ -345,7 +346,7 @@ const Onboarding = () => {
         <ChoiceList
           items={INCOME_BANDS.map((b) => ({ id: b, label: b }))}
           value={form.annual_income}
-          onChange={(v) => { set("annual_income", v); setTimeout(next, 220); }}
+          onChange={(v) => set("annual_income", v)}
         />
       ),
     });
@@ -362,7 +363,7 @@ const Onboarding = () => {
         <ChoiceList
           items={SOURCES.map((s) => ({ id: s, label: s }))}
           value={form.source_of_funds}
-          onChange={(v) => { set("source_of_funds", v); setTimeout(next, 220); }}
+          onChange={(v) => set("source_of_funds", v)}
         />
       ),
     });
@@ -371,8 +372,6 @@ const Onboarding = () => {
     // multi-jurisdiction obligations can edit it later in Settings.
     if (needsTax) {
       const taxCountry = form.tax_country || form.country || "US";
-      // Persist the inferred tax country so downstream KYC has it.
-      if (form.tax_country !== taxCountry) set("tax_country", taxCountry);
       list.push({
         id: "tax_id",
         kicker: kicker(taxCountry === "US" ? "SSN" : "Tax ID"),
@@ -508,9 +507,11 @@ const Onboarding = () => {
   };
 
   const goNext = async () => {
+    if (saving) return;
     const list = stepsRef.current;
     const idx = stepRef.current;
     const cur = list[idx];
+    if (!cur) return;
     if (!cur.valid()) { toast.error(validationMessage(cur.id)); return; }
     toast.dismiss();
     if (idx < list.length - 1) setStep(idx + 1);
@@ -614,6 +615,7 @@ const Onboarding = () => {
             ))}
           </div>
           <button
+            type="button"
             onClick={() => setShowIntro(false)}
             className="w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-lg shadow-primary/20"
           >
@@ -636,6 +638,7 @@ const Onboarding = () => {
       <div className="px-5 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur z-10">
         <div className="flex items-center gap-3 mb-3">
           <button
+            type="button"
             onClick={goBack}
             className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
             aria-label="Back"
@@ -686,6 +689,7 @@ const Onboarding = () => {
 
       <div className="px-5 pb-8 pt-3 sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0 space-y-2">
         <button
+          type="button"
           onClick={goNext}
           disabled={saving}
           aria-disabled={saving}
@@ -701,6 +705,7 @@ const Onboarding = () => {
         </button>
         {isOptional && (
           <button
+            type="button"
             onClick={() => setStep((s) => Math.min(s + 1, steps.length - 1))}
             className="w-full py-3 rounded-2xl text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
@@ -768,6 +773,7 @@ const ChoiceList = ({
       const active = value === it.id;
       return (
         <button
+          type="button"
           key={it.id}
           onClick={() => onChange(it.id)}
           className={`w-full p-4 rounded-xl text-left flex items-center gap-3 border-2 transition-all ${
