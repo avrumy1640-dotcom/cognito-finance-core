@@ -87,10 +87,11 @@ const App = () => (
               <Route path="/profile/personal" element={<Guarded><PersonalInfo /></Guarded>} />
               <Route path="/profile/verify" element={<Guarded><VerifyIdentity /></Guarded>} />
               <Route path="/profile/documents" element={<Guarded><Documents /></Guarded>} />
-              <Route path="/profile/address" element={<Guarded><PersonalInfo /></Guarded>} />
-              <Route path="/profile/identity" element={<Guarded><PersonalInfo /></Guarded>} />
-              <Route path="/profile/employment" element={<Guarded><PersonalInfo /></Guarded>} />
-              <Route path="/profile/linked" element={<Guarded><PersonalInfo /></Guarded>} />
+              {/* Redundant /profile/address, /identity, /employment, /linked
+                  routes were removed — they all rendered PersonalInfo and
+                  confused the menu. PersonalInfo now owns all editable
+                  fields; Identity data is under /profile/verify. */}
+
               <Route path="/transaction/:id" element={<Banking><TransactionDetail /></Banking>} />
               <Route path="/account/:type" element={<Banking><AccountDetail /></Banking>} />
               <Route path="/security" element={<Guarded><SecurityCenter /></Guarded>} />
