@@ -25,6 +25,8 @@ interface ScheduledTransfer {
   last_run_at: string | null;
   last_error: string | null;
   next_run_at: string | null;
+  last_transaction_ref: string | null;
+  needs_attention: boolean;
   metadata: Record<string, unknown>;
 }
 
@@ -159,15 +161,29 @@ const ScheduledTransfers = () => {
                       <p className="text-sm font-semibold text-foreground truncate">{kindLabel[r.kind]} → {r.to_label}</p>
                       <p className="text-lg font-bold text-foreground mt-0.5">{formatUsd(r.amount)}</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">{local} · {r.timezone} · {r.frequency}</p>
+                      {r.last_run_at && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Last run {new Date(r.last_run_at).toLocaleString()}
+                          {r.last_transaction_ref ? ` · ref ${r.last_transaction_ref}` : ""}
+                        </p>
+                      )}
+                      {r.next_run_at && (
+                        <p className="text-[11px] text-muted-foreground">Next run {new Date(r.next_run_at).toLocaleString()}</p>
+                      )}
                       {r.last_error && <p className="text-[11px] text-destructive mt-1">{r.last_error}</p>}
+                      {r.needs_attention && (
+                        <p className="text-[11px] text-destructive mt-1 font-medium">
+                          Paused after repeated failures — fix the details and run it again.
+                        </p>
+                      )}
                     </div>
                   </div>
                   <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${meta.className}`}>{meta.label}</span>
                 </div>
                 {(r.status === "scheduled" || r.status === "failed") && (
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => runNow(r)} className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1">
-                      <Play size={12} /> Run now
+                    <button onClick={() => void runNow(r)} disabled={runningId === r.id} className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1 disabled:opacity-60">
+                      <Play size={12} /> {runningId === r.id ? "Running…" : "Run now"}
                     </button>
                     <button onClick={() => { setEditing(r); setShowForm(true); }} className="flex-1 py-2 rounded-lg bg-secondary text-foreground text-xs font-semibold flex items-center justify-center gap-1">
                       <Edit3 size={12} /> Edit
