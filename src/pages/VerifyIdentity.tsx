@@ -21,6 +21,8 @@ import KycStatusCard from "@/components/kyc/KycStatusCard";
 import DocumentUploader from "@/components/kyc/DocumentUploader";
 import PhoneField from "@/components/form/PhoneField";
 import SearchSelect from "@/components/form/SearchSelect";
+import AddressAutocomplete from "@/components/form/AddressAutocomplete";
+
 import { COUNTRIES, US_STATES } from "@/lib/countries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -127,7 +129,20 @@ const VerifyIdentity = () => {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const hydratedRef = useRef(false);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const [footerH, setFooterH] = useState(120);
   const dobMax = useMemo(maxDobString, []);
+
+  // Track the sticky footer's live height so content padding always clears it.
+  useEffect(() => {
+    const el = footerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setFooterH(el.offsetHeight));
+    ro.observe(el);
+    setFooterH(el.offsetHeight);
+    return () => ro.disconnect();
+  }, [showIntro, status, submitError]);
+
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
     setForm((f) => ({ ...f, [k]: v }));
@@ -402,7 +417,25 @@ const VerifyIdentity = () => {
       },
       render: (err) => (
         <div className="space-y-4">
-          <Field label="Street address" value={form.street} error={err.street} onChange={(v) => set("street", v)} />
+          <AddressAutocomplete
+            label="Street address"
+            value={form.street}
+            error={err.street}
+            country={form.country}
+            onChange={(v) => set("street", v)}
+            onSelect={(s) => {
+              setForm((f) => ({
+                ...f,
+                street: s.street || f.street,
+                city: s.city || f.city,
+                region: s.region || f.region,
+                postal_code: s.postal_code || f.postal_code,
+                country: s.country || f.country,
+              }));
+              setFieldErrors((e) => ({ ...e, street: undefined, city: undefined, region: undefined, postal_code: undefined, country: undefined }));
+            }}
+          />
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="City" value={form.city} error={err.city} onChange={(v) => set("city", v)} />
             {form.country === "US" ? (
@@ -696,7 +729,10 @@ const VerifyIdentity = () => {
         </div>
       </div>
 
-      <div className="flex-1 px-5 pb-6">
+      {/* Bottom padding tracks the real sticky-footer height (+ safe area) so no
+          field can ever sit underneath the Continue / Submit button. */}
+      <div className="flex-1 px-5" style={{ paddingBottom: `calc(${footerH + 24}px + env(safe-area-inset-bottom))` }}>
+
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
@@ -714,7 +750,10 @@ const VerifyIdentity = () => {
         </AnimatePresence>
       </div>
 
-      <div className="px-5 pb-8 pt-3 sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0 space-y-3">
+      <div
+        ref={footerRef}
+        className="px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border/40 space-y-3 max-w-md mx-auto"
+      >
         {submitError && (
           <motion.div
             initial={{ opacity: 0, y: 6 }}

@@ -45,6 +45,10 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
   const [issues, setIssues] = useState<Issue[]>([]);
   const [meta, setMeta] = useState<{ name: string; sizeBytes: number; width?: number; height?: number } | null>(null);
   const [validated, setValidated] = useState(!!value);
+  const [dragging, setDragging] = useState(false);
+
+  const openPicker = () => inputRef.current?.click();
+
 
   const maxMb = spec.maxMb ?? 6;
   const accept = spec.accept ?? (spec.kind === "document" ? "image/*,application/pdf" : "image/*");
@@ -153,13 +157,32 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
         )}
       </AnimatePresence>
 
-      {/* Uploader */}
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className={`w-full rounded-2xl border-2 border-dashed p-5 flex flex-col items-center gap-3 transition-all ${
+      {/* Uploader — the dashed box itself is the trigger for the hidden input */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={value ? `Replace ${spec.label}` : `Upload ${spec.label}`}
+        onClick={openPicker}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+            e.preventDefault();
+            openPicker();
+          }
+        }}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          const f = e.dataTransfer?.files?.[0];
+          if (f) void handleFile(f);
+        }}
+        className={`w-full cursor-pointer select-none rounded-2xl border-2 border-dashed p-5 flex flex-col items-center gap-3 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
           hasError
             ? "border-destructive/50 bg-destructive/5"
+            : dragging
+            ? "border-primary bg-primary/10"
             : validated
             ? "border-primary bg-primary/5"
             : "border-border bg-card hover:border-border/80"
@@ -167,18 +190,18 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
       >
         {value ? (
           spec.kind === "selfie" ? (
-            <img src={value} alt="Selfie preview" className="w-24 h-24 rounded-full object-cover shadow-lg" />
+            <img src={value} alt="Selfie preview" className="w-24 h-24 rounded-full object-cover shadow-lg pointer-events-none" />
           ) : (
-            <img src={value} alt="Document preview" className="max-h-40 rounded-xl object-cover shadow-lg" />
+            <img src={value} alt="Document preview" className="max-h-40 rounded-xl object-cover shadow-lg pointer-events-none" />
           )
         ) : (
-          <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center pointer-events-none">
             {spec.kind === "selfie" ? <Camera size={24} className="text-primary" />
               : spec.kind === "document" ? <FileImage size={24} className="text-primary" />
               : <Upload size={24} className="text-primary" />}
           </div>
         )}
-        <div className="text-center">
+        <div className="text-center pointer-events-none">
           <div className="text-sm font-semibold text-foreground">
             {value ? "Tap to replace" : spec.kind === "selfie" ? "Take a selfie" : "Upload a photo"}
           </div>
@@ -186,15 +209,25 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
             {meta ? `${prettyBytes(meta.sizeBytes)}${meta.width ? ` · ${meta.width}×${meta.height}` : ""}` : `Up to ${maxMb} MB`}
           </div>
         </div>
-      </button>
+      </div>
+      {/*
+        Kept in the layout (not display:none) and visually hidden instead —
+        some mobile browsers refuse to open the picker for a display:none input.
+      */}
       <input
         ref={inputRef}
         type="file"
         accept={accept}
         capture={spec.kind === "selfie" ? "user" : undefined}
-        className="hidden"
-        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+        tabIndex={-1}
+        aria-hidden="true"
+        className="sr-only absolute w-px h-px opacity-0 pointer-events-none"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleFile(f);
+        }}
       />
+
 
       {/* Live validation issues */}
       <AnimatePresence>
