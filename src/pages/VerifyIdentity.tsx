@@ -320,7 +320,15 @@ const VerifyIdentity = () => {
             <Field label="Legal last name" value={form.legal_last_name} error={err.legal_last_name} onChange={(v) => set("legal_last_name", v)} />
           </div>
           <Field label="Date of birth" type="date" max={dobMax} value={form.date_of_birth}
-            error={err.date_of_birth} onChange={(v) => set("date_of_birth", v)} />
+            error={err.date_of_birth}
+            onChange={(v) => {
+              set("date_of_birth", v);
+              // Surface the age rule as soon as a date is picked, not only on submit.
+              const age = ageFrom(v);
+              if (v && !Number.isNaN(age) && age < 18) {
+                setFieldErrors((e) => ({ ...e, date_of_birth: "You must be at least 18 years old" }));
+              }
+            }} />
           <PhoneField
             value={form.call_number}
             onChange={(v) => set("call_number", v)}
