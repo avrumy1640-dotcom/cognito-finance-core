@@ -45,6 +45,10 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
   const [issues, setIssues] = useState<Issue[]>([]);
   const [meta, setMeta] = useState<{ name: string; sizeBytes: number; width?: number; height?: number } | null>(null);
   const [validated, setValidated] = useState(!!value);
+  const [dragging, setDragging] = useState(false);
+
+  const openPicker = () => inputRef.current?.click();
+
 
   const maxMb = spec.maxMb ?? 6;
   const accept = spec.accept ?? (spec.kind === "document" ? "image/*,application/pdf" : "image/*");
