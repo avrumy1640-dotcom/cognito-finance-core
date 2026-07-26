@@ -148,6 +148,29 @@ const CardsPage = () => {
     { key: "out", label: "Spend", icon: ArrowUpRight },
   ];
 
+  if (dataStatus === "error") {
+    return (
+      <AppLayout>
+        <div className="px-5 pt-14">
+          <DataErrorState message={dataError} onRetry={retry} title="We couldn't load your cards" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (dataStatus === "loading") {
+    return (
+      <AppLayout>
+        <div className="px-5 pt-14 space-y-4">
+          <div className="h-6 w-40 rounded-lg bg-secondary animate-pulse" />
+          <div className="h-52 w-full rounded-3xl bg-secondary animate-pulse" />
+          <div className="h-20 w-full rounded-2xl bg-secondary animate-pulse" />
+          <div className="h-20 w-full rounded-2xl bg-secondary animate-pulse" />
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="px-5 pt-14 space-y-5 pb-8">
