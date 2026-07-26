@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
+import DataErrorState from "@/components/layout/DataErrorState";
 import { Search, Download, ChevronRight, SlidersHorizontal, FileText } from "lucide-react";
 import { buildCsv, buildPdf, type ExportResult } from "@/lib/exports";
 import ExportPreviewModal from "@/components/exports/ExportPreviewModal";
@@ -16,7 +17,7 @@ const ActivityPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const navigate = useNavigate();
-  const { transactions } = useBank();
+  const { transactions, dataStatus, dataError, retry } = useBank();
 
   const filtered = transactions.filter((tx) => {
     const matchesSearch =
@@ -79,6 +80,29 @@ const ActivityPage = () => {
     { label: "Recurring", emoji: "🔄", filter: null },
     { label: "Refunds", emoji: "💸", filter: "Income" },
   ];
+
+  if (dataStatus === "error") {
+    return (
+      <AppLayout>
+        <div className="px-5 pt-14">
+          <DataErrorState message={dataError} onRetry={retry} title="We couldn't load your activity" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (dataStatus === "loading") {
+    return (
+      <AppLayout>
+        <div className="px-5 pt-14 space-y-3">
+          <div className="h-6 w-32 rounded-lg bg-secondary animate-pulse" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-14 w-full rounded-2xl bg-secondary animate-pulse" />
+          ))}
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

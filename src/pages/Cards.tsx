@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
+import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
 import {
   Lock,
@@ -60,7 +61,7 @@ type TxFilter = "all" | "in" | "out";
 
 const CardsPage = () => {
   const navigate = useNavigate();
-  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen, issueCard, columnLive } = useBank();
+  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen, issueCard, columnLive, dataStatus, dataError, retry } = useBank();
   const { canMoveMoney, status: kycStatus } = useKyc();
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState<"actions" | "controls" | "transactions">("actions");

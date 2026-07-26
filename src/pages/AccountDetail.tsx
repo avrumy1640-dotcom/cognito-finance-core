@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
+import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
 import { toast } from "sonner";
 import { generateMonthlyStatement } from "@/lib/pdfDocuments";
@@ -45,7 +46,7 @@ const AccountDetail = () => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TxFilter>("all");
   const [limitsExport, setLimitsExport] = useState<ExportResult | null>(null);
-  const { accounts, transactions } = useBank(); const loading = false;
+  const { accounts, transactions, dataStatus, dataError, retry } = useBank(); const loading = false;
   const { status: kycStatus } = useKyc();
   const account = type === "savings" ? accounts.savings : accounts.checking;
 
@@ -91,6 +92,26 @@ const AccountDetail = () => {
     { key: "out", label: "Money out", icon: ArrowUpRight },
     { key: "pending", label: "Pending" },
   ];
+
+  if (dataStatus === "error") {
+    return (
+      <div className="min-h-screen bg-background px-5 pt-14">
+        <DataErrorState message={dataError} onRetry={retry} />
+      </div>
+    );
+  }
+
+  if (dataStatus === "loading") {
+    return (
+      <div className="min-h-screen bg-background px-5 pt-14 space-y-4">
+        <div className="h-6 w-40 rounded-lg bg-secondary animate-pulse" />
+        <div className="h-36 w-full rounded-3xl bg-secondary animate-pulse" />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-14 w-full rounded-2xl bg-secondary animate-pulse" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
