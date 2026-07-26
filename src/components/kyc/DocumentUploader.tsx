@@ -48,8 +48,13 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
   const [meta, setMeta] = useState<{ name: string; sizeBytes: number; width?: number; height?: number } | null>(null);
   const [validated, setValidated] = useState(!!value);
   const [dragging, setDragging] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
+  const isSelfie = spec.kind === "selfie";
   const openPicker = () => inputRef.current?.click();
+  const openSource = () => (isSelfie ? setCameraOpen(true) : openPicker());
+
+
 
 
   const maxMb = spec.maxMb ?? 6;
