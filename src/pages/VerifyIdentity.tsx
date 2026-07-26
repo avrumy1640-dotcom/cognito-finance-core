@@ -83,7 +83,27 @@ const EMPLOYMENT: { value: FormState["employment_status"]; label: string }[] = [
   { value: "unemployed", label: "Unemployed" },
 ];
 
-type StepDef = { title: string; kicker: string; valid: () => boolean; render: () => JSX.Element };
+type FieldErrors = Partial<Record<string, string>>;
+type StepDef = {
+  title: string;
+  kicker: string;
+  /** Returns a map of field → message. Empty object means the step is valid. */
+  errors: () => FieldErrors;
+  render: (err: FieldErrors) => JSX.Element;
+};
+
+/** Latest date of birth that still makes the user 18. */
+const maxDobString = () => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 18);
+  return d.toISOString().slice(0, 10);
+};
+
+const ageFrom = (v: string) => {
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return NaN;
+  return (Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000);
+};
 
 const draftKey = (uid?: string | null) => `kyc_draft_v1:${uid ?? "anon"}`;
 
