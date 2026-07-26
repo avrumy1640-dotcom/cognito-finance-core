@@ -750,7 +750,10 @@ const VerifyIdentity = () => {
         </AnimatePresence>
       </div>
 
-      <div className="px-5 pb-8 pt-3 sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0 space-y-3">
+      <div
+        ref={footerRef}
+        className="px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border/40 space-y-3 max-w-md mx-auto"
+      >
         {submitError && (
           <motion.div
             initial={{ opacity: 0, y: 6 }}
