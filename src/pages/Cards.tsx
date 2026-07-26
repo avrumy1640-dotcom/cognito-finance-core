@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
+import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
 import {
   Lock,
@@ -60,7 +61,7 @@ type TxFilter = "all" | "in" | "out";
 
 const CardsPage = () => {
   const navigate = useNavigate();
-  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen, issueCard, columnLive } = useBank();
+  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen, issueCard, columnLive, dataStatus, dataError, retry } = useBank();
   const { canMoveMoney, status: kycStatus } = useKyc();
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState<"actions" | "controls" | "transactions">("actions");
@@ -147,6 +148,29 @@ const CardsPage = () => {
     { key: "in", label: "Refunds", icon: ArrowDownLeft },
     { key: "out", label: "Spend", icon: ArrowUpRight },
   ];
+
+  if (dataStatus === "error") {
+    return (
+      <AppLayout>
+        <div className="px-5 pt-14">
+          <DataErrorState message={dataError} onRetry={retry} title="We couldn't load your cards" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (dataStatus === "loading") {
+    return (
+      <AppLayout>
+        <div className="px-5 pt-14 space-y-4">
+          <div className="h-6 w-40 rounded-lg bg-secondary animate-pulse" />
+          <div className="h-52 w-full rounded-3xl bg-secondary animate-pulse" />
+          <div className="h-20 w-full rounded-2xl bg-secondary animate-pulse" />
+          <div className="h-20 w-full rounded-2xl bg-secondary animate-pulse" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
