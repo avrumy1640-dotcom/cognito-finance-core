@@ -1,6 +1,8 @@
 import { useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, Upload, Check, AlertTriangle, RefreshCw, X, FileImage, Sparkles } from "lucide-react";
+import SelfieCapture from "@/components/SelfieCapture";
+
 
 export interface DocumentSpec {
   id: string;
@@ -46,8 +48,13 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
   const [meta, setMeta] = useState<{ name: string; sizeBytes: number; width?: number; height?: number } | null>(null);
   const [validated, setValidated] = useState(!!value);
   const [dragging, setDragging] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
+  const isSelfie = spec.kind === "selfie";
   const openPicker = () => inputRef.current?.click();
+  const openSource = () => (isSelfie ? setCameraOpen(true) : openPicker());
+
+
 
 
   const maxMb = spec.maxMb ?? 6;
@@ -157,18 +164,20 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
         )}
       </AnimatePresence>
 
-      {/* Uploader — the dashed box itself is the trigger for the hidden input */}
+      {/* Uploader — the dashed box opens the live camera (selfie) or the file picker */}
       <div
         role="button"
         tabIndex={0}
-        aria-label={value ? `Replace ${spec.label}` : `Upload ${spec.label}`}
-        onClick={openPicker}
+        data-testid={`uploader-${spec.id}`}
+        aria-label={value ? `Replace ${spec.label}` : isSelfie ? `Take a selfie` : `Upload ${spec.label}`}
+        onClick={openSource}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
             e.preventDefault();
-            openPicker();
+            openSource();
           }
         }}
+
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
@@ -247,7 +256,7 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
 
       {value && (
         <div className="flex gap-2">
-          <button type="button" onClick={() => inputRef.current?.click()}
+          <button type="button" onClick={openSource}
             className="flex-1 py-2 px-3 rounded-lg bg-secondary text-foreground text-xs font-semibold flex items-center justify-center gap-1.5">
             <RefreshCw size={12} /> Retake
           </button>
@@ -257,6 +266,21 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
           </button>
         </div>
       )}
+
+      {isSelfie && (
+        <SelfieCapture
+          open={cameraOpen}
+          onClose={() => setCameraOpen(false)}
+          onFallback={openPicker}
+          onCapture={(url, info) => {
+            setIssues([]);
+            setMeta(info);
+            setValidated(true);
+            onChange(url, info);
+          }}
+        />
+      )}
+
     </div>
   );
 };
