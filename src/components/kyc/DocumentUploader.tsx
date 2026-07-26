@@ -164,18 +164,20 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
         )}
       </AnimatePresence>
 
-      {/* Uploader — the dashed box itself is the trigger for the hidden input */}
+      {/* Uploader — the dashed box opens the live camera (selfie) or the file picker */}
       <div
         role="button"
         tabIndex={0}
-        aria-label={value ? `Replace ${spec.label}` : `Upload ${spec.label}`}
-        onClick={openPicker}
+        data-testid={`uploader-${spec.id}`}
+        aria-label={value ? `Replace ${spec.label}` : isSelfie ? `Take a selfie` : `Upload ${spec.label}`}
+        onClick={openSource}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
             e.preventDefault();
-            openPicker();
+            openSource();
           }
         }}
+
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
