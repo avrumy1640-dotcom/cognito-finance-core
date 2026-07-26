@@ -256,7 +256,7 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
 
       {value && (
         <div className="flex gap-2">
-          <button type="button" onClick={() => inputRef.current?.click()}
+          <button type="button" onClick={openSource}
             className="flex-1 py-2 px-3 rounded-lg bg-secondary text-foreground text-xs font-semibold flex items-center justify-center gap-1.5">
             <RefreshCw size={12} /> Retake
           </button>
@@ -266,6 +266,21 @@ const DocumentUploader = ({ spec, value, onChange, rejectionReason, required }: 
           </button>
         </div>
       )}
+
+      {isSelfie && (
+        <SelfieCapture
+          open={cameraOpen}
+          onClose={() => setCameraOpen(false)}
+          onFallback={openPicker}
+          onCapture={(url, info) => {
+            setIssues([]);
+            setMeta(info);
+            setValidated(true);
+            onChange(url, info);
+          }}
+        />
+      )}
+
     </div>
   );
 };
