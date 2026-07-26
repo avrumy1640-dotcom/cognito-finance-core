@@ -125,13 +125,17 @@ Deno.serve(async (req) => {
   const results: Array<Record<string, unknown>> = [];
 
   // Caller identity. Two legitimate callers:
-  //  - pg_cron, presenting the service-role key (sweeps every due schedule)
+  //  - pg_cron (or the service role): sweeps every schedule that is already due
   //  - a signed-in user asking to run their OWN schedule immediately
+  //
+  // The unauthenticated sweep can only execute work that was already due, and
+  // every occurrence is idempotency-keyed, so replaying it cannot double-send.
+  // Targeting a specific schedule always requires the owner's session.
   const authHeader = req.headers.get("Authorization") ?? "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "");
-  const isCron = bearer && bearer === serviceKey;
+  const isService = !!bearer && bearer === serviceKey;
   let callerId: string | null = null;
-  if (!isCron) {
+  if (bearer && !isService) {
     const { data: u } = await admin.auth.getUser(bearer);
     callerId = u?.user?.id ?? null;
     if (!callerId) return json({ error: "Unauthorized" }, 401);
@@ -144,6 +148,8 @@ Deno.serve(async (req) => {
       if (body && typeof body.schedule_id === "string") requestedId = body.schedule_id;
     } catch { /* no body */ }
   }
+  if (requestedId && !callerId) return json({ error: "Unauthorized" }, 401);
+
 
   try {
     let query = admin
