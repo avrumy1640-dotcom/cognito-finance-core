@@ -527,7 +527,14 @@ const VerifyIdentity = () => {
   const current = steps[step];
 
   const next = async () => {
-    if (!current.valid()) { toast.error("Please complete this step to continue."); return; }
+    const errs = current.errors();
+    const keys = Object.keys(errs).filter((k) => errs[k]);
+    if (keys.length) {
+      setFieldErrors(errs);
+      toast.error(errs[keys[0]]!);
+      return;
+    }
+    setFieldErrors({});
     if (step < steps.length - 1) setStep(step + 1);
     else await submit();
   };
