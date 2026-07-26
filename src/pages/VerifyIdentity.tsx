@@ -129,7 +129,20 @@ const VerifyIdentity = () => {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const hydratedRef = useRef(false);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const [footerH, setFooterH] = useState(120);
   const dobMax = useMemo(maxDobString, []);
+
+  // Track the sticky footer's live height so content padding always clears it.
+  useEffect(() => {
+    const el = footerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setFooterH(el.offsetHeight));
+    ro.observe(el);
+    setFooterH(el.offsetHeight);
+    return () => ro.disconnect();
+  }, [showIntro, status, submitError]);
+
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
     setForm((f) => ({ ...f, [k]: v }));
