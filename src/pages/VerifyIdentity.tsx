@@ -701,7 +701,7 @@ const VerifyIdentity = () => {
             <h1 className="text-[26px] font-display font-bold text-foreground leading-tight tracking-tight mb-6">
               {current.title}
             </h1>
-            {current.render()}
+            {current.render(fieldErrors)}
           </motion.div>
         </AnimatePresence>
       </div>
