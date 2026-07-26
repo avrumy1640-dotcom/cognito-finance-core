@@ -77,7 +77,6 @@ const App = () => (
               <Route path="/mfa-challenge" element={<MfaChallenge />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
-              <Route path="/__kyc_test" element={<VerifyIdentity />} />
               <Route path="/onboarding" element={<Guarded><Onboarding /></Guarded>} />
               <Route path="/" element={<Banking><Index /></Banking>} />
               <Route path="/receive" element={<Banking><ReceiveMoney /></Banking>} />
