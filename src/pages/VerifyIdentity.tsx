@@ -124,10 +124,16 @@ const VerifyIdentity = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<SubmitError>(null);
   const [attempt, setAttempt] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const hydratedRef = useRef(false);
+  const dobMax = useMemo(maxDobString, []);
 
-  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    // Errors clear the moment the user starts correcting the offending field.
+    setFieldErrors((e) => (e[k as string] ? { ...e, [k as string]: undefined } : e));
+  };
 
   // Hydrate any prior draft so a refresh, session expiry, or crash doesn't
   // force the user to start over. Sensitive fields (password, selfie, ID number,
