@@ -1,6 +1,8 @@
 import { useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, Upload, Check, AlertTriangle, RefreshCw, X, FileImage, Sparkles } from "lucide-react";
+import SelfieCapture from "@/components/SelfieCapture";
+
 
 export interface DocumentSpec {
   id: string;
