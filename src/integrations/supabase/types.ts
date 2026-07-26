@@ -257,6 +257,90 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          created_at: string
+          email_marketing: boolean
+          email_statements: boolean
+          id: string
+          large_txn_amount: number
+          low_balance_amount: number
+          push_card: boolean
+          push_deposits: boolean
+          push_low_balance: boolean
+          push_security: boolean
+          push_transfers: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_marketing?: boolean
+          email_statements?: boolean
+          id?: string
+          large_txn_amount?: number
+          low_balance_amount?: number
+          push_card?: boolean
+          push_deposits?: boolean
+          push_low_balance?: boolean
+          push_security?: boolean
+          push_transfers?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_marketing?: boolean
+          email_statements?: boolean
+          id?: string
+          large_txn_amount?: number
+          low_balance_amount?: number
+          push_card?: boolean
+          push_deposits?: boolean
+          push_low_balance?: boolean
+          push_security?: boolean
+          push_transfers?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          data: Json
+          dedupe_key: string | null
+          id: string
+          read_at: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          data?: Json
+          dedupe_key?: string | null
+          id?: string
+          read_at?: string | null
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          data?: Json
+          dedupe_key?: string | null
+          id?: string
+          read_at?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_requests: {
         Row: {
           amount_cents: number
@@ -389,9 +473,54 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_transfer_runs: {
+        Row: {
+          error: string | null
+          finished_at: string | null
+          id: string
+          occurrence_key: string
+          schedule_id: string
+          started_at: string
+          status: string
+          transaction_ref: string | null
+          user_id: string
+        }
+        Insert: {
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          occurrence_key: string
+          schedule_id: string
+          started_at?: string
+          status?: string
+          transaction_ref?: string | null
+          user_id: string
+        }
+        Update: {
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          occurrence_key?: string
+          schedule_id?: string
+          started_at?: string
+          status?: string
+          transaction_ref?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_transfer_runs_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduled_transfers: {
         Row: {
           amount: number
+          consecutive_failures: number
           created_at: string
           currency: string
           frequency: string
@@ -400,8 +529,10 @@ export type Database = {
           kind: string
           last_error: string | null
           last_run_at: string | null
+          last_transaction_ref: string | null
           memo: string | null
           metadata: Json
+          needs_attention: boolean
           next_run_at: string | null
           scheduled_for: string
           status: string
@@ -412,6 +543,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          consecutive_failures?: number
           created_at?: string
           currency?: string
           frequency?: string
@@ -420,8 +552,10 @@ export type Database = {
           kind: string
           last_error?: string | null
           last_run_at?: string | null
+          last_transaction_ref?: string | null
           memo?: string | null
           metadata?: Json
+          needs_attention?: boolean
           next_run_at?: string | null
           scheduled_for: string
           status?: string
@@ -432,6 +566,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          consecutive_failures?: number
           created_at?: string
           currency?: string
           frequency?: string
@@ -440,8 +575,10 @@ export type Database = {
           kind?: string
           last_error?: string | null
           last_run_at?: string | null
+          last_transaction_ref?: string | null
           memo?: string | null
           metadata?: Json
+          needs_attention?: boolean
           next_run_at?: string | null
           scheduled_for?: string
           status?: string
@@ -532,6 +669,69 @@ export type Database = {
         }
         Relationships: []
       }
+      transaction_categories: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          is_override: boolean
+          merchant_normalized: string | null
+          transaction_ref: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          is_override?: boolean
+          merchant_normalized?: string | null
+          transaction_ref: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_override?: boolean
+          merchant_normalized?: string | null
+          transaction_ref?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transaction_category_rules: {
+        Row: {
+          active: boolean
+          category: string
+          created_at: string
+          id: string
+          pattern: string
+          priority: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category: string
+          created_at?: string
+          id?: string
+          pattern: string
+          priority?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          created_at?: string
+          id?: string
+          pattern?: string
+          priority?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       trusted_devices: {
         Row: {
           created_at: string
@@ -583,6 +783,75 @@ export type Database = {
         }
         Relationships: []
       }
+      user_security_settings: {
+        Row: {
+          biometric_enabled: boolean
+          created_at: string
+          id: string
+          passcode_hash: string | null
+          passcode_salt: string | null
+          passcode_updated_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          biometric_enabled?: boolean
+          created_at?: string
+          id?: string
+          passcode_hash?: string | null
+          passcode_salt?: string | null
+          passcode_updated_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          biometric_enabled?: boolean
+          created_at?: string
+          id?: string
+          passcode_hash?: string | null
+          passcode_salt?: string | null
+          passcode_updated_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      webauthn_credentials: {
+        Row: {
+          created_at: string
+          credential_id: string
+          device_id: string | null
+          id: string
+          label: string
+          last_used_at: string | null
+          public_key: string | null
+          transports: string[] | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credential_id: string
+          device_id?: string | null
+          id?: string
+          label?: string
+          last_used_at?: string | null
+          public_key?: string | null
+          transports?: string[] | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credential_id?: string
+          device_id?: string | null
+          id?: string
+          label?: string
+          last_used_at?: string | null
+          public_key?: string | null
+          transports?: string[] | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       webhook_events: {
         Row: {
           attempts: number
@@ -630,6 +899,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_set_role: {
+        Args: {
+          _grant: boolean
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

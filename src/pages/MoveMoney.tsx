@@ -51,7 +51,6 @@ const moreActions = [
 const MoveMoney = () => {
   const navigate = useNavigate();
   const { action: routeAction } = useParams();
-  const { recipients } = useBank();
   const { canMoveMoney } = useKyc();
   const initial = routeAction && ["transfer", "send", "external", "wire", "add", "bills"].includes(routeAction) ? routeAction : null;
   const [selected, setSelected] = useState<string | null>(initial);
@@ -81,35 +80,6 @@ const MoveMoney = () => {
           <p className="text-sm text-muted-foreground mt-1">Transfer, send, or deposit funds</p>
         </motion.div>
 
-        {recipients.length > 0 && (
-          <div>
-            <h2 className="text-section-title mb-3">Recent Recipients</h2>
-            <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
-              {recipients.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => setSelected("send")}
-                  className="flex flex-col items-center gap-1.5 min-w-[60px]"
-                >
-                  <div className="w-12 h-12 rounded-full gradient-hero flex items-center justify-center">
-                    <span className="text-primary-foreground font-semibold text-sm">{r.initial}</span>
-                  </div>
-                  <span className="text-xs text-foreground font-medium truncate max-w-[60px]">{r.name}</span>
-                  <span className="text-[10px] text-muted-foreground">{r.lastSent}</span>
-                </button>
-              ))}
-              <button
-                onClick={() => setSelected("send")}
-                className="flex flex-col items-center gap-1.5 min-w-[60px]"
-              >
-                <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
-                  <Plus size={20} className="text-muted-foreground" />
-                </div>
-                <span className="text-xs text-muted-foreground font-medium">New</span>
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="grid grid-cols-2 gap-3">
           {primaryActions.map((action, i) => (

@@ -25,6 +25,8 @@ interface ScheduledTransfer {
   last_run_at: string | null;
   last_error: string | null;
   next_run_at: string | null;
+  last_transaction_ref: string | null;
+  needs_attention: boolean;
   metadata: Record<string, unknown>;
 }
 
@@ -60,7 +62,8 @@ const nextRunFor = (freq: ScheduledTransfer["frequency"], scheduledFor: string) 
 const ScheduledTransfers = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { accounts, transfer, externalTransfer, wireTransfer, payBill, send } = useBank();
+  const { accounts } = useBank();
+  const [runningId, setRunningId] = useState<string | null>(null);
   const [rows, setRows] = useState<ScheduledTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -87,36 +90,26 @@ const ScheduledTransfers = () => {
     load();
   };
 
+  // Genuine execution: the same server-side executor pg_cron calls, which
+  // performs the Iberbanco transfer with server-resolved ownership checks and
+  // per-occurrence idempotency. The UI never fakes a status change.
   const runNow = async (r: ScheduledTransfer) => {
-    await supabase.from("scheduled_transfers").update({ status: "processing" }).eq("id", r.id);
-    const meta = (r.metadata || {}) as Record<string, string>;
-    let ok = false;
-    try {
-      if (r.kind === "internal") {
-        ok = transfer({ from: r.from_account as "checking" | "savings", to: r.to_label as "checking" | "savings", amount: r.amount, memo: r.memo ?? undefined });
-      } else if (r.kind === "external") {
-        ok = externalTransfer({ from: r.from_account as "checking" | "savings", amount: r.amount, bank: meta.bank || r.to_label, routingNumber: meta.routingNumber || "", accountNumber: meta.accountNumber || "", memo: r.memo ?? undefined });
-      } else if (r.kind === "wire") {
-        ok = wireTransfer({ from: r.from_account as "checking" | "savings", amount: r.amount, beneficiaryName: r.to_label, routingNumber: meta.routingNumber || "", accountNumber: meta.accountNumber || "", memo: r.memo ?? undefined, fee: 25 });
-      } else if (r.kind === "bill") {
-        ok = payBill({ from: r.from_account as "checking" | "savings", amount: r.amount, biller: r.to_label });
-      } else if (r.kind === "send") {
-        ok = send({ from: r.from_account as "checking" | "savings", amount: r.amount, recipient: r.to_label, note: r.memo ?? undefined });
-      }
-    } catch (e) {
-      ok = false;
+    setRunningId(r.id);
+    const t = toast.loading("Running scheduled transfer…");
+    const { data, error } = await supabase.functions.invoke("run-scheduled-transfers", {
+      body: { schedule_id: r.id },
+    });
+    setRunningId(null);
+    if (error) {
+      toast.error("Couldn't run transfer", { id: t, description: error.message });
+      load();
+      return;
     }
-    const patch = ok
-      ? {
-          status: r.frequency === "once" ? "completed" : "scheduled",
-          last_run_at: new Date().toISOString(),
-          last_error: null,
-          next_run_at: r.frequency === "once" ? null : nextRunFor(r.frequency, r.scheduled_for),
-        }
-      : { status: "failed", last_error: "Execution failed — check balance and details.", last_run_at: new Date().toISOString() };
-    await supabase.from("scheduled_transfers").update(patch as never).eq("id", r.id);
-    if (ok) toast.success("Scheduled transfer executed");
-    else toast.error("Execution failed — marked as failed");
+    const res = (data as { results?: Array<{ ok?: boolean; error?: string; skipped?: string }> })?.results?.[0];
+    if (!res) toast.info("Nothing to run for this schedule right now.", { id: t });
+    else if (res.skipped) toast.info("This occurrence already ran.", { id: t });
+    else if (res.ok) toast.success("Transfer executed", { id: t });
+    else toast.error("Transfer failed", { id: t, description: res.error || "Check balance and details." });
     load();
   };
 
@@ -168,15 +161,29 @@ const ScheduledTransfers = () => {
                       <p className="text-sm font-semibold text-foreground truncate">{kindLabel[r.kind]} → {r.to_label}</p>
                       <p className="text-lg font-bold text-foreground mt-0.5">{formatUsd(r.amount)}</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">{local} · {r.timezone} · {r.frequency}</p>
+                      {r.last_run_at && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Last run {new Date(r.last_run_at).toLocaleString()}
+                          {r.last_transaction_ref ? ` · ref ${r.last_transaction_ref}` : ""}
+                        </p>
+                      )}
+                      {r.next_run_at && (
+                        <p className="text-[11px] text-muted-foreground">Next run {new Date(r.next_run_at).toLocaleString()}</p>
+                      )}
                       {r.last_error && <p className="text-[11px] text-destructive mt-1">{r.last_error}</p>}
+                      {r.needs_attention && (
+                        <p className="text-[11px] text-destructive mt-1 font-medium">
+                          Paused after repeated failures — fix the details and run it again.
+                        </p>
+                      )}
                     </div>
                   </div>
                   <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${meta.className}`}>{meta.label}</span>
                 </div>
                 {(r.status === "scheduled" || r.status === "failed") && (
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => runNow(r)} className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1">
-                      <Play size={12} /> Run now
+                    <button onClick={() => void runNow(r)} disabled={runningId === r.id} className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1 disabled:opacity-60">
+                      <Play size={12} /> {runningId === r.id ? "Running…" : "Run now"}
                     </button>
                     <button onClick={() => { setEditing(r); setShowForm(true); }} className="flex-1 py-2 rounded-lg bg-secondary text-foreground text-xs font-semibold flex items-center justify-center gap-1">
                       <Edit3 size={12} /> Edit

@@ -5,7 +5,7 @@ import GlassCard from "@/components/glass/GlassCard";
 import { ArrowLeft, FileText, Download, Search, Receipt, Shield, Bell } from "lucide-react";
 import { useBank } from "@/store/bankStore";
 import { generateMonthlyStatement, generate1099INT } from "@/lib/pdfDocuments";
-import type { Transaction } from "@/data/mockData";
+import type { Transaction } from "@/types/transaction";
 
 const categories = ["All", "Statements", "Tax Forms", "Notices", "Agreements"] as const;
 type Category = (typeof categories)[number];

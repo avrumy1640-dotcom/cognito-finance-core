@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
-import { useBank } from "@/store/bankStore";
+import { useNotifications } from "@/hooks/useNotifications";
 import { loadAlertPrefs, saveAlertPrefs, AlertPrefs } from "@/lib/alerts";
 import { ArrowLeft, Settings, CheckCheck } from "lucide-react";
 
@@ -40,8 +40,7 @@ const NotificationsPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isSettings = location.pathname.endsWith("/settings");
-  const { notifications, markNotificationRead, markAllRead } = useBank();
-  const unread = notifications.filter((n) => !n.read).length;
+  const { items: notifications, unread, markRead: markNotificationRead, markAllRead, status } = useNotifications();
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [alerts, setAlerts] = useState<AlertPrefs>(loadAlertPrefs);
 
@@ -203,7 +202,7 @@ const NotificationsPage = () => {
           <div className="flex items-center gap-2">
             {unread > 0 && (
               <button
-                onClick={() => { markAllRead(); toast.success("All marked as read"); }}
+                onClick={() => { void markAllRead(); toast.success("All marked as read"); }}
                 className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
                 title="Mark all as read"
               >
@@ -221,7 +220,12 @@ const NotificationsPage = () => {
         </div>
 
         <div className="space-y-2">
-          {notifications.length === 0 && (
+          {status === "loading" && (
+            <GlassCard className="text-center py-8">
+              <p className="text-sm text-muted-foreground">Loading notifications…</p>
+            </GlassCard>
+          )}
+          {status === "loaded" && notifications.length === 0 && (
             <GlassCard className="text-center py-10">
               <div className="text-4xl mb-2">🔔</div>
               <p className="text-sm font-medium text-foreground">You're all caught up</p>
@@ -239,16 +243,16 @@ const NotificationsPage = () => {
           {notifications.map((n, i) => (
             <motion.div key={n.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
               <GlassCard
-                onClick={() => markNotificationRead(n.id)}
-                className={`flex items-start gap-3 py-3 ${!n.read ? "border-l-2 border-l-accent" : ""}`}
+                onClick={() => void markNotificationRead(n.id)}
+                className={`flex items-start gap-3 py-3 ${!n.read_at ? "border-l-2 border-l-accent" : ""}`}
               >
                 <span className="text-lg mt-0.5">{iconMap[n.type] || "🔔"}</span>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium ${!n.read ? "text-foreground" : "text-muted-foreground"}`}>{n.title}</p>
+                  <p className={`text-sm font-medium ${!n.read_at ? "text-foreground" : "text-muted-foreground"}`}>{n.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{n.body}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">{n.time}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">{new Date(n.created_at).toLocaleString()}</p>
                 </div>
-                {!n.read && <div className="w-2 h-2 rounded-full bg-accent mt-1.5 shrink-0" />}
+                {!n.read_at && <div className="w-2 h-2 rounded-full bg-accent mt-1.5 shrink-0" />}
               </GlassCard>
             </motion.div>
           ))}

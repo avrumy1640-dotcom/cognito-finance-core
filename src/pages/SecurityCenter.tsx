@@ -6,6 +6,8 @@ import GlassCard from "@/components/glass/GlassCard";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/deviceTracking";
+import { isBiometricAvailable, registerBiometric, removeBiometric } from "@/lib/webauthn";
+import { loadSecuritySettings, setBiometricEnabled, setPasscode, clearPasscode } from "@/lib/passcode";
 import {
   ArrowLeft,
   Lock,
@@ -36,9 +38,12 @@ const SecurityCenter = () => {
   const navigate = useNavigate();
   const { user, signOutOthers, updatePassword, sendPasswordReset } = useAuth();
 
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [passcodeModal, setPasscodeModal] = useState(false);
+  const [passcodeInput, setPasscodeInput] = useState("");
   const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
-    biometric: true,
-    passcode: true,
+    biometric: false,
+    passcode: false,
     unusualLogin: true,
     suspiciousTx: true,
   });
@@ -98,14 +103,62 @@ const SecurityCenter = () => {
     setListLoading(false);
   };
 
-  const flip = (k: ToggleKey) => {
+  // Real, persisted security state. Biometric = WebAuthn platform credential,
+  // passcode = PBKDF2 hash in user_security_settings. Nothing is local-only.
+  useEffect(() => {
+    void (async () => {
+      setBioAvailable(await isBiometricAvailable());
+      if (!user) return;
+      const s = await loadSecuritySettings(user.id);
+      setToggles((t) => ({ ...t, biometric: s.biometric_enabled, passcode: !!s.passcode_hash }));
+    })();
+  }, [user]);
+
+  const flip = async (k: ToggleKey) => {
+    if (!user) return;
+    if (k === "biometric") {
+      if (toggles.biometric) {
+        await removeBiometric(user.id);
+        await setBiometricEnabled(user.id, false);
+        setToggles((t) => ({ ...t, biometric: false }));
+        toast.success("Biometric unlock disabled");
+        return;
+      }
+      const res = await registerBiometric(user.id, user.email ?? "Glass Bank user");
+      if (!res.ok) { toast.error("Couldn't enable biometric unlock", { description: res.error }); return; }
+      await setBiometricEnabled(user.id, true);
+      setToggles((t) => ({ ...t, biometric: true }));
+      toast.success("Biometric unlock enabled on this device");
+      return;
+    }
+    if (k === "passcode") {
+      if (toggles.passcode) {
+        const err = await clearPasscode(user.id);
+        if (err) { toast.error("Couldn't remove passcode", { description: err }); return; }
+        setToggles((t) => ({ ...t, passcode: false }));
+        toast.success("App passcode removed");
+      } else {
+        setPasscodeInput("");
+        setPasscodeModal(true);
+      }
+      return;
+    }
     setToggles((t) => {
       const next = { ...t, [k]: !t[k] };
       toast.success(
-        `${k === "biometric" ? "Biometric login" : k === "passcode" ? "App passcode" : k === "unusualLogin" ? "Unusual login alerts" : "Suspicious transaction alerts"} ${next[k] ? "enabled" : "disabled"}`
+        `${k === "unusualLogin" ? "Unusual login alerts" : "Suspicious transaction alerts"} ${next[k] ? "enabled" : "disabled"}`
       );
       return next;
     });
+  };
+
+  const savePasscode = async () => {
+    if (!user) return;
+    const err = await setPasscode(user.id, passcodeInput);
+    if (err) { toast.error(err); return; }
+    setToggles((t) => ({ ...t, passcode: true }));
+    setPasscodeModal(false);
+    toast.success("App passcode set");
   };
 
   const submitPassword = async () => {
@@ -222,8 +275,10 @@ const SecurityCenter = () => {
       title: "Login & Authentication",
       items: [
         { icon: Key, label: "Change Password", desc: "Set a new password" },
-        { icon: Fingerprint, label: "Biometric Login", desc: `Face ID ${toggles.biometric ? "enabled" : "disabled"}`, toggle: "biometric" },
-        { icon: Lock, label: "App Passcode", desc: `4-digit passcode ${toggles.passcode ? "enabled" : "disabled"}`, toggle: "passcode" },
+        ...(bioAvailable
+          ? [{ icon: Fingerprint, label: "Biometric Login", desc: `Device biometrics ${toggles.biometric ? "enabled" : "disabled"}`, toggle: "biometric" as ToggleKey }]
+          : []),
+        { icon: Lock, label: "App Passcode", desc: toggles.passcode ? "Passcode set" : "Not set", toggle: "passcode" },
         { icon: Shield, label: "Two-Factor Authentication", desc: verifiedFactor ? "Authenticator app enabled" : "Not enabled" },
         { icon: Smartphone, label: "Trusted Devices", desc: `${devices.length || "—"} device${devices.length === 1 ? "" : "s"}` },
         { icon: Clock, label: "Login History", desc: "View recent logins" },
@@ -291,7 +346,7 @@ const SecurityCenter = () => {
                 return (
                   <button
                     key={item.label}
-                    onClick={isToggle ? () => flip(item.toggle as ToggleKey) : action(item.label)}
+                    onClick={isToggle ? () => void flip(item.toggle as ToggleKey) : action(item.label)}
                     className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-secondary/40 transition-colors"
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -433,6 +488,35 @@ const SecurityCenter = () => {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {passcodeModal && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center">
+          <div className="w-full sm:max-w-sm bg-card rounded-t-3xl sm:rounded-3xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">Set app passcode</h2>
+              <button onClick={() => setPasscodeModal(false)} aria-label="Close"><X size={18} className="text-muted-foreground" /></button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              4–8 digits. Locks this app on your devices. Stored only as a salted hash.
+            </p>
+            <input
+              inputMode="numeric"
+              autoFocus
+              value={passcodeInput}
+              onChange={(e) => setPasscodeInput(e.target.value.replace(/\D/g, "").slice(0, 8))}
+              placeholder="••••"
+              className="w-full text-center tracking-[0.5em] text-lg py-3 rounded-xl bg-secondary text-foreground outline-none"
+            />
+            <button
+              onClick={() => void savePasscode()}
+              disabled={passcodeInput.length < 4}
+              className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50"
+            >
+              Save passcode
+            </button>
           </div>
         </div>
       )}
