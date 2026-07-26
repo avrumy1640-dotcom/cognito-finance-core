@@ -716,7 +716,10 @@ const VerifyIdentity = () => {
         </div>
       </div>
 
-      <div className="flex-1 px-5 pb-6">
+      {/* Bottom padding tracks the real sticky-footer height (+ safe area) so no
+          field can ever sit underneath the Continue / Submit button. */}
+      <div className="flex-1 px-5" style={{ paddingBottom: `calc(${footerH + 24}px + env(safe-area-inset-bottom))` }}>
+
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
