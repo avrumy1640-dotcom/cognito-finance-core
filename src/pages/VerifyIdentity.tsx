@@ -757,19 +757,27 @@ const VerifyIdentity = () => {
   );
 };
 
-const Field = ({ label, value, onChange, placeholder, type }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+const Field = ({ label, value, onChange, placeholder, type, max, error }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; type?: string; max?: string; error?: string | null;
 }) => (
   <div>
     <label className="text-xs text-muted-foreground font-semibold mb-1.5 block uppercase tracking-wide">{label}</label>
     <input
       type={type ?? "text"}
       value={value}
+      max={max}
+      aria-label={label}
+      aria-invalid={!!error}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full p-3.5 rounded-xl bg-secondary text-foreground text-sm border-2 border-transparent outline-none focus:border-primary/40 focus:bg-card transition-colors"
+      className={`w-full p-3.5 rounded-xl bg-secondary text-foreground text-sm border-2 outline-none transition-colors ${
+        error ? "border-destructive/60" : "border-transparent focus:border-primary/40 focus:bg-card"
+      }`}
     />
+    {error && <p className="text-[11px] text-destructive mt-1.5 font-medium">{error}</p>}
   </div>
 );
+
 
 export default VerifyIdentity;
