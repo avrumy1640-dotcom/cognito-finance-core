@@ -87,7 +87,7 @@ const App = () => (
               <Route path="/profile" element={<Guarded><Profile /></Guarded>} />
               <Route path="/profile/personal" element={<Guarded><PersonalInfo /></Guarded>} />
               <Route path="/profile/verify" element={<Guarded><VerifyIdentity /></Guarded>} />
-              <Route path="/__kyc_test" element={<VerifyIdentity />} />
+              
 
               <Route path="/profile/documents" element={<Guarded><Documents /></Guarded>} />
               {/* Redundant /profile/address, /identity, /employment, /linked
