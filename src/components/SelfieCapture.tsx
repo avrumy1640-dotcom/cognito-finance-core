@@ -33,8 +33,9 @@ function inIframe(): boolean {
 
 function describeError(err: unknown): CamError {
   const name = (err as { name?: string } | null)?.name ?? "";
+  const msg = ((err as { message?: string } | null)?.message ?? "").toLowerCase();
   const framed = inIframe();
-  if (name === "NotAllowedError" || name === "SecurityError") {
+  if (name === "NotAllowedError" || name === "SecurityError" || /permission|denied|dismiss/.test(msg)) {
     return {
       title: "Camera permission blocked",
       message: framed
