@@ -60,7 +60,8 @@ const nextRunFor = (freq: ScheduledTransfer["frequency"], scheduledFor: string) 
 const ScheduledTransfers = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { accounts, transfer, externalTransfer, wireTransfer, payBill, send } = useBank();
+  const { accounts } = useBank();
+  const [runningId, setRunningId] = useState<string | null>(null);
   const [rows, setRows] = useState<ScheduledTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
