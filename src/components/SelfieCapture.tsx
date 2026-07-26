@@ -46,6 +46,15 @@ function describeError(err: unknown): CamError {
         : "Tap the lock/camera icon in your browser's address bar, set Camera to Allow, then reload and try again.",
     };
   }
+  if (name === "NotSupportedError") {
+    return {
+      title: framed ? "Camera blocked in this preview" : "Camera unavailable",
+      message: framed
+        ? "This app is running inside an embedded frame that hasn't been granted camera access."
+        : "This browser or device didn't allow a camera stream to start.",
+      hint: "Open the app in its own browser tab, or upload a photo instead.",
+    };
+  }
   if (name === "NotFoundError" || name === "OverconstrainedError" || name === "DevicesNotFoundError") {
     return {
       title: "No camera found",
