@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
-import { faqData } from "@/data/mockData";
+import { FAQ_SECTIONS as faqData } from "@/content/faq";
 import {
   ArrowLeft,
   Search,

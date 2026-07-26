@@ -1,7 +1,7 @@
 // Real PDF generation for monthly statements and year-end tax documents.
 // Uses jsPDF client-side so the app doesn't need a backend PDF service.
 import { jsPDF } from "jspdf";
-import type { Transaction } from "@/data/mockData";
+import type { Transaction } from "@/types/transaction";
 
 interface Account {
   name: string;

@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
+import { useUnreadCount } from "@/hooks/useNotifications";
+import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
 import { useProfile } from "@/hooks/useProfile";
 import {
@@ -48,10 +50,12 @@ const Skeleton = ({ className = "" }: { className?: string }) => (
 const HomePage = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const navigate = useNavigate();
-  const { accounts, totalBalance, transactions, notifications, columnStatus } = useBank();
+  const { accounts, totalBalance, transactions, dataStatus, dataError, retry } = useBank();
+  const checking = accounts.checking;
+  const savings = accounts.savings;
+  const unread = useUnreadCount();
   const { status: kycStatus, loading: kycLoading } = useKyc();
   const { displayName, loading: profileLoading } = useProfile();
-  const unread = notifications.filter((n) => !n.read).length;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
@@ -59,9 +63,12 @@ const HomePage = () => {
   // `idle` means we haven't even started (auth still resolving). `loading`
   // means the first sync is in flight. Both should render skeletons instead
   // of the fallback seed numbers.
-  const hydrating = columnStatus === "idle" || columnStatus === "loading";
+  const hydrating = dataStatus === "loading";
 
-  const formatCurrency = (n: number) =>
+  const formatCurrency = (n: number | null | undefined) =>
+    n === null || n === undefined
+      ? "—"
+      :
     balanceVisible
       ? n.toLocaleString("en-US", { style: "currency", currency: "USD" })
       : "••••••";
@@ -76,9 +83,9 @@ const HomePage = () => {
   };
 
   const shareDirectDeposit = async () => {
-    const details = accounts.checking.depositDetails;
-    const acct = details?.accountNumber || accounts.checking.accountNumber;
-    const route = details?.iban || accounts.checking.routingNumber;
+    const details = checking?.depositDetails;
+    const acct = details?.accountNumber || checking?.accountNumber;
+    const route = details?.iban || checking?.routingNumber;
     const routeLabel = details?.iban ? "IBAN" : "Routing";
     const text = `Glass Bank Deposit\n${routeLabel}: ${route}\nAccount: ${acct}${
       details?.reference ? `\nReference: ${details.reference}` : ""
@@ -234,7 +241,12 @@ const HomePage = () => {
         </motion.div>
 
 
+        {dataStatus === "error" && (
+          <DataErrorState message={dataError} onRetry={retry} />
+        )}
+
         {/* Account Cards */}
+        {dataStatus !== "error" && (
         <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
           <GlassCard onClick={() => navigate("/account/checking")} className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -242,8 +254,8 @@ const HomePage = () => {
                 <Wallet size={18} className="text-primary-foreground" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">{accounts.checking.name}</p>
-                <p className="text-xs text-muted-foreground">{accounts.checking.accountNumber}</p>
+                <p className="text-sm font-semibold text-foreground">{checking?.name ?? "Primary account"}</p>
+                <p className="text-xs text-muted-foreground">{checking?.accountNumber ?? "—"}</p>
               </div>
             </div>
             <div className="text-right">
@@ -252,11 +264,11 @@ const HomePage = () => {
               ) : (
                 <>
                   <p className="text-sm font-bold text-foreground">
-                    {formatCurrency(accounts.checking.availableBalance)}
+                    {formatCurrency(checking?.availableBalance)}
                   </p>
-                  {accounts.checking.pendingAmount > 0 && (
+                  {(checking?.pendingAmount ?? 0) > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      {formatCurrency(accounts.checking.pendingAmount)} pending
+                      {formatCurrency(checking?.pendingAmount)} pending
                     </p>
                   )}
                 </>
@@ -264,27 +276,31 @@ const HomePage = () => {
             </div>
           </GlassCard>
 
-          <GlassCard onClick={() => navigate("/account/savings")} className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl gradient-savings flex items-center justify-center">
-                <TrendingUp size={18} className="text-primary-foreground" />
+          {savings && (
+            <GlassCard onClick={() => navigate("/account/savings")} className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl gradient-savings flex items-center justify-center">
+                  <TrendingUp size={18} className="text-primary-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{savings.name}</p>
+                  {savings.apy ? <p className="text-xs text-muted-foreground">{savings.apy}% APY</p> : null}
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">{accounts.savings.name}</p>
-                <p className="text-xs text-muted-foreground">{accounts.savings.apy}% APY</p>
+              <div className="text-right">
+                {hydrating ? (
+                  <Skeleton className="h-4 w-20" />
+                ) : (
+                  <p className="text-sm font-bold text-foreground">
+                    {formatCurrency(savings.availableBalance)}
+                  </p>
+                )}
               </div>
-            </div>
-            <div className="text-right">
-              {hydrating ? (
-                <Skeleton className="h-4 w-20" />
-              ) : (
-                <p className="text-sm font-bold text-foreground">
-                  {formatCurrency(accounts.savings.availableBalance)}
-                </p>
-              )}
-            </div>
-          </GlassCard>
+            </GlassCard>
+          )}
         </motion.div>
+        )}
+
 
         {/* Quick Actions */}
         <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible">
@@ -418,27 +434,27 @@ const HomePage = () => {
                   <h2 className="text-section-title text-sm text-foreground">Deposit details</h2>
                 </div>
                 <div className="space-y-2">
-                  {accounts.checking.depositDetails?.iban ? (
+                  {checking?.depositDetails?.iban ? (
                     <button
-                      onClick={() => copyToClipboard(accounts.checking.depositDetails!.iban!, "IBAN")}
+                      onClick={() => copyToClipboard(checking?.depositDetails!.iban!, "IBAN")}
                       className="flex items-center justify-between w-full active:opacity-70"
                     >
                       <span className="text-xs text-muted-foreground">IBAN</span>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-mono font-medium text-foreground">
-                          {accounts.checking.depositDetails.iban}
+                          {checking?.depositDetails?.iban}
                         </span>
                         <Copy size={14} className="text-muted-foreground" />
                       </div>
                     </button>
                   ) : (
                     <button
-                      onClick={() => copyToClipboard(accounts.checking.routingNumber, "Routing number")}
+                      onClick={() => copyToClipboard(checking?.routingNumber ?? "", "Routing number")}
                       className="flex items-center justify-between w-full active:opacity-70"
                     >
                       <span className="text-xs text-muted-foreground">Routing Number</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-mono font-medium text-foreground">{accounts.checking.routingNumber}</span>
+                        <span className="text-sm font-mono font-medium text-foreground">{checking?.routingNumber}</span>
                         <Copy size={14} className="text-muted-foreground" />
                       </div>
                     </button>
@@ -446,7 +462,7 @@ const HomePage = () => {
                   <button
                     onClick={() =>
                       copyToClipboard(
-                        accounts.checking.depositDetails?.accountNumber || accounts.checking.accountNumber,
+                        checking?.depositDetails?.accountNumber || checking?.accountNumber || "",
                         "Account number"
                       )
                     }
@@ -455,7 +471,7 @@ const HomePage = () => {
                     <span className="text-xs text-muted-foreground">Account Number</span>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-mono font-medium text-foreground">
-                        {accounts.checking.depositDetails?.accountNumber || accounts.checking.accountNumber}
+                        {checking?.depositDetails?.accountNumber || checking?.accountNumber}
                       </span>
                       <Copy size={14} className="text-muted-foreground" />
                     </div>
