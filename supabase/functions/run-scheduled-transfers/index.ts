@@ -124,16 +124,43 @@ Deno.serve(async (req) => {
   const nowIso = new Date().toISOString();
   const results: Array<Record<string, unknown>> = [];
 
+  // Caller identity. Two legitimate callers:
+  //  - pg_cron, presenting the service-role key (sweeps every due schedule)
+  //  - a signed-in user asking to run their OWN schedule immediately
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const bearer = authHeader.replace(/^Bearer\s+/i, "");
+  const isCron = bearer && bearer === serviceKey;
+  let callerId: string | null = null;
+  if (!isCron) {
+    const { data: u } = await admin.auth.getUser(bearer);
+    callerId = u?.user?.id ?? null;
+    if (!callerId) return json({ error: "Unauthorized" }, 401);
+  }
+
+  let requestedId: string | null = null;
+  if (req.method === "POST") {
+    try {
+      const body = await req.json();
+      if (body && typeof body.schedule_id === "string") requestedId = body.schedule_id;
+    } catch { /* no body */ }
+  }
+
   try {
-    const { data: due, error } = await admin
+    let query = admin
       .from("scheduled_transfers")
       .select("*")
       .eq("status", "scheduled")
       .eq("needs_attention", false)
-      .or(`next_run_at.lte.${nowIso},and(next_run_at.is.null,scheduled_for.lte.${nowIso})`)
       .limit(50);
 
+    if (callerId) query = query.eq("user_id", callerId);
+    if (requestedId) query = query.eq("id", requestedId);
+    else query = query.or(`next_run_at.lte.${nowIso},and(next_run_at.is.null,scheduled_for.lte.${nowIso})`);
+
+    const { data: due, error } = await query;
+
     if (error) return json({ error: error.message }, 500);
+
 
     for (const row of due ?? []) {
       const dueAt: string = row.next_run_at ?? row.scheduled_for;
