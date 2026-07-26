@@ -297,15 +297,37 @@ const VerifyIdentity = () => {
     {
       kicker: "01 · Legal identity",
       title: "Let's confirm who you are",
-      valid: () => !!form.legal_first_name && !!form.legal_last_name && !!form.date_of_birth && /^\+[1-9]\d{4,14}$/.test(form.call_number),
-      render: () => (
+      errors: () => {
+        const e: FieldErrors = {};
+        if (!form.legal_first_name.trim()) e.legal_first_name = "First name is required";
+        if (!form.legal_last_name.trim()) e.legal_last_name = "Last name is required";
+        if (!form.date_of_birth) e.date_of_birth = "Date of birth is required";
+        else {
+          const age = ageFrom(form.date_of_birth);
+          if (Number.isNaN(age)) e.date_of_birth = "Enter a valid date";
+          else if (age < 18) e.date_of_birth = "You must be at least 18 years old";
+          else if (age >= 120) e.date_of_birth = "Enter a valid date of birth";
+        }
+        const digits = form.call_number.replace(/\D/g, "");
+        if (!digits) e.call_number = "Mobile number is required";
+        else if (!/^\+[1-9]\d{6,14}$/.test(form.call_number)) e.call_number = "Enter a valid mobile number";
+        return e;
+      },
+      render: (err) => (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Legal first name" value={form.legal_first_name} onChange={(v) => set("legal_first_name", v)} />
-            <Field label="Legal last name" value={form.legal_last_name} onChange={(v) => set("legal_last_name", v)} />
+            <Field label="Legal first name" value={form.legal_first_name} error={err.legal_first_name} onChange={(v) => set("legal_first_name", v)} />
+            <Field label="Legal last name" value={form.legal_last_name} error={err.legal_last_name} onChange={(v) => set("legal_last_name", v)} />
           </div>
-          <Field label="Date of birth" type="date" value={form.date_of_birth} onChange={(v) => set("date_of_birth", v)} />
-          <Field label="Phone (E.164)" placeholder="+15551234567" value={form.call_number} onChange={(v) => set("call_number", v)} />
+          <Field label="Date of birth" type="date" max={dobMax} value={form.date_of_birth}
+            error={err.date_of_birth} onChange={(v) => set("date_of_birth", v)} />
+          <PhoneField
+            value={form.call_number}
+            onChange={(v) => set("call_number", v)}
+            defaultCountry={form.country || "US"}
+            error={err.call_number}
+            hint="We'll text security codes to this number."
+          />
           <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-1">
             <Lock size={11} /> Must exactly match your government-issued ID.
           </p>
@@ -315,8 +337,16 @@ const VerifyIdentity = () => {
     {
       kicker: "02 · Identity document",
       title: "Which ID are you using?",
-      valid: () => !!form.id_number && !!form.id_issued_date && !!form.id_expiration_date,
-      render: () => (
+      errors: () => {
+        const e: FieldErrors = {};
+        if (form.id_number.trim().length < 4) e.id_number = "Enter your ID number";
+        if (!form.id_issued_date) e.id_issued_date = "Issued date is required";
+        if (!form.id_expiration_date) e.id_expiration_date = "Expiration date is required";
+        else if (form.id_issued_date && form.id_expiration_date <= form.id_issued_date)
+          e.id_expiration_date = "Must be after the issued date";
+        return e;
+      },
+      render: (err) => (
         <div className="space-y-4">
           <div className="space-y-2">
             {ID_OPTIONS.map((o) => {
@@ -341,10 +371,10 @@ const VerifyIdentity = () => {
               );
             })}
           </div>
-          <Field label="ID number" value={form.id_number} onChange={(v) => set("id_number", v)} />
+          <Field label="ID number" value={form.id_number} error={err.id_number} onChange={(v) => set("id_number", v)} />
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Issued on" type="date" value={form.id_issued_date} onChange={(v) => set("id_issued_date", v)} />
-            <Field label="Expires on" type="date" value={form.id_expiration_date} onChange={(v) => set("id_expiration_date", v)} />
+            <Field label="Issued on" type="date" value={form.id_issued_date} error={err.id_issued_date} onChange={(v) => set("id_issued_date", v)} />
+            <Field label="Expires on" type="date" value={form.id_expiration_date} error={err.id_expiration_date} onChange={(v) => set("id_expiration_date", v)} />
           </div>
         </div>
       ),
@@ -352,27 +382,71 @@ const VerifyIdentity = () => {
     {
       kicker: "03 · Home address",
       title: "Where do you live?",
-      valid: () => !!form.street && !!form.city && !!form.region && !!form.postal_code && form.country.length === 2 && form.citizenship.length === 2,
-      render: () => (
+      errors: () => {
+        const e: FieldErrors = {};
+        if (!form.street.trim()) e.street = "Street address is required";
+        if (!form.city.trim()) e.city = "City is required";
+        if (form.region.trim().length < 2) e.region = form.country === "US" ? "Select your state" : "State / region is required";
+        if (form.postal_code.trim().length < 3) e.postal_code = "Enter a valid postal code";
+        if (form.country.length !== 2) e.country = "Select your country";
+        if (form.citizenship.length !== 2) e.citizenship = "Select your citizenship";
+        return e;
+      },
+      render: (err) => (
         <div className="space-y-4">
-          <Field label="Street address" value={form.street} onChange={(v) => set("street", v)} />
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2"><Field label="City" value={form.city} onChange={(v) => set("city", v)} /></div>
-            <Field label="State" value={form.region} onChange={(v) => set("region", v.toUpperCase())} />
+          <Field label="Street address" value={form.street} error={err.street} onChange={(v) => set("street", v)} />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="City" value={form.city} error={err.city} onChange={(v) => set("city", v)} />
+            {form.country === "US" ? (
+              <SearchSelect
+                label="State"
+                value={form.region}
+                error={err.region}
+                placeholder="Select state"
+                searchPlaceholder="Search states"
+                options={US_STATES.map((s) => ({ value: s.code, label: s.name, hint: s.code }))}
+                onChange={(v) => set("region", v)}
+              />
+            ) : (
+              <Field label="State / region" value={form.region} error={err.region} onChange={(v) => set("region", v)} />
+            )}
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Postal" value={form.postal_code} onChange={(v) => set("postal_code", v)} />
-            <Field label="Country" value={form.country} onChange={(v) => set("country", v.toUpperCase().slice(0, 2))} />
-            <Field label="Citizenship" value={form.citizenship} onChange={(v) => set("citizenship", v.toUpperCase().slice(0, 2))} />
-          </div>
+          <Field label="Postal code" value={form.postal_code} error={err.postal_code} onChange={(v) => set("postal_code", v)} />
+          <SearchSelect
+            label="Country"
+            value={form.country}
+            error={err.country}
+            placeholder="Select country"
+            searchPlaceholder="Search countries"
+            options={COUNTRIES.map((c) => ({ value: c.code, label: c.name, prefix: c.flag }))}
+            onChange={(v) => {
+              // Switching to/from the US swaps the state control, so reset the region.
+              if (v !== form.country) set("region", "");
+              set("country", v);
+            }}
+          />
+          <SearchSelect
+            label="Citizenship"
+            value={form.citizenship}
+            error={err.citizenship}
+            placeholder="Select citizenship"
+            searchPlaceholder="Search countries"
+            options={COUNTRIES.map((c) => ({ value: c.code, label: c.name, prefix: c.flag }))}
+            onChange={(v) => set("citizenship", v)}
+          />
         </div>
       ),
     },
     {
       kicker: "04 · Work & income",
       title: "A bit about your work",
-      valid: () => !!form.occupation && /^\d+$/.test(form.income),
-      render: () => (
+      errors: () => {
+        const e: FieldErrors = {};
+        if (!form.occupation.trim()) e.occupation = "Occupation is required";
+        if (!/^\d+$/.test(form.income)) e.income = "Enter your annual income in digits";
+        return e;
+      },
+      render: (err) => (
         <div className="space-y-4">
           <div>
             <label className="text-xs text-muted-foreground font-semibold mb-1.5 block uppercase tracking-wide">Employment status</label>
@@ -393,16 +467,22 @@ const VerifyIdentity = () => {
               })}
             </div>
           </div>
-          <Field label="Occupation" value={form.occupation} onChange={(v) => set("occupation", v)} />
-          <Field label="Annual income (USD)" placeholder="50000" value={form.income} onChange={(v) => set("income", v.replace(/[^0-9]/g, ""))} />
+          <Field label="Occupation" value={form.occupation} error={err.occupation} onChange={(v) => set("occupation", v)} />
+          <Field label="Annual income (USD)" placeholder="50000" value={form.income} error={err.income} onChange={(v) => set("income", v.replace(/[^0-9]/g, ""))} />
         </div>
       ),
     },
     {
       kicker: "05 · Selfie & finish",
       title: "Take a quick selfie",
-      valid: () => !!selfie && form.password.length >= 8 && form.confirm,
-      render: () => (
+      errors: () => {
+        const e: FieldErrors = {};
+        if (!selfie) e.selfie = "A selfie photo is required";
+        if (form.password.length < 8) e.password = "Password must be at least 8 characters";
+        if (!form.confirm) e.confirm = "Please confirm your information is accurate";
+        return e;
+      },
+      render: (err) => (
         <div className="space-y-4">
           <DocumentUploader
             spec={{
@@ -419,25 +499,29 @@ const VerifyIdentity = () => {
               ],
             }}
             value={selfie}
-            onChange={(url) => setSelfie(url)}
+            onChange={(url) => { setSelfie(url); setFieldErrors((e) => ({ ...e, selfie: undefined })); }}
             rejectionReason={status === "rejected" ? profile?.rejection_reason ?? null : null}
             required
           />
-
+          {err.selfie && <p className="text-[11px] text-destructive font-medium">{err.selfie}</p>}
 
           <Field label="Create account password" type="password" placeholder="At least 8 characters"
-            value={form.password} onChange={(v) => set("password", v)} />
+            value={form.password} error={err.password} onChange={(v) => set("password", v)} />
 
-          <label className="flex items-start gap-3 p-3.5 rounded-xl bg-secondary cursor-pointer">
-            <input type="checkbox" className="mt-0.5 accent-primary"
-              checked={form.confirm} onChange={(e) => set("confirm", e.target.checked)} />
-            <span className="text-xs text-muted-foreground leading-relaxed">
-              I certify the information above is accurate and consent to identity verification by our banking partner.
-            </span>
-          </label>
+          <div>
+            <label className="flex items-start gap-3 p-3.5 rounded-xl bg-secondary cursor-pointer">
+              <input type="checkbox" className="mt-0.5 accent-primary"
+                checked={form.confirm} onChange={(e) => set("confirm", e.target.checked)} />
+              <span className="text-xs text-muted-foreground leading-relaxed">
+                I certify the information above is accurate and consent to identity verification by our banking partner.
+              </span>
+            </label>
+            {err.confirm && <p className="text-[11px] text-destructive mt-1.5 font-medium">{err.confirm}</p>}
+          </div>
         </div>
       ),
     },
+
   ], [form, selfie]);
 
   const current = steps[step];
