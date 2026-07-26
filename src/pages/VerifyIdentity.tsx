@@ -21,6 +21,8 @@ import KycStatusCard from "@/components/kyc/KycStatusCard";
 import DocumentUploader from "@/components/kyc/DocumentUploader";
 import PhoneField from "@/components/form/PhoneField";
 import SearchSelect from "@/components/form/SearchSelect";
+import AddressAutocomplete from "@/components/form/AddressAutocomplete";
+
 import { COUNTRIES, US_STATES } from "@/lib/countries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
