@@ -241,7 +241,7 @@ const SelfieCapture = ({ open, onClose, onCapture, onFallback }: Props) => {
               onClick={capture}
               aria-label="Capture selfie"
               data-testid="selfie-shutter"
-              className="mx-auto block w-18 h-18 w-[72px] h-[72px] rounded-full bg-primary ring-4 ring-primary/25 active:scale-95 transition-transform"
+              className="mx-auto block w-[72px] h-[72px] rounded-full bg-primary ring-4 ring-primary/25 active:scale-95 transition-transform"
             />
           )}
 
