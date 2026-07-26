@@ -402,7 +402,25 @@ const VerifyIdentity = () => {
       },
       render: (err) => (
         <div className="space-y-4">
-          <Field label="Street address" value={form.street} error={err.street} onChange={(v) => set("street", v)} />
+          <AddressAutocomplete
+            label="Street address"
+            value={form.street}
+            error={err.street}
+            country={form.country}
+            onChange={(v) => set("street", v)}
+            onSelect={(s) => {
+              setForm((f) => ({
+                ...f,
+                street: s.street || f.street,
+                city: s.city || f.city,
+                region: s.region || f.region,
+                postal_code: s.postal_code || f.postal_code,
+                country: s.country || f.country,
+              }));
+              setFieldErrors((e) => ({ ...e, street: undefined, city: undefined, region: undefined, postal_code: undefined, country: undefined }));
+            }}
+          />
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="City" value={form.city} error={err.city} onChange={(v) => set("city", v)} />
             {form.country === "US" ? (
