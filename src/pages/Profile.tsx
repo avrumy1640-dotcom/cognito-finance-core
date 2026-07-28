@@ -18,6 +18,7 @@ import {
   MessageCircle,
   Star,
   BadgeCheck,
+  ShieldAlert,
 } from "lucide-react";
 
 const sections = [
@@ -33,6 +34,7 @@ const sections = [
     items: [
       { icon: FileText, label: "Statements & Documents", path: "/profile/documents" },
       { icon: CreditCard, label: "Account Details", path: "/account/checking" },
+      { icon: ShieldAlert, label: "Disputes", path: "/disputes" },
     ],
   },
   {

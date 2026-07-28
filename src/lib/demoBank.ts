@@ -85,6 +85,41 @@ export interface DemoGoal {
   contributions: DemoGoalContribution[];
 }
 
+/** An advance of an upcoming payroll deposit, released up to 2 days early. */
+export interface DemoEarlyPayout {
+  id: string;
+  /** ISO date of the payday this advance stands in for. */
+  expectedDate: string;
+  amount: number;
+  releasedAt: string;
+  /** Set once the real payday has passed — the deposit is accounted for. */
+  settledAt?: string | null;
+  merchant: string;
+}
+
+export type DisputeReason =
+  | "unauthorized"
+  | "wrong_amount"
+  | "duplicate"
+  | "not_received"
+  | "other";
+
+export type DisputeStatus = "under_review" | "resolved";
+
+export interface DemoDispute {
+  id: string;
+  caseNumber: string;
+  transactionId: string;
+  merchant: string;
+  amount: number;
+  reason: DisputeReason;
+  note?: string;
+  status: DisputeStatus;
+  createdAt: string;
+  updatedAt: string;
+  resolution?: string | null;
+}
+
 export interface DemoLedger {
   version: 1;
   userNumber: string;
@@ -98,7 +133,12 @@ export interface DemoLedger {
   roundUpGoalId?: string | null;
   /** Ids of debits already swept, so round-ups are never double counted. */
   roundUpSweptTxIds?: string[];
+  /** Early paycheck advances already released. */
+  earlyPayouts?: DemoEarlyPayout[];
+  /** Transaction disputes raised by the customer. */
+  disputes?: DemoDispute[];
 }
+
 
 
 const STORAGE_PREFIX = "glassbank.demo.v1:";
@@ -375,6 +415,131 @@ function write(userId: string, ledger: DemoLedger) {
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// ---- payroll detection (early paycheck access) -----------------------------
+
+export interface PayrollPattern {
+  merchant: string;
+  /** Average of the recent payroll deposits — what an advance would release. */
+  averageAmount: number;
+  intervalDays: number;
+  lastPaidAt: string;
+  nextExpectedAt: string;
+  daysUntilNext: number;
+  /** True when the next payday is within the 2-day early-access window. */
+  eligibleNow: boolean;
+  /** Already advanced for this upcoming payday. */
+  alreadyAdvanced: boolean;
+  occurrences: number;
+}
+
+const DAY = 86_400_000;
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+/**
+ * Look for a recurring direct-deposit credit (same payer, regular cadence) and
+ * project the next payday from it. Returns null when there isn't enough
+ * history to be honest about a prediction.
+ */
+export function detectPayroll(ledger: DemoLedger): PayrollPattern | null {
+  const checking = ledger.accounts.find((a) => a.type === "checking");
+  if (!checking) return null;
+
+  const groups = new Map<string, DemoTransaction[]>();
+  for (const t of ledger.transactions) {
+    if (t.account !== checking.id || t.amount <= 0) continue;
+    const isPayroll = t.paymentMethod === "Direct deposit" || /payroll|salary/i.test(t.merchant);
+    if (!isPayroll) continue;
+    const list = groups.get(t.merchant) ?? [];
+    list.push(t);
+    groups.set(t.merchant, list);
+  }
+
+  let best: { merchant: string; txs: DemoTransaction[] } | null = null;
+  for (const [merchant, txs] of groups) {
+    if (txs.length < 3) continue;
+    if (!best || txs.length > best.txs.length) best = { merchant, txs };
+  }
+  if (!best) return null;
+
+  const sorted = best.txs.slice().sort((a, b) => +new Date(a.date) - +new Date(b.date));
+  const gaps: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    gaps.push(Math.round((+new Date(sorted[i].date) - +new Date(sorted[i - 1].date)) / DAY));
+  }
+  gaps.sort((a, b) => a - b);
+  const intervalDays = gaps[Math.floor(gaps.length / 2)] || 14;
+  if (intervalDays < 5 || intervalDays > 40) return null;
+
+  const last = sorted[sorted.length - 1];
+  const recent = sorted.slice(-3);
+  const averageAmount = round2(recent.reduce((s, t) => s + t.amount, 0) / recent.length);
+
+  // Roll forward from the last deposit until the projected payday is in the future.
+  const next = new Date(last.date);
+  const today = startOfDay(new Date());
+  let guard = 0;
+  while (startOfDay(next) <= today && guard++ < 60) {
+    next.setDate(next.getDate() + intervalDays);
+  }
+  const daysUntilNext = Math.max(0, Math.round((startOfDay(next) - today) / DAY));
+  const expectedKey = next.toISOString().slice(0, 10);
+  const alreadyAdvanced = (ledger.earlyPayouts ?? []).some(
+    (p) => p.expectedDate.slice(0, 10) === expectedKey,
+  );
+
+  return {
+    merchant: best.merchant,
+    averageAmount,
+    intervalDays,
+    lastPaidAt: last.date,
+    nextExpectedAt: next.toISOString(),
+    daysUntilNext,
+    eligibleNow: daysUntilNext <= 2 && !alreadyAdvanced,
+    alreadyAdvanced,
+    occurrences: sorted.length,
+  };
+}
+
+const REASON_LABELS: Record<DisputeReason, string> = {
+  unauthorized: "Unauthorized charge",
+  wrong_amount: "Wrong amount",
+  duplicate: "Duplicate charge",
+  not_received: "Goods or services not received",
+  other: "Other",
+};
+
+export const disputeReasonLabel = (r: DisputeReason) => REASON_LABELS[r] ?? "Other";
+
+/** Advance a dispute to Resolved once the review window has elapsed. */
+function progressDisputes(ledger: DemoLedger): boolean {
+  let changed = false;
+  for (const d of ledger.disputes ?? []) {
+    if (d.status !== "under_review") continue;
+    if (Date.now() - +new Date(d.createdAt) < 3 * DAY) continue;
+    d.status = "resolved";
+    d.updatedAt = new Date().toISOString();
+    d.resolution =
+      d.reason === "unauthorized"
+        ? "Provisional credit issued and the charge was reversed."
+        : "Reviewed with the merchant — the charge was confirmed as valid.";
+    changed = true;
+  }
+  return changed;
+}
+
+/** Mark early payouts as settled once their real payday has passed. */
+function settleEarlyPayouts(ledger: DemoLedger): boolean {
+  let changed = false;
+  for (const p of ledger.earlyPayouts ?? []) {
+    if (p.settledAt) continue;
+    if (+new Date(p.expectedDate) > Date.now()) continue;
+    p.settledAt = new Date().toISOString();
+    changed = true;
+  }
+  return changed;
+}
+
+
 export const demoBank = {
   /** Load (or lazily create) the user's ledger. Never throws, never fails. */
   async load(userId: string, holderName: string, email?: string): Promise<DemoLedger> {
@@ -388,8 +553,87 @@ export const demoBank = {
       ledger.accounts.forEach((a) => { a.depositDetails.holderName = holderName; });
       write(userId, ledger);
     }
+    // Time-based housekeeping: settle matured advances, age out disputes.
+    if (settleEarlyPayouts(ledger) || progressDisputes(ledger)) write(userId, ledger);
     return ledger;
   },
+
+  // ---- early paycheck access ----------------------------------------------
+
+  /** Release the next expected payroll deposit into checking, up to 2 days early. */
+  async releaseEarlyPaycheck(userId: string): Promise<DemoLedger> {
+    await delay(520);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    const pattern = detectPayroll(ledger);
+    if (!pattern) throw new Error("No recurring payroll deposit detected yet");
+    if (pattern.alreadyAdvanced) throw new Error("This paycheck has already been released early");
+    if (pattern.daysUntilNext > 2) throw new Error("Your paycheck is not within the 2-day window yet");
+
+    const checking = ledger.accounts.find((a) => a.type === "checking");
+    if (!checking) throw new Error("Checking account unavailable");
+
+    const now = new Date().toISOString();
+    const amount = round2(pattern.averageAmount);
+    ledger.transactions.unshift({
+      id: `tx_early_${Date.now()}`,
+      merchant: `${pattern.merchant} (early)`,
+      category: "Income",
+      amount,
+      date: now,
+      status: "posted",
+      type: "credit",
+      paymentMethod: "Early direct deposit",
+      icon: "⚡️",
+      account: checking.id,
+    });
+    checking.currentBalance = round2(checking.currentBalance + amount);
+    checking.availableBalance = round2(checking.currentBalance - checking.pendingAmount);
+
+    ledger.earlyPayouts = [
+      {
+        id: `early_${Date.now()}`,
+        expectedDate: pattern.nextExpectedAt,
+        amount,
+        releasedAt: now,
+        settledAt: null,
+        merchant: pattern.merchant,
+      },
+      ...(ledger.earlyPayouts ?? []),
+    ];
+    write(userId, ledger);
+    return ledger;
+  },
+
+  // ---- disputes ------------------------------------------------------------
+
+  async openDispute(
+    userId: string,
+    args: { transactionId: string; merchant: string; amount: number; reason: DisputeReason; note?: string },
+  ): Promise<{ ledger: DemoLedger; dispute: DemoDispute }> {
+    await delay(480);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    ledger.disputes = ledger.disputes ?? [];
+    const existing = ledger.disputes.find((d) => d.transactionId === args.transactionId);
+    if (existing) throw new Error(`A dispute is already open for this transaction (${existing.caseNumber})`);
+    const now = new Date().toISOString();
+    const dispute: DemoDispute = {
+      id: `dsp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      caseNumber: `GB-${new Date().getFullYear()}-${String(Math.floor(100000 + Math.random() * 899999))}`,
+      transactionId: args.transactionId,
+      merchant: args.merchant,
+      amount: round2(Math.abs(args.amount)),
+      reason: args.reason,
+      note: args.note?.trim() || undefined,
+      status: "under_review",
+      createdAt: now,
+      updatedAt: now,
+      resolution: null,
+    };
+    ledger.disputes.unshift(dispute);
+    write(userId, ledger);
+    return { ledger, dispute };
+  },
+
 
   reset(userId: string) {
     try { localStorage.removeItem(keyFor(userId)); } catch { /* noop */ }

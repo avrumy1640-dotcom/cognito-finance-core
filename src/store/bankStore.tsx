@@ -1,7 +1,18 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import type { Transaction } from "@/types/transaction";
-import { demoBank, type DemoLedger, type DemoAccount, type DemoCard, type DemoGoal } from "@/lib/demoBank";
+import {
+  demoBank,
+  detectPayroll,
+  type DemoLedger,
+  type DemoAccount,
+  type DemoCard,
+  type DemoGoal,
+  type DemoDispute,
+  type DemoEarlyPayout,
+  type DisputeReason,
+  type PayrollPattern,
+} from "@/lib/demoBank";
 import { loadCategoryRules, categorize } from "@/lib/categorize";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -117,6 +128,13 @@ interface Ctx {
   deleteGoal: (goalId: string) => Promise<boolean>;
   setRoundUpGoal: (goalId: string | null) => Promise<boolean>;
   runRoundUpSweep: () => Promise<{ swept: number; count: number }>;
+  // --- early paycheck access ---
+  payroll: PayrollPattern | null;
+  earlyPayouts: DemoEarlyPayout[];
+  releaseEarlyPaycheck: () => Promise<boolean>;
+  // --- disputes ---
+  disputes: DemoDispute[];
+  openDispute: (args: { transactionId: string; merchant: string; amount: number; reason: DisputeReason; note?: string }) => Promise<DemoDispute | null>;
 }
 
 
@@ -167,6 +185,13 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [dataError, setDataError] = useState<string | null>(null);
   const [goals, setGoals] = useState<DemoGoal[]>([]);
   const [roundUpGoalId, setRoundUpGoalId] = useState<string | null>(null);
+  const [payroll, setPayroll] = useState<PayrollPattern | null>(null);
+  const [earlyPayouts, setEarlyPayouts] = useState<DemoEarlyPayout[]>([]);
+  const [disputes, setDisputes] = useState<DemoDispute[]>([]);
+  // Ids already seen, so a notification is only ever raised for genuinely new
+  // activity (never for the whole history on first hydrate).
+  const seenTxIds = useRef<Set<string> | null>(null);
+  const lowBalanceNotified = useRef<string | null>(null);
   const userIdRef = useRef<string | null>(null);
   const ledgerRef = useRef<DemoLedger | null>(null);
   const stateRef = useRef(state);
@@ -176,6 +201,9 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     ledgerRef.current = ledger;
     setGoals(ledger.goals ?? []);
     setRoundUpGoalId(ledger.roundUpGoalId ?? null);
+    setPayroll(detectPayroll(ledger));
+    setEarlyPayouts(ledger.earlyPayouts ?? []);
+    setDisputes(ledger.disputes ?? []);
     const checking = ledger.accounts.find((a) => a.type === "checking") ?? ledger.accounts[0] ?? null;
 
     const savings = ledger.accounts.find((a) => a.type === "savings") ?? null;
@@ -215,6 +243,43 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       transactions: txs,
       card: toCardState(ledger.cards.find((c) => c.status === "active") ?? ledger.cards[0]),
     });
+    // --- push-style alerts on genuinely new activity ------------------------
+    const first = seenTxIds.current === null;
+    const seen = seenTxIds.current ?? new Set<string>();
+    if (first) {
+      ledger.transactions.forEach((t) => seen.add(t.id));
+    } else {
+      for (const t of ledger.transactions) {
+        if (seen.has(t.id)) continue;
+        seen.add(t.id);
+        const abs = Math.abs(t.amount);
+        if (abs < 50) continue;
+        const credit = t.amount > 0;
+        void raiseNotification({
+          type: credit ? "transfer" : "card",
+          title: credit ? `Money in: $${abs.toFixed(2)}` : `Card charge: $${abs.toFixed(2)}`,
+          body: `${t.merchant} · ${t.paymentMethod}`,
+          dedupe_key: `tx-${t.id}`,
+          data: { transactionId: t.id, amount: t.amount },
+        });
+      }
+    }
+    seenTxIds.current = seen;
+
+    const available = checking?.availableBalance ?? null;
+    if (available !== null && available < 100) {
+      const stamp = new Date().toISOString().slice(0, 10);
+      if (lowBalanceNotified.current !== stamp) {
+        lowBalanceNotified.current = stamp;
+        void raiseNotification({
+          type: "alert",
+          title: "Low balance",
+          body: `${checking?.name ?? "Your account"} is down to $${available.toFixed(2)}.`,
+          dedupe_key: `low-balance-${stamp}`,
+        });
+      }
+    }
+
     setDataError(null);
     setDataStatus("loaded");
   }, []);
@@ -276,7 +341,14 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         if (successBody) void raiseNotification({ type: "transfer", title: `${label} complete`, body: successBody });
         return true;
       } catch (err) {
-        toast.error(`${label} failed`, { id, description: err instanceof Error ? err.message : "Please try again." });
+        const reason = err instanceof Error ? err.message : "Please try again.";
+        toast.error(`${label} failed`, { id, description: reason });
+        void raiseNotification({
+          type: "alert",
+          title: `${label} declined`,
+          body: reason,
+          dedupe_key: `failed-${label}-${Date.now()}`,
+        });
         return false;
       }
     },
@@ -451,6 +523,43 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [applyLedger]);
 
+  // --- early paycheck access ------------------------------------------------
+  const releaseEarlyPaycheck = useCallback(async () => {
+    const id = uid();
+    if (!id) return false;
+    return runMutation(
+      "Releasing your paycheck",
+      () => demoBank.releaseEarlyPaycheck(id),
+      "Your paycheck is available now",
+    );
+  }, [runMutation]);
+
+  // --- disputes -------------------------------------------------------------
+  const openDispute = useCallback(
+    async (args: { transactionId: string; merchant: string; amount: number; reason: DisputeReason; note?: string }) => {
+      const id = uid();
+      if (!id) return null;
+      const toastId = `dispute-${Date.now()}`;
+      toast.loading("Submitting dispute…", { id: toastId });
+      try {
+        const { ledger, dispute } = await demoBank.openDispute(id, args);
+        await applyLedger(ledger);
+        toast.success(`Dispute opened · ${dispute.caseNumber}`, { id: toastId });
+        void raiseNotification({
+          type: "alert",
+          title: `Dispute received — ${dispute.caseNumber}`,
+          body: `We're reviewing your $${dispute.amount.toFixed(2)} charge at ${dispute.merchant}.`,
+          dedupe_key: `dispute-${dispute.id}`,
+        });
+        return dispute;
+      } catch (err) {
+        toast.error("Couldn't open dispute", { id: toastId, description: err instanceof Error ? err.message : undefined });
+        return null;
+      }
+    },
+    [applyLedger],
+  );
+
   const { checking, savings } = state.accounts;
   const totalBalance =
     dataStatus === "loaded" && checking
@@ -489,6 +598,11 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     deleteGoal,
     setRoundUpGoal,
     runRoundUpSweep,
+    payroll,
+    earlyPayouts,
+    releaseEarlyPaycheck,
+    disputes,
+    openDispute,
   };
 
 
