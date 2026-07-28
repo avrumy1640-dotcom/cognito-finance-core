@@ -165,6 +165,8 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [dataStatus, setDataStatus] = useState<DataStatus>("loading");
   const [dataError, setDataError] = useState<string | null>(null);
+  const [goals, setGoals] = useState<DemoGoal[]>([]);
+  const [roundUpGoalId, setRoundUpGoalId] = useState<string | null>(null);
   const userIdRef = useRef<string | null>(null);
   const ledgerRef = useRef<DemoLedger | null>(null);
   const stateRef = useRef(state);
@@ -172,7 +174,10 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
   const applyLedger = useCallback(async (ledger: DemoLedger) => {
     ledgerRef.current = ledger;
+    setGoals(ledger.goals ?? []);
+    setRoundUpGoalId(ledger.roundUpGoalId ?? null);
     const checking = ledger.accounts.find((a) => a.type === "checking") ?? ledger.accounts[0] ?? null;
+
     const savings = ledger.accounts.find((a) => a.type === "savings") ?? null;
 
     // Real, rules-based categorisation on top of the ledger's own labels.
