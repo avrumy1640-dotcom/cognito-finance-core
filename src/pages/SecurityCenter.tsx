@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
+import ToggleRow from "@/components/glass/ToggleRow";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/deviceTracking";
@@ -343,31 +344,39 @@ const SecurityCenter = () => {
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">{section.title}</h2>
             <GlassCard className="divide-y divide-border p-0 overflow-hidden">
               {section.items.map((item) => {
-                const isToggle = !!item.toggle;
-                const enabled = isToggle ? toggles[item.toggle as ToggleKey] : false;
+                if (item.toggle) {
+                  const key = item.toggle as ToggleKey;
+                  return (
+                    <ToggleRow
+                      key={item.label}
+                      icon={item.icon}
+                      label={item.label}
+                      desc={item.desc}
+                      checked={toggles[key]}
+                      onChange={() => void flip(key)}
+                    />
+                  );
+                }
                 return (
                   <button
                     key={item.label}
-                    onClick={isToggle ? () => void flip(item.toggle as ToggleKey) : action(item.label)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-secondary/40 transition-colors"
+                    onClick={action(item.label)}
+                    className="w-full flex items-start justify-between gap-3 px-4 py-3.5 min-h-[56px] text-left hover:bg-secondary/40 transition-colors"
                   >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <item.icon size={20} className="text-muted-foreground shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{item.label}</p>
-                        <p className="text-xs text-muted-foreground truncate">{item.desc}</p>
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <span className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center shrink-0 mt-0.5">
+                        <item.icon size={18} className="text-muted-foreground" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground leading-snug break-words">{item.label}</p>
+                        <p className="text-xs text-muted-foreground leading-snug mt-0.5 break-words">{item.desc}</p>
                       </div>
                     </div>
-                    {isToggle ? (
-                      <div className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${enabled ? "bg-primary" : "bg-secondary"}`}>
-                        <div className={`w-5 h-5 rounded-full bg-primary-foreground shadow-sm transition-transform ${enabled ? "translate-x-5" : "translate-x-0"}`} />
-                      </div>
-                    ) : (
-                      <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-                    )}
+                    <ChevronRight size={16} className="text-muted-foreground shrink-0 mt-2.5" />
                   </button>
                 );
               })}
+
             </GlassCard>
           </motion.div>
         ))}

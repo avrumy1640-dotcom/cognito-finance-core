@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
+import SharedToggleRow from "@/components/glass/ToggleRow";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBank } from "@/store/bankStore";
@@ -384,33 +385,16 @@ const SelectRow = ({
   </div>
 );
 
+/** Settings toggles reuse the shared row so switches look identical app-wide. */
 const ToggleRow = ({
-  icon: Icon, label, desc, checked, onChange,
+  icon, label, desc, checked, onChange,
 }: {
   icon: React.ComponentType<{ size?: number | string; className?: string }>;
   label: string; desc?: string; checked: boolean; onChange: () => void;
 }) => (
-  <button onClick={onChange} className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left">
-    <div className="flex items-center gap-3 min-w-0">
-      <Icon size={18} className="text-primary shrink-0" />
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        {desc && <p className="text-xs text-muted-foreground truncate">{desc}</p>}
-      </div>
-    </div>
-    <span
-      className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${
-        checked ? "bg-primary" : "bg-border"
-      }`}
-    >
-      <span
-        className={`block w-5 h-5 rounded-full bg-background shadow transition-transform ${
-          checked ? "translate-x-5" : "translate-x-0"
-        }`}
-      />
-    </span>
-  </button>
+  <SharedToggleRow icon={icon} label={label} desc={desc} checked={checked} onChange={() => onChange()} />
 );
+
 
 const LinkRow = ({ label, onClick }: { label: string; onClick: () => void }) => (
   <button onClick={onClick} className="w-full flex items-center justify-between px-4 py-3.5 text-left">
