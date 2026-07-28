@@ -224,6 +224,14 @@ const SecurityCenter = () => {
     setDevices((d) => d.filter((x) => x.id !== row.id));
   };
 
+  const runSignOutOthers = () => {
+    toast.loading("Ending other sessions…", { id: "signout-others" });
+    signOutOthers().then(({ error }) => {
+      if (error) toast.error(error, { id: "signout-others" });
+      else toast.success("All other sessions ended.", { id: "signout-others" });
+    });
+  };
+
   const action = (label: string) => () => {
     switch (label) {
       case "Change Password":
@@ -249,13 +257,6 @@ const SecurityCenter = () => {
           title: "Sign out of all other devices?",
           description: "You'll stay signed in here. Every other browser and phone will need to sign in again.",
           confirmLabel: "Sign out others",
-        });
-        break;
-      case "__run_signout_others":
-        toast.loading("Ending other sessions…", { id: "signout-others" });
-        signOutOthers().then(({ error }) => {
-          if (error) toast.error(error, { id: "signout-others" });
-          else toast.success("All other sessions ended.", { id: "signout-others" });
         });
         break;
       case "Fraud Center":
