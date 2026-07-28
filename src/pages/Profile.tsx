@@ -71,6 +71,8 @@ const ProfilePage = () => {
   const { signOut, user: authUser } = useAuth();
   const { fullName, initials, memberSince, loading } = useProfile();
   const { theme, setTheme } = useTheme();
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+
 
   return (
     <AppLayout>
