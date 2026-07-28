@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { recordSignIn } from "@/lib/deviceTracking";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -369,6 +370,38 @@ const SecurityCenter = () => {
             </GlassCard>
           </motion.div>
         ))}
+
+        {/* Sign-in alert test — real banks send one on every new sign-in. */}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <GlassCard className="space-y-2">
+            <p className="text-sm font-semibold text-foreground">Sign-in alerts</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              We alert you whenever your account is accessed from a device. Send a test alert
+              to see exactly how it arrives in your notification centre.
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={async () => {
+                  if (!user) return;
+                  setAlertSending(true);
+                  await recordSignIn(user.id);
+                  setAlertSending(false);
+                  toast.success("Sign-in alert sent", { description: "Check your notifications." });
+                }}
+                disabled={alertSending}
+                className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-60"
+              >
+                {alertSending ? "Sending…" : "Send a test sign-in alert"}
+              </button>
+              <button
+                onClick={() => navigate("/notifications")}
+                className="px-4 py-2.5 rounded-xl bg-secondary text-foreground text-xs font-semibold"
+              >
+                Open notifications
+              </button>
+            </div>
+          </GlassCard>
+        </motion.div>
       </div>
 
       {modal && (
