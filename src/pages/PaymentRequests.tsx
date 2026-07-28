@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { ArrowLeft, Plus, Share2, Check, X, Loader2 } from "lucide-react";
 import GlassCard from "@/components/glass/GlassCard";
+import EmptyState from "@/components/glass/EmptyState";
+import { HandCoins } from "lucide-react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -161,9 +163,20 @@ const PaymentRequests = () => {
         {rows === null ? (
           <GlassCard className="text-center py-6 text-sm text-muted-foreground">Loading…</GlassCard>
         ) : list.length === 0 ? (
-          <GlassCard className="text-center py-8 text-sm text-muted-foreground">
-            {tab === "outgoing" ? "No requests sent yet." : "Nothing owed to you here."}
-          </GlassCard>
+          <EmptyState
+            icon={HandCoins}
+            title={tab === "outgoing" ? "No requests sent yet" : "Nothing owed to you"}
+            description={
+              tab === "outgoing"
+                ? "Ask someone to pay you back — they get a link and the money lands in your checking account."
+                : "When someone requests money from you, it shows up here so you can pay or decline."
+            }
+            actions={
+              tab === "outgoing"
+                ? [{ label: "Request money", onClick: () => setShowForm(true) }]
+                : [{ label: "Request money instead", onClick: () => setTab("outgoing"), variant: "ghost" }]
+            }
+          />
         ) : (
           <div className="space-y-2">
             {list.map((r) => (

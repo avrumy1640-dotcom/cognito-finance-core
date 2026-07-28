@@ -7,6 +7,8 @@ import {
   ArrowLeft, Plus, Search, Star, StarOff, Trash2, Send, Building2, Globe2, Loader2,
 } from "lucide-react";
 import GlassCard from "@/components/glass/GlassCard";
+import EmptyState from "@/components/glass/EmptyState";
+import { Users } from "lucide-react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -210,9 +212,20 @@ const Beneficiaries = () => {
         {rows === null ? (
           <GlassCard className="text-center py-6 text-sm text-muted-foreground">Loading…</GlassCard>
         ) : filtered.length === 0 ? (
-          <GlassCard className="text-center py-8 text-sm text-muted-foreground">
-            No beneficiaries yet. Add one to send money faster.
-          </GlassCard>
+          <EmptyState
+            icon={Users}
+            title={rows.length === 0 ? "No saved recipients yet" : "No recipients match"}
+            description={
+              rows.length === 0
+                ? "Save the people and businesses you pay often — their bank details are filled in for you next time."
+                : "Try a different name or clear the search."
+            }
+            actions={
+              rows.length === 0
+                ? [{ label: "Add a recipient", onClick: () => setShowForm(true) }]
+                : [{ label: "Clear search", onClick: () => setQ(""), variant: "ghost" }]
+            }
+          />
         ) : (
           <div className="space-y-2">
             {filtered.map((b) => (

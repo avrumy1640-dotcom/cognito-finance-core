@@ -213,10 +213,23 @@ const Documents = () => {
           ))}
         </div>
 
+        {filtered.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title={docs.length === 0 ? "No documents yet" : "Nothing matches that search"}
+            description={
+              docs.length === 0
+                ? "Monthly statements are generated automatically once your account has activity. Tax forms appear each January."
+                : "Try another keyword, or switch back to the All category."
+            }
+            actions={
+              docs.length === 0
+                ? [{ label: "View activity", onClick: () => navigate("/activity") }]
+                : [{ label: "Clear search", onClick: () => { setSearch(""); setActiveCategory("All"); }, variant: "ghost" }]
+            }
+          />
+        ) : (
         <GlassCard className="divide-y divide-border p-0 overflow-hidden">
-          {filtered.length === 0 && (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">No documents match your search.</div>
-          )}
           {filtered.map((doc) => {
             const Icon = doc.icon;
             return (

@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
+import EmptyState from "@/components/glass/EmptyState";
+import { Receipt } from "lucide-react";
 import { useBank } from "@/store/bankStore";
 import DataErrorState from "@/components/layout/DataErrorState";
 import { Search, Download, ChevronRight, SlidersHorizontal, FileText } from "lucide-react";
@@ -184,28 +186,27 @@ const ActivityPage = () => {
 
         {/* Transaction Groups */}
         <div className="space-y-4 pb-4">
-          {filtered.length === 0 && (
-            <GlassCard className="text-center py-10">
-              <div className="text-4xl mb-2">🔍</div>
-              <p className="text-sm font-medium text-foreground">No transactions match</p>
-              <p className="text-xs text-muted-foreground mt-1 mb-4">
-                Try clearing filters or start a new transaction.
-              </p>
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  onClick={() => { setSearchQuery(""); setActiveFilter("All"); }}
-                  className="px-3 py-2 rounded-xl bg-secondary text-foreground text-xs font-semibold"
-                >
-                  Clear filters
-                </button>
-                <button
-                  onClick={() => navigate("/move-money")}
-                  className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold"
-                >
-                  Move money
-                </button>
-              </div>
-            </GlassCard>
+          {filtered.length === 0 && transactions.length === 0 && (
+            <EmptyState
+              icon={Receipt}
+              title="No activity yet"
+              description="Once money moves in or out, every transaction lands here with its category, status and receipt."
+              actions={[
+                { label: "Add money", onClick: () => navigate("/move-money/add") },
+                { label: "Set up direct deposit", onClick: () => navigate("/direct-deposit"), variant: "ghost" },
+              ]}
+            />
+          )}
+          {filtered.length === 0 && transactions.length > 0 && (
+            <EmptyState
+              emoji="🔍"
+              title="No transactions match"
+              description="Try a different search term, or clear the filters to see everything again."
+              actions={[
+                { label: "Clear filters", onClick: () => { setSearchQuery(""); setActiveFilter("All"); }, variant: "ghost" },
+                { label: "Move money", onClick: () => navigate("/move-money") },
+              ]}
+            />
           )}
           {Object.entries(groups).map(([group, txs]) => (
             <div key={group}>
