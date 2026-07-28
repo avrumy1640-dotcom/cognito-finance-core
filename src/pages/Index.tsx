@@ -131,7 +131,7 @@ const HomePage = () => {
 
   return (
     <AppLayout>
-      <div className="px-5 pt-14 space-y-5">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 lg:pt-10 space-y-5">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -151,14 +151,14 @@ const HomePage = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("/activity")}
-              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
+              className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
               aria-label="Search"
             >
               <Search size={18} className="text-muted-foreground" />
             </button>
             <button
               onClick={() => navigate("/notifications")}
-              className="relative w-10 h-10 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
+              className="relative h-11 w-11 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform"
               aria-label="Notifications"
             >
               <Bell size={18} className="text-muted-foreground" />
@@ -166,6 +166,10 @@ const HomePage = () => {
             </button>
           </div>
         </motion.div>
+
+        {/* Desktop: two-column — accounts & actions left, activity right. */}
+        <div className="space-y-5 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] lg:gap-6 lg:items-start">
+        <div className="space-y-5">
 
         {/* KYC / Trust banner */}
         {kycMeta && kycStatus !== "verified" && (
@@ -220,7 +224,7 @@ const HomePage = () => {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.25 }}
-                  className="text-serif-display text-[46px] leading-[1.05] text-foreground mt-1 tabular-nums"
+                  className="text-serif-display text-[46px] lg:text-[56px] leading-[1.05] text-foreground mt-1 tabular-nums"
                 >
                   {formatCurrency(totalBalance)}
                 </motion.p>
@@ -344,6 +348,10 @@ const HomePage = () => {
             ))}
           </div>
         </motion.div>
+
+        </div>
+
+        <div className="space-y-5">
 
         {/* Recent Activity */}
         <motion.div custom={3} variants={fadeUp} initial="hidden" animate="visible">
@@ -509,6 +517,8 @@ const HomePage = () => {
             </GlassCard>
           </motion.div>
         )}
+        </div>
+        </div>
       </div>
     </AppLayout>
   );

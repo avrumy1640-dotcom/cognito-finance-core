@@ -20,7 +20,10 @@ const BottomNav = () => {
   };
 
   return (
-    <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 glass-card-elevated rounded-full px-1.5 py-1.5 safe-bottom">
+    <nav
+      className="lg:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 glass-card-elevated rounded-full px-1.5 py-1.5 safe-bottom"
+      aria-label="Primary"
+    >
       <div className="flex items-center justify-around gap-0.5 min-w-[320px] max-w-[92vw]">
         {tabs.map((tab) => {
           const active = isActive(tab.path);
@@ -28,7 +31,7 @@ const BottomNav = () => {
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
-              className="relative flex flex-col items-center gap-0.5 px-3.5 py-1.5 min-w-0 flex-1 rounded-full press"
+              className="relative flex flex-col items-center justify-center gap-0.5 px-3.5 min-h-11 min-w-11 flex-1 rounded-full press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={tab.label}
               aria-current={active ? "page" : undefined}
             >

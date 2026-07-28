@@ -98,7 +98,7 @@ const AccountDetail = () => {
 
   if (dataStatus === "error") {
     return (
-      <div className="min-h-screen bg-background px-5 pt-14">
+      <div className="min-h-dvh bg-background px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12">
         <DataErrorState message={dataError} onRetry={retry} />
       </div>
     );
@@ -106,7 +106,7 @@ const AccountDetail = () => {
 
   if (dataStatus === "loading") {
     return (
-      <div className="min-h-screen bg-background px-5 pt-14 space-y-4">
+      <div className="min-h-dvh bg-background px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-4">
         <div className="h-6 w-40 rounded-lg bg-secondary animate-pulse" />
         <div className="h-36 w-full rounded-3xl bg-secondary animate-pulse" />
         {Array.from({ length: 5 }).map((_, i) => (
@@ -117,11 +117,11 @@ const AccountDetail = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="px-5 pt-14 space-y-5 pb-12">
+    <div className="min-h-dvh bg-background">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-5 pb-12">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform" aria-label="Back">
+          <button onClick={() => navigate(-1)} className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center active:scale-95 transition-transform" aria-label="Back">
             <ArrowLeft size={20} className="text-foreground" />
           </button>
           <div className="flex-1 min-w-0">

@@ -15,10 +15,10 @@ const EarlyPay = () => {
   const { payroll, earlyPayouts, releaseEarlyPaycheck, accounts } = useBank();
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="px-5 pt-14 space-y-5 pb-12">
+    <div className="min-h-dvh bg-background">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-5 pb-12">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center press">
+          <button onClick={() => navigate(-1)} className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center press">
             <ArrowLeft size={20} className="text-foreground" />
           </button>
           <div>

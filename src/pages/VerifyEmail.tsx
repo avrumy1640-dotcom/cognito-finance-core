@@ -48,7 +48,7 @@ const VerifyEmail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-8">
+    <div className="min-h-dvh bg-background flex flex-col items-center justify-center px-8">
       <button
         onClick={() => navigate("/welcome")}
         className="absolute top-6 left-6 flex items-center gap-1 text-sm text-muted-foreground"

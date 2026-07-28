@@ -61,14 +61,14 @@ const MfaChallenge = () => {
 
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-dvh flex items-center justify-center bg-background">
         <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-8">
+    <div className="min-h-dvh bg-background flex flex-col items-center justify-center px-8">
       <button onClick={cancel} className="absolute top-6 left-6 flex items-center gap-1 text-sm text-muted-foreground">
         <ArrowLeft size={16} /> Cancel
       </button>

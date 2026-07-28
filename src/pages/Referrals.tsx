@@ -66,10 +66,10 @@ const Referrals = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="px-5 pt-14 space-y-5 pb-12">
+    <div className="min-h-dvh bg-background">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-5 pb-12">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center press" aria-label="Back">
+          <button onClick={() => navigate(-1)} className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center press" aria-label="Back">
             <ArrowLeft size={20} className="text-foreground" />
           </button>
           <div>
@@ -100,13 +100,13 @@ const Referrals = () => {
           <GlassCard className="space-y-3">
             <p className="kicker text-muted-foreground">Your code</p>
             <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary px-4 py-3">
-              <span className="text-lg font-display font-bold tracking-[0.2em] text-foreground">{referralCode || "—"}</span>
+              <span className="text-lg font-display font-bold tracking-[0.2em] text-foreground truncate min-w-0">{referralCode || "—"}</span>
               <button onClick={() => copy(referralCode, "Referral code")} className="text-primary press" aria-label="Copy referral code">
                 <Copy size={16} />
               </button>
             </div>
             <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary px-4 py-3">
-              <span className="text-xs text-muted-foreground truncate">{referralLink}</span>
+              <span className="text-xs text-muted-foreground truncate min-w-0 flex-1">{referralLink}</span>
               <button onClick={() => copy(referralLink, "Referral link")} className="text-primary press shrink-0" aria-label="Copy referral link">
                 <Copy size={16} />
               </button>

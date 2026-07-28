@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   MessageSquare,
   Download,
-  MoreHorizontal,
   ChevronRight,
   ShieldAlert,
   X,
@@ -52,23 +51,27 @@ const TransactionDetail = () => {
 
   if (!tx) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-dvh bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Transaction not found</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="px-5 pt-14 space-y-5">
+    <div className="min-h-dvh bg-background">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+          <button onClick={() => navigate(-1)} className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center">
             <ArrowLeft size={20} className="text-foreground" />
           </button>
           <h1 className="text-sm font-semibold text-foreground">Transaction Details</h1>
-          <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-            <MoreHorizontal size={20} className="text-foreground" />
+          <button
+            onClick={() => navigate("/disputes")}
+            className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="View your disputes"
+          >
+            <ShieldAlert size={20} className="text-foreground" aria-hidden="true" />
           </button>
         </div>
 

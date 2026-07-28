@@ -77,14 +77,14 @@ const MoveMoney = () => {
 
   return (
     <AppLayout>
-      <div className="px-5 pt-14 space-y-5 pb-8">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-5 pb-8">
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-2xl font-display font-bold text-foreground">Move Money</h1>
           <p className="text-sm text-muted-foreground mt-1">Transfer, send, or deposit funds</p>
         </motion.div>
 
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
           {primaryActions.map((action, i) => (
             <motion.button
               key={action.id}

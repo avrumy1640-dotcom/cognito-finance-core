@@ -1,11 +1,10 @@
 import { ReactNode } from "react";
-import BottomNav from "./BottomNav";
 
-const AppLayout = ({ children }: { children: ReactNode }) => (
-  <div className="min-h-screen bg-background">
-    <main className="pb-20">{children}</main>
-    <BottomNav />
-  </div>
-);
+/**
+ * Legacy page wrapper. Navigation and the responsive container now live in
+ * AppShell (applied at the route level), so this is a transparent pass-through
+ * kept so existing pages don't all need editing.
+ */
+const AppLayout = ({ children }: { children: ReactNode }) => <>{children}</>;
 
 export default AppLayout;

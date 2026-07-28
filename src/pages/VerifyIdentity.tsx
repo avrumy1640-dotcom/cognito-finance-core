@@ -540,14 +540,14 @@ const VerifyIdentity = () => {
   };
 
   if (kycLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="animate-spin text-primary" /></div>;
+    return <div className="min-h-dvh flex items-center justify-center bg-background"><Loader2 className="animate-spin text-primary" /></div>;
   }
 
   // Verified — celebratory landing with contextual next steps
   if (status === "verified") {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="px-5 pt-14 pb-8 space-y-5 max-w-md mx-auto">
+      <div className="min-h-dvh bg-background">
+        <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 pb-8 space-y-5 max-w-md mx-auto">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate("/")} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center" aria-label="Home">
               <ArrowLeft size={18} className="text-foreground" />
@@ -575,8 +575,8 @@ const VerifyIdentity = () => {
   // Pending / under review
   if (status === "pending") {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="px-5 pt-14 pb-8 space-y-5 max-w-md mx-auto">
+      <div className="min-h-dvh bg-background">
+        <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 pb-8 space-y-5 max-w-md mx-auto">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate("/")} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center" aria-label="Home">
               <ArrowLeft size={18} className="text-foreground" />
@@ -596,8 +596,8 @@ const VerifyIdentity = () => {
   // Intro splash (mirrors Onboarding.tsx language)
   if (showIntro) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="flex-1 relative overflow-hidden">
+      <div className="min-h-dvh bg-background flex flex-col">
+        <div className="flex-1 relative overflow-hidden w-full max-w-xl mx-auto">
           <div className="absolute inset-0 gradient-hero" />
           <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_30%_20%,hsl(var(--accent))_0%,transparent_45%)]" />
           <div className="relative z-10 h-full flex flex-col justify-between p-8 pt-16">
@@ -663,8 +663,8 @@ const VerifyIdentity = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <div className="px-5 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur z-10">
+    <div className="min-h-dvh bg-background flex flex-col">
+      <div className="px-5 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur z-10 w-full max-w-xl mx-auto">
         <div className="flex items-center gap-3 mb-3">
           <button
             onClick={() => step === 0 ? setShowIntro(true) : setStep(step - 1)}
@@ -684,7 +684,7 @@ const VerifyIdentity = () => {
 
       {/* Bottom padding tracks the real sticky-footer height (+ safe area) so no
           field can ever sit underneath the Continue / Submit button. */}
-      <div className="flex-1 px-5" style={{ paddingBottom: `calc(${footerH + 24}px + env(safe-area-inset-bottom))` }}>
+      <div className="flex-1 px-5 w-full max-w-xl mx-auto" style={{ paddingBottom: `calc(${footerH + 24}px + env(safe-area-inset-bottom))` }}>
 
         <AnimatePresence mode="wait">
           <motion.div
@@ -705,7 +705,7 @@ const VerifyIdentity = () => {
 
       <div
         ref={footerRef}
-        className="px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border/40 space-y-3 max-w-md mx-auto"
+        className="px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border/40 space-y-3 max-w-xl mx-auto"
       >
         {submitError && (
           <motion.div

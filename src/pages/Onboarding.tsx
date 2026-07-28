@@ -620,7 +620,7 @@ const Onboarding = () => {
 
   if (!state.hydrated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-dvh flex items-center justify-center bg-background">
         <Loader2 className="animate-spin text-primary" />
       </div>
     );
@@ -628,7 +628,7 @@ const Onboarding = () => {
 
   if (state.done) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-8">
+      <div className="min-h-dvh bg-background flex flex-col items-center justify-center px-8">
         <motion.div
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -649,8 +649,8 @@ const Onboarding = () => {
 
   if (state.showIntro) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="flex-1 relative overflow-hidden">
+      <div className="min-h-dvh bg-background flex flex-col">
+        <div className="flex-1 relative overflow-hidden w-full max-w-xl mx-auto">
           <div className="absolute inset-0 gradient-hero" />
           <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_30%_20%,hsl(var(--accent))_0%,transparent_45%)]" />
           <div className="relative z-10 h-full flex flex-col justify-between p-8 pt-16">
@@ -711,9 +711,9 @@ const Onboarding = () => {
   return (
     <form
       onSubmit={(e) => { e.preventDefault(); submit(); }}
-      className="min-h-screen bg-background flex flex-col"
+      className="min-h-dvh bg-background flex flex-col"
     >
-      <div className="px-5 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur z-10">
+      <div className="px-5 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur z-10 w-full max-w-xl mx-auto">
         <div className="flex items-center gap-3 mb-3">
           <button
             type="button"
@@ -732,7 +732,7 @@ const Onboarding = () => {
         </div>
       </div>
 
-      <div className="flex-1 px-5 pb-6">
+      <div className="flex-1 px-5 pb-6 w-full max-w-xl mx-auto">
         <AnimatePresence mode="wait">
           <motion.div
             key={current.id}
@@ -756,7 +756,7 @@ const Onboarding = () => {
         </AnimatePresence>
       </div>
 
-      <div className="px-5 pb-8 pt-3 sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0 space-y-2">
+      <div className="px-5 pb-8 pt-3 sticky bottom-0 w-full max-w-xl mx-auto bg-gradient-to-t from-background via-background to-background/0 space-y-2">
         <button
           type="submit"
           data-testid="onboarding-continue"

@@ -12,7 +12,7 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-5">
+    <div className="min-h-dvh bg-background flex items-center justify-center px-5">
       <GlassCard elevated className="max-w-sm w-full text-center py-8">
         <div className="text-5xl mb-3">🧭</div>
         <h1 className="text-2xl font-display font-bold text-foreground mb-1">Page not found</h1>
