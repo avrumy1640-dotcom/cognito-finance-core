@@ -109,7 +109,16 @@ interface Ctx {
   replaceCard: () => Promise<void> | void;
   reportStolen: () => Promise<void> | void;
   issueCard: (args?: { type?: "physical" | "virtual" }) => Promise<boolean>;
+  // --- savings goals ---
+  goals: DemoGoal[];
+  roundUpGoalId: string | null;
+  createGoal: (args: { name: string; emoji?: string; targetAmount: number; targetDate: string }) => Promise<boolean>;
+  contributeToGoal: (args: { goalId: string; amount: number }) => Promise<boolean>;
+  deleteGoal: (goalId: string) => Promise<boolean>;
+  setRoundUpGoal: (goalId: string | null) => Promise<boolean>;
+  runRoundUpSweep: () => Promise<{ swept: number; count: number }>;
 }
+
 
 // While the ledger loads, screens still need a shape to read from. These
 // carry zero balances (never fabricated numbers) and are swapped out the
