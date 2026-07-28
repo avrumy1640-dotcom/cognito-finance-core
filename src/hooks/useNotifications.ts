@@ -1,6 +1,6 @@
 // Real notifications, backed by the `notifications` table.
 //
-// Rows are written by trusted server-side code (the Iberbanco webhook, the
+// Rows are written by trusted server-side code (the provider webhook, the
 // scheduled-transfer runner, the KYC path) plus a small set of first-party
 // client events (new-device login). Reads are realtime-subscribed so the badge
 // and list update without polling.

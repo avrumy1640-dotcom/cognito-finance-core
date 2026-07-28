@@ -443,7 +443,7 @@ const SendMoneySheet = ({ onClose }: { onClose: () => void }) => {
 };
 
 // Mobile check deposit and the old "AddMoneySheet" stub have been removed —
-// mobile deposit isn't exposed by Iberbanco v2, and Add Money is now handled
+// mobile deposit is handled in-app, and Add Money is now handled
 // by the real AddMoneyPanel component (Bank Transfer / Debit Card / ACH).
 
 

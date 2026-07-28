@@ -29,7 +29,7 @@ const ReceiveMoney = () => {
   const [copied, setCopied] = useState<string | null>(null);
 
   const acc = accounts[account];
-  // Prefer real Iberbanco deposit details (populated on live sync). Fall back
+  // Prefer the account deposit details (populated on sync). Fall back
   // to the local placeholder when the account hasn't been hydrated yet.
   const details = acc.depositDetails;
   const fullAccountNumber = useMemo(() => {

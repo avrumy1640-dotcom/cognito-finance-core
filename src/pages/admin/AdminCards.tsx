@@ -28,7 +28,7 @@ const AdminCards = () => {
       />
       <div className="grid grid-cols-3 gap-4 mb-6">
         <StatCard label="Customers" value={customers.length} />
-        <StatCard label="Card program" value="Iberbanco" hint="Physical + virtual" />
+        <StatCard label="Card program" value="Glass Card" hint="Physical + virtual" />
         <StatCard label="Active issuance API" value="v2" />
       </div>
       <DataTable
@@ -43,7 +43,7 @@ const AdminCards = () => {
         ]}
       />
       <p className="text-xs text-muted-foreground mt-4">
-        Card lock / reissue / limit changes flow through the Iberbanco proxy edge function. Sensitive PAN and CVV data are never stored in this dashboard.
+        Card lock / reissue / limit changes are applied to the card ledger. Sensitive PAN and CVV data are never stored in this dashboard.
       </p>
     </AdminPage>
   );

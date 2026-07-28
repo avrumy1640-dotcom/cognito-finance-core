@@ -31,7 +31,7 @@ const AdminWebhooks = () => {
 
   return (
     <AdminPage>
-      <AdminHeader title="Webhook logs" subtitle="Incoming events from Iberbanco and other providers." />
+      <AdminHeader title="Webhook logs" subtitle="Incoming events from connected providers." />
       <DataTable
         rows={rows}
         empty={loading ? "Loading…" : "No webhook events yet"}

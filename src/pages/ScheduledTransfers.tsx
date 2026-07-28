@@ -91,7 +91,7 @@ const ScheduledTransfers = () => {
   };
 
   // Genuine execution: the same server-side executor pg_cron calls, which
-  // performs the Iberbanco transfer with server-resolved ownership checks and
+  // performs the transfer with server-resolved ownership checks and
   // per-occurrence idempotency. The UI never fakes a status change.
   const runNow = async (r: ScheduledTransfer) => {
     setRunningId(r.id);

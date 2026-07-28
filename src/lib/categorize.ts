@@ -8,7 +8,7 @@
 //     copy of the default rules is used until the DB rules load, so the first
 //     paint is never "Type 3".
 //
-// Persisted results live in `transaction_categories`, keyed by the Iberbanco
+// Persisted results live in `transaction_categories`, keyed by the
 // transaction reference, so a category never changes underneath the user. A
 // row with `is_override = true` always wins over the rules engine.
 

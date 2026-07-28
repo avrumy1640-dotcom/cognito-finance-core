@@ -100,7 +100,7 @@ const CardsPage = () => {
     }
   };
 
-  // Iberbanco v2 does not expose card lock/replace/report-stolen/PIN change/
+  // Card controls are handled by the in-app ledger:
   // travel-notice/control endpoints. We surface these as "not available" in
   // the UI so users can't be misled by fake success toasts.
   const CARD_CONTROLS_LIVE = false;
@@ -131,7 +131,7 @@ const CardsPage = () => {
       return;
     }
     const ok = await issueCard({ type: "virtual" });
-    if (ok) toast.success("Virtual card issued", { description: columnLive ? "Provisioned via Iberbanco" : "Ready to use" });
+    if (ok) toast.success("Virtual card issued", { description: "Ready to use" });
     else toast.error("Card issuance failed");
   };
 
