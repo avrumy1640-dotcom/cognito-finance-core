@@ -222,12 +222,12 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       if (!holder) {
         const { data: prof } = await supabase
           .from("profiles")
-          .select("first_name, last_name")
+          .select("preferred_name")
           .eq("user_id", user.id)
           .maybeSingle();
-        const p = prof as { first_name?: string; last_name?: string } | null;
-        holder = `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim();
+        holder = (prof?.preferred_name ?? "").trim();
       }
+
       if (!holder) holder = user.email?.split("@")[0] ?? "Account holder";
 
       const ledger = await demoBank.load(user.id, holder, user.email ?? undefined);
