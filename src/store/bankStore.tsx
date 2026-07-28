@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import type { Transaction } from "@/types/transaction";
-import { demoBank, type DemoLedger, type DemoAccount, type DemoCard } from "@/lib/demoBank";
+import { demoBank, type DemoLedger, type DemoAccount, type DemoCard, type DemoGoal } from "@/lib/demoBank";
 import { loadCategoryRules, categorize } from "@/lib/categorize";
 import { supabase } from "@/integrations/supabase/client";
 
