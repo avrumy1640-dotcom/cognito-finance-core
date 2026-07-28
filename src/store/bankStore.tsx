@@ -441,7 +441,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { ledger, swept, count } = await demoBank.runRoundUpSweep(id);
       await applyLedger(ledger);
-      setGoalsVersion((v) => v + 1);
+      
       if (swept > 0) toast.success(`Swept $${swept.toFixed(2)} from ${count} transactions`, { id: toastId });
       else toast.info("Nothing new to round up yet", { id: toastId });
       return { swept, count };
