@@ -2,6 +2,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
+import ToggleRow from "@/components/glass/ToggleRow";
+
 import { useNotifications } from "@/hooks/useNotifications";
 import { useNotificationPrefs, NotificationPrefs } from "@/hooks/useNotificationPrefs";
 import { ArrowLeft, Settings, CheckCheck } from "lucide-react";
