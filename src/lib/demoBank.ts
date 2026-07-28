@@ -846,10 +846,75 @@ export const demoBank = {
       ledger.accounts.forEach((a) => { a.depositDetails.holderName = holderName; });
       write(userId, ledger);
     }
-    // Time-based housekeeping: settle matured advances, age out disputes.
-    if (settleEarlyPayouts(ledger) || progressDisputes(ledger)) write(userId, ledger);
+    // Time-based housekeeping: settle matured advances, age out disputes,
+    // seed the referral program and pay any earned referral bonuses.
+    const housekeeping = [settleEarlyPayouts(ledger), progressDisputes(ledger), ensureReferrals(ledger)];
+    if (housekeeping.some(Boolean)) write(userId, ledger);
     return ledger;
   },
+
+  // ---- referrals -----------------------------------------------------------
+
+  /** Record a new invite against the user's referral code. */
+  async inviteReferral(userId: string, args: { name: string; contact: string }): Promise<DemoLedger> {
+    await delay(320);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    ensureReferrals(ledger);
+    const name = args.name.trim();
+    const contact = args.contact.trim();
+    if (!name) throw new Error("Add a name so you can track this invite");
+    const now = new Date().toISOString();
+    ledger.referrals = [
+      {
+        id: `ref_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        name,
+        contact,
+        status: "invited",
+        invitedAt: now,
+        updatedAt: now,
+        bonusPaidAt: null,
+        bonusAmount: REFERRAL_BONUS,
+      },
+      ...(ledger.referrals ?? []),
+    ];
+    write(userId, ledger);
+    return ledger;
+  },
+
+  // ---- cashback rewards ----------------------------------------------------
+
+  /** Pay the accrued cashback into checking as a real credit. */
+  async redeemCashback(userId: string): Promise<{ ledger: DemoLedger; amount: number }> {
+    await delay(460);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    const summary = cashbackSummary(ledger);
+    const amount = round2(summary.available);
+    if (amount < 1) throw new Error("You need at least $1.00 in cashback to redeem");
+    const checking = ledger.accounts.find((a) => a.type === "checking");
+    if (!checking) throw new Error("Checking account unavailable");
+    const now = new Date().toISOString();
+    ledger.transactions.unshift({
+      id: `tx_cashback_${Date.now()}`,
+      merchant: "Glass Card cashback",
+      category: "Rewards",
+      amount,
+      date: now,
+      status: "posted",
+      type: "credit",
+      paymentMethod: "Cashback redemption",
+      icon: "💚",
+      account: checking.id,
+    });
+    checking.currentBalance = round2(checking.currentBalance + amount);
+    checking.availableBalance = round2(checking.currentBalance - checking.pendingAmount);
+    ledger.cashbackRedemptions = [
+      { id: `cbr_${Date.now()}`, amount, date: now },
+      ...(ledger.cashbackRedemptions ?? []),
+    ];
+    write(userId, ledger);
+    return { ledger, amount };
+  },
+
 
   // ---- early paycheck access ----------------------------------------------
 
