@@ -66,6 +66,25 @@ export interface DemoCard {
   };
 }
 
+export interface DemoGoalContribution {
+  id: string;
+  amount: number;
+  date: string; // ISO
+  source: "manual" | "round-up";
+  note?: string;
+}
+
+export interface DemoGoal {
+  id: string;
+  name: string;
+  emoji: string;
+  targetAmount: number;
+  targetDate: string; // ISO date (yyyy-mm-dd)
+  saved: number;
+  createdAt: string;
+  contributions: DemoGoalContribution[];
+}
+
 export interface DemoLedger {
   version: 1;
   userNumber: string;
@@ -73,7 +92,14 @@ export interface DemoLedger {
   accounts: DemoAccount[];
   transactions: DemoTransaction[];
   cards: DemoCard[];
+  /** Savings goals — optional so older persisted ledgers stay valid. */
+  goals?: DemoGoal[];
+  /** Goal id that receives round-up sweeps, or null when round-ups are off. */
+  roundUpGoalId?: string | null;
+  /** Ids of debits already swept, so round-ups are never double counted. */
+  roundUpSweptTxIds?: string[];
 }
+
 
 const STORAGE_PREFIX = "glassbank.demo.v1:";
 const ROUTING = "084106768";
