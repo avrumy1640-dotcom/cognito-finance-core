@@ -4,6 +4,7 @@ import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
 import { toast } from "sonner";
 import {
+import { formatTxDate, txGroupLabel } from "@/lib/dates";
   ArrowLeft,
   MapPin,
   Tag,
@@ -60,7 +61,7 @@ const TransactionDetail = () => {
         {/* Details */}
         <GlassCard className="space-y-3">
           {[
-            { label: "Date & Time", value: tx.date },
+            { label: "Date & Time", value: formatTxDate(tx.date) },
             { label: "Category", value: tx.category },
             { label: "Payment Method", value: tx.paymentMethod },
             { label: "Account", value: tx.account },

@@ -11,6 +11,7 @@ import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
 import { useProfile } from "@/hooks/useProfile";
 import {
+import { formatTxDate, txGroupLabel } from "@/lib/dates";
   ArrowUpRight,
   ArrowDownLeft,
   QrCode,
@@ -365,7 +366,7 @@ const HomePage = () => {
                     <div className="text-left">
                       <p className="text-sm font-medium text-foreground">{tx.merchant}</p>
                       <p className="text-xs text-muted-foreground">
-                        {tx.category} · {tx.date}
+                        {tx.category} · {formatTxDate(tx.date)}
                       </p>
                     </div>
                   </div>

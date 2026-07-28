@@ -8,6 +8,7 @@ import DataErrorState from "@/components/layout/DataErrorState";
 import { Search, Download, ChevronRight, SlidersHorizontal, FileText } from "lucide-react";
 import { buildCsv, buildPdf, type ExportResult } from "@/lib/exports";
 import ExportPreviewModal from "@/components/exports/ExportPreviewModal";
+import { formatTxDate, txGroupLabel } from "@/lib/dates";
 
 const filterChips = ["All", "Card", "Transfers", "Deposits", "Bills", "P2P", "Pending", "Income", "Fees"];
 
@@ -39,20 +40,14 @@ const ActivityPage = () => {
   // Group transactions
   const groups: Record<string, typeof transactions> = {};
   filtered.forEach((tx) => {
-    const key = tx.date.includes("Today")
-      ? "Today"
-      : tx.date.includes("Yesterday")
-      ? "Yesterday"
-      : tx.date.startsWith("Mar 2")
-      ? "This Week"
-      : "Earlier";
+    const key = txGroupLabel(tx.date);
     if (!groups[key]) groups[key] = [];
     groups[key].push(tx);
   });
 
   const rowsFor = () =>
     filtered.map((tx) => ({
-      Date: tx.date,
+      Date: formatTxDate(tx.date),
       Merchant: tx.merchant,
       Category: tx.category,
       Account: tx.account,
