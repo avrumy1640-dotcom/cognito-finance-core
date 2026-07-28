@@ -120,6 +120,26 @@ export interface DemoDispute {
   resolution?: string | null;
 }
 
+export type ReferralStatus = "invited" | "signed_up" | "completed";
+
+export interface DemoReferral {
+  id: string;
+  name: string;
+  contact: string;
+  status: ReferralStatus;
+  invitedAt: string;
+  updatedAt: string;
+  /** Set once the $20 bonus has been credited to checking. */
+  bonusPaidAt?: string | null;
+  bonusAmount: number;
+}
+
+export interface DemoCashbackRedemption {
+  id: string;
+  amount: number;
+  date: string;
+}
+
 export interface DemoLedger {
   version: 1;
   userNumber: string;
@@ -137,12 +157,23 @@ export interface DemoLedger {
   earlyPayouts?: DemoEarlyPayout[];
   /** Transaction disputes raised by the customer. */
   disputes?: DemoDispute[];
+  /** Referral program. */
+  referralCode?: string;
+  referrals?: DemoReferral[];
+  /** Cashback already paid out to checking. */
+  cashbackRedemptions?: DemoCashbackRedemption[];
 }
 
 
 
 const STORAGE_PREFIX = "glassbank.demo.v1:";
 const ROUTING = "084106768";
+
+/** No-fee overdraft cushion available on the checking account. */
+export const OVERDRAFT_CUSHION = 50;
+/** Cashback rate earned on Glass Card purchases. */
+export const CASHBACK_RATE = 0.01;
+
 
 // ---- deterministic pseudo-random ------------------------------------------
 function hashSeed(input: string): number {
