@@ -67,23 +67,16 @@ const NotificationsPage = () => {
             <>
               <GlassCard className="divide-y divide-border p-0 overflow-hidden">
                 {rows.map((r) => (
-                  <div key={r.key} className="flex items-start justify-between gap-4 px-4 py-3.5">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">{r.label}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{r.desc}</p>
-                    </div>
-                    <button
-                      role="switch"
-                      aria-checked={Boolean(prefs[r.key])}
-                      aria-label={r.label}
-                      onClick={() => void togglePref(r.key, r.label.toLowerCase())}
-                      className={`shrink-0 w-11 h-6 rounded-full transition-colors ${prefs[r.key] ? "bg-primary" : "bg-secondary"}`}
-                    >
-                      <span className={`block w-5 h-5 bg-background rounded-full shadow transform transition-transform ${prefs[r.key] ? "translate-x-5" : "translate-x-0.5"}`} />
-                    </button>
-                  </div>
+                  <ToggleRow
+                    key={r.key}
+                    label={r.label}
+                    desc={r.desc}
+                    checked={Boolean(prefs[r.key])}
+                    onChange={() => void togglePref(r.key, r.label.toLowerCase())}
+                  />
                 ))}
               </GlassCard>
+
 
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-2">Thresholds</p>
