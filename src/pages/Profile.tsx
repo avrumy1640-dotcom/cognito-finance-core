@@ -72,7 +72,7 @@ const ProfilePage = () => {
 
   return (
     <AppLayout>
-      <div className="px-5 pt-14 space-y-5">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-5">
         {/* Profile Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="flex items-center gap-4">

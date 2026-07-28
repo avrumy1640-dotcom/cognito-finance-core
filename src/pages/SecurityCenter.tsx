@@ -317,10 +317,10 @@ const SecurityCenter = () => {
   }, [user?.id]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="px-5 pt-14 space-y-5 pb-10">
+    <div className="min-h-dvh bg-background">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-5 pb-10">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+          <button onClick={() => navigate(-1)} className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center">
             <ArrowLeft size={20} className="text-foreground" />
           </button>
           <h1 className="text-lg font-display font-bold text-foreground">Security Center</h1>
@@ -415,8 +415,8 @@ const SecurityCenter = () => {
                 {modal === "devices" && "Trusted devices"}
                 {modal === "history" && "Login history"}
               </h3>
-              <button onClick={closeModal} disabled={pwLoading || mfaLoading}>
-                <X size={18} className="text-muted-foreground" />
+              <button onClick={closeModal} disabled={pwLoading || mfaLoading} aria-label="Close">
+                <X size={18} className="text-muted-foreground" aria-hidden="true" />
               </button>
             </div>
 

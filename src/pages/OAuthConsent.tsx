@@ -76,7 +76,7 @@ const OAuthConsent = () => {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6">
+      <main className="min-h-dvh flex items-center justify-center p-6">
         <div className="text-muted-foreground text-sm">Loading authorization…</div>
       </main>
     );
@@ -84,7 +84,7 @@ const OAuthConsent = () => {
 
   if (error) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6">
+      <main className="min-h-dvh flex items-center justify-center p-6">
         <div className="max-w-md w-full rounded-2xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center gap-2 text-destructive mb-2">
             <AlertTriangle className="h-5 w-5" />
@@ -105,7 +105,7 @@ const OAuthConsent = () => {
     : [];
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-background">
+    <main className="min-h-dvh flex items-center justify-center p-6 bg-background">
       <div className="max-w-md w-full rounded-2xl border border-border bg-card p-6 shadow-lg space-y-5">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">

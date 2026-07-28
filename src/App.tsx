@@ -7,6 +7,7 @@ import { BankProvider } from "@/store/bankStore";
 import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLock from "@/components/AppLock";
+import AppShell from "@/components/layout/AppShell";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import MoveMoney from "./pages/MoveMoney";
@@ -60,13 +61,22 @@ import { AdminAccounts, AdminCrypto, AdminExchange } from "./pages/admin/AdminSi
 
 const queryClient = new QueryClient();
 
-const Guarded = ({ children }: { children: React.ReactNode }) => (
+// Bare guard — used by full-screen flows (onboarding, KYC) that must not
+// show app navigation.
+const Bare = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute>{children}</ProtectedRoute>
+);
+const Guarded = ({ children }: { children: React.ReactNode }) => (
+  <ProtectedRoute>
+    <AppShell>{children}</AppShell>
+  </ProtectedRoute>
 );
 // Banking-grade guard: signed-in + onboarded + KYC verified. Anything that
 // exposes balances, transactions, cards, or money movement must use this.
 const Banking = ({ children }: { children: React.ReactNode }) => (
-  <ProtectedRoute requireKyc>{children}</ProtectedRoute>
+  <ProtectedRoute requireKyc>
+    <AppShell>{children}</AppShell>
+  </ProtectedRoute>
 );
 
 const App = () => (
@@ -86,7 +96,7 @@ const App = () => (
               <Route path="/mfa-challenge" element={<MfaChallenge />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
-              <Route path="/onboarding" element={<Guarded><Onboarding /></Guarded>} />
+              <Route path="/onboarding" element={<Bare><Onboarding /></Bare>} />
               <Route path="/" element={<Banking><Index /></Banking>} />
               <Route path="/receive" element={<Banking><ReceiveMoney /></Banking>} />
               <Route path="/move-money" element={<Banking><MoveMoney /></Banking>} />
@@ -95,7 +105,7 @@ const App = () => (
               <Route path="/activity" element={<Banking><Activity /></Banking>} />
               <Route path="/profile" element={<Guarded><Profile /></Guarded>} />
               <Route path="/profile/personal" element={<Guarded><PersonalInfo /></Guarded>} />
-              <Route path="/profile/verify" element={<Guarded><VerifyIdentity /></Guarded>} />
+              <Route path="/profile/verify" element={<Bare><VerifyIdentity /></Bare>} />
               
 
               <Route path="/profile/documents" element={<Guarded><Documents /></Guarded>} />

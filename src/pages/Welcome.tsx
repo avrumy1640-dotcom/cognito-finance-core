@@ -13,7 +13,7 @@ const Welcome = () => {
   }, [loading, session, navigate]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col px-8 py-10">
+    <div className="min-h-dvh bg-background flex flex-col px-8 py-10">
       <div className="flex-1 flex flex-col items-center justify-center text-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}

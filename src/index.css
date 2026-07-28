@@ -150,6 +150,15 @@
     @apply border-border;
   }
 
+  /* Visible keyboard focus everywhere — never rely on the browser default
+     being visible against glass surfaces. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+
   html {
     /* Tighter default line-height for tighter-feeling UI */
     -webkit-text-size-adjust: 100%;

@@ -100,9 +100,9 @@ const SupportTicket = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <div className="px-5 pt-14 pb-3 flex items-center gap-3 border-b border-border">
-        <button onClick={() => navigate("/support")} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+    <div className="min-h-dvh bg-background flex flex-col">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 pb-3 flex items-center gap-3 border-b border-border">
+        <button onClick={() => navigate("/support")} className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center">
           <ArrowLeft size={20} className="text-foreground" />
         </button>
         <div className="flex-1 min-w-0">

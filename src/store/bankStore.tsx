@@ -145,7 +145,14 @@ interface Ctx {
   releaseEarlyPaycheck: () => Promise<boolean>;
   // --- disputes ---
   disputes: DemoDispute[];
-  openDispute: (args: { transactionId: string; merchant: string; amount: number; reason: DisputeReason; note?: string }) => Promise<DemoDispute | null>;
+  openDispute: (args: {
+    transactionId: string;
+    merchant: string;
+    amount: number;
+    reason: DisputeReason;
+    note?: string;
+    evidence?: { name: string; size: number; type: string }[];
+  }) => Promise<DemoDispute | null>;
   // --- referrals ---
   referralCode: string;
   referralLink: string;
@@ -224,6 +231,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   // activity (never for the whole history on first hydrate).
   const seenTxIds = useRef<Set<string> | null>(null);
   const lowBalanceNotified = useRef<string | null>(null);
+  const disputeStatusRef = useRef<Map<string, string>>(new Map());
   const userIdRef = useRef<string | null>(null);
   const ledgerRef = useRef<DemoLedger | null>(null);
   const overdraftRef = useRef(true);
@@ -237,7 +245,25 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     setRoundUpGoalId(ledger.roundUpGoalId ?? null);
     setPayroll(detectPayroll(ledger));
     setEarlyPayouts(ledger.earlyPayouts ?? []);
-    setDisputes(ledger.disputes ?? []);
+    const nextDisputes = ledger.disputes ?? [];
+    // Notify when a case advances (submitted → under review → resolved).
+    const known = disputeStatusRef.current;
+    for (const d of nextDisputes) {
+      const prev = known.get(d.id);
+      if (prev && prev !== d.status) {
+        void raiseNotification({
+          type: "alert",
+          title: `Dispute ${d.caseNumber} is ${d.status === "resolved" ? "resolved" : "under review"}`,
+          body:
+            d.status === "resolved"
+              ? d.resolution ?? `We finished reviewing your $${d.amount.toFixed(2)} charge at ${d.merchant}.`
+              : `Our team is reviewing your $${d.amount.toFixed(2)} charge at ${d.merchant}.`,
+          dedupe_key: `dispute-${d.id}-${d.status}`,
+        });
+      }
+      known.set(d.id, d.status);
+    }
+    setDisputes(nextDisputes);
     setReferralCode(ledger.referralCode ?? "");
     setReferrals(ledger.referrals ?? []);
     setCashback(cashbackSummary(ledger));
@@ -575,7 +601,14 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
   // --- disputes -------------------------------------------------------------
   const openDispute = useCallback(
-    async (args: { transactionId: string; merchant: string; amount: number; reason: DisputeReason; note?: string }) => {
+    async (args: {
+      transactionId: string;
+      merchant: string;
+      amount: number;
+      reason: DisputeReason;
+      note?: string;
+      evidence?: { name: string; size: number; type: string }[];
+    }) => {
       const id = uid();
       if (!id) return null;
       const toastId = `dispute-${Date.now()}`;

@@ -104,7 +104,20 @@ export type DisputeReason =
   | "not_received"
   | "other";
 
-export type DisputeStatus = "under_review" | "resolved";
+export type DisputeStatus = "submitted" | "under_review" | "resolved";
+
+/** A single, uploaded piece of supporting evidence (metadata only). */
+export interface DisputeEvidence {
+  name: string;
+  size: number;
+  type: string;
+}
+
+export interface DisputeEvent {
+  status: DisputeStatus;
+  at: string;
+  note: string;
+}
 
 export interface DemoDispute {
   id: string;
@@ -118,6 +131,8 @@ export interface DemoDispute {
   createdAt: string;
   updatedAt: string;
   resolution?: string | null;
+  evidence?: DisputeEvidence[];
+  timeline?: DisputeEvent[];
 }
 
 export type ReferralStatus = "invited" | "signed_up" | "completed";
@@ -543,18 +558,41 @@ const REASON_LABELS: Record<DisputeReason, string> = {
 
 export const disputeReasonLabel = (r: DisputeReason) => REASON_LABELS[r] ?? "Other";
 
-/** Advance a dispute to Resolved once the review window has elapsed. */
+export const DISPUTE_STATUS_LABEL: Record<DisputeStatus, string> = {
+  submitted: "Submitted",
+  under_review: "Under review",
+  resolved: "Resolved",
+};
+
+/** Move disputes along their lifecycle: submitted → under review → resolved. */
 function progressDisputes(ledger: DemoLedger): boolean {
   let changed = false;
   for (const d of ledger.disputes ?? []) {
+    d.timeline = d.timeline ?? [
+      { status: "submitted", at: d.createdAt, note: "Dispute submitted and case opened." },
+    ];
+    const age = Date.now() - +new Date(d.createdAt);
+    if (d.status === "submitted") {
+      if (age < 6 * 60 * 60 * 1000) continue;
+      d.status = "under_review";
+      d.updatedAt = new Date().toISOString();
+      d.timeline.push({
+        status: "under_review",
+        at: d.updatedAt,
+        note: "Our disputes team is reviewing the charge with the merchant.",
+      });
+      changed = true;
+      continue;
+    }
     if (d.status !== "under_review") continue;
-    if (Date.now() - +new Date(d.createdAt) < 3 * DAY) continue;
+    if (age < 3 * DAY) continue;
     d.status = "resolved";
     d.updatedAt = new Date().toISOString();
     d.resolution =
       d.reason === "unauthorized"
         ? "Provisional credit issued and the charge was reversed."
         : "Reviewed with the merchant — the charge was confirmed as valid.";
+    d.timeline.push({ status: "resolved", at: d.updatedAt, note: d.resolution });
     changed = true;
   }
   return changed;
@@ -992,7 +1030,14 @@ export const demoBank = {
 
   async openDispute(
     userId: string,
-    args: { transactionId: string; merchant: string; amount: number; reason: DisputeReason; note?: string },
+    args: {
+      transactionId: string;
+      merchant: string;
+      amount: number;
+      reason: DisputeReason;
+      note?: string;
+      evidence?: DisputeEvidence[];
+    },
   ): Promise<{ ledger: DemoLedger; dispute: DemoDispute }> {
     await delay(480);
     const ledger = read(userId) ?? generateLedger(userId, "Account holder");
@@ -1008,10 +1053,12 @@ export const demoBank = {
       amount: round2(Math.abs(args.amount)),
       reason: args.reason,
       note: args.note?.trim() || undefined,
-      status: "under_review",
+      status: "submitted",
       createdAt: now,
       updatedAt: now,
       resolution: null,
+      evidence: args.evidence ?? [],
+      timeline: [{ status: "submitted", at: now, note: "Dispute submitted and case opened." }],
     };
     ledger.disputes.unshift(dispute);
     write(userId, ledger);

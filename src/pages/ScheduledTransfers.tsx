@@ -115,9 +115,9 @@ const ScheduledTransfers = () => {
 
   return (
     <AppLayout>
-      <div className="px-5 pt-14 space-y-5 pb-8">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-5 pb-8">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center" aria-label="Back">
+          <button onClick={() => navigate(-1)} className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center" aria-label="Back">
             <ArrowLeft size={20} className="text-foreground" />
           </button>
           <div className="flex-1">
@@ -145,7 +145,7 @@ const ScheduledTransfers = () => {
           </GlassCard>
         )}
 
-        <div className="space-y-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           {rows.map((r) => {
             const meta = statusMeta[r.status];
             const dt = new Date(r.scheduled_for);

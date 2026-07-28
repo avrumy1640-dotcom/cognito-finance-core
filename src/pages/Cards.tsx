@@ -170,7 +170,7 @@ const CardsPage = () => {
   if (dataStatus === "error") {
     return (
       <AppLayout>
-        <div className="px-5 pt-14">
+        <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12">
           <DataErrorState message={dataError} onRetry={retry} title="We couldn't load your cards" />
         </div>
       </AppLayout>
@@ -180,7 +180,7 @@ const CardsPage = () => {
   if (dataStatus === "loading") {
     return (
       <AppLayout>
-        <div className="px-5 pt-14 space-y-4">
+        <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-4">
           <div className="h-6 w-40 rounded-lg bg-secondary animate-pulse" />
           <div className="h-52 w-full rounded-3xl bg-secondary animate-pulse" />
           <div className="h-20 w-full rounded-2xl bg-secondary animate-pulse" />
@@ -192,7 +192,7 @@ const CardsPage = () => {
 
   return (
     <AppLayout>
-      <div className="px-5 pt-14 space-y-5 pb-8">
+      <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-5 pb-8">
         {/* Header — kicker + title, mirrors AccountDetail */}
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
@@ -229,7 +229,7 @@ const CardsPage = () => {
           whileTap={{ scale: 0.985 }}
         >
           <div
-            className={`card-material gradient-card-face relative rounded-[26px] p-6 overflow-hidden transition-opacity ${card.isLocked ? "opacity-80" : ""}`}
+            className={`card-material gradient-card-face relative rounded-[26px] p-6 overflow-hidden transition-opacity sm:max-w-md lg:max-w-lg ${card.isLocked ? "opacity-80" : ""}`}
             style={{
               minHeight: 232,
               boxShadow:
@@ -342,7 +342,7 @@ const CardsPage = () => {
 
         <AnimatePresence mode="wait">
           {activeTab === "actions" && (
-            <motion.div key="actions" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2">
+            <motion.div key="actions" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid gap-2 sm:grid-cols-2">
               <ActionRow
                 icon={card.isLocked ? Unlock : Lock}
                 label={card.isLocked ? "Unlock card" : "Lock card"}
