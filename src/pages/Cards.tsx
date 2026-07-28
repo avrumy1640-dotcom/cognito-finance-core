@@ -300,6 +300,25 @@ const CardsPage = () => {
           </GlassCard>
         </div>
 
+        {/* Cashback rewards entry point */}
+        <button
+          onClick={() => navigate("/rewards")}
+          className="w-full text-left press"
+        >
+          <GlassCard className="flex items-center gap-3 py-3">
+            <div className="w-9 h-9 rounded-xl bg-success/10 flex items-center justify-center shrink-0">
+              <span className="text-base">💚</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">Cashback rewards</p>
+              <p className="text-xs text-muted-foreground">
+                1% back on every purchase · {formatCurrency(cashback?.available ?? 0)} ready to redeem
+              </p>
+            </div>
+            <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+          </GlassCard>
+        </button>
+
         {kycStatus === "verified" && (
           <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-success bg-success/10 rounded-full px-2.5 py-1">
             <ShieldCheck size={12} /> PCI-DSS secured · Zero liability on unauthorized charges
