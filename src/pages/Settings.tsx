@@ -20,8 +20,19 @@ import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/hooks/useTheme";
+import type { Theme } from "@/lib/theme";
+import {
+  biometricLabel,
+  getBiometricKind,
+  isAppLockEnabled,
+  lockNow,
+  setAppLockEnabled,
+  setBiometricKind,
+  type BiometricKind,
+} from "@/lib/appLock";
 
-type Theme = "light" | "dark" | "system";
+
 
 const LANGUAGES = [
   { code: "en", label: "English" },
@@ -42,17 +53,11 @@ const TIMEZONES = [
   "Australia/Sydney",
 ];
 
-const applyTheme = (t: Theme) => {
-  const root = document.documentElement;
-  const isDark = t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  root.classList.toggle("dark", isDark);
-};
-
 const Settings = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("gb_theme") as Theme) || "system");
+  const { theme, setTheme } = useTheme();
   const [language, setLanguage] = useState<string>(() => localStorage.getItem("gb_lang") || "en");
   const [currency, setCurrency] = useState<string>("USD");
   const [timezone, setTimezone] = useState<string>(() =>
@@ -62,10 +67,9 @@ const Settings = () => {
   const [notifEmail, setNotifEmail] = useState<boolean>(() => localStorage.getItem("gb_notif_email") !== "false");
   const [notifSms, setNotifSms] = useState<boolean>(() => localStorage.getItem("gb_notif_sms") === "true");
   const [marketing, setMarketing] = useState<boolean>(() => localStorage.getItem("gb_marketing") === "true");
-  const [biometrics, setBiometrics] = useState<boolean>(() => localStorage.getItem("gb_biometrics") === "true");
+  const [biometrics, setBiometrics] = useState<boolean>(() => isAppLockEnabled());
+  const [bioKind, setBioKind] = useState<BiometricKind>(() => getBiometricKind());
   const [hideBalances, setHideBalances] = useState<boolean>(() => localStorage.getItem("gb_hide_balances") === "true");
-
-  useEffect(() => { applyTheme(theme); }, [theme]);
 
   useEffect(() => {
     (async () => {
@@ -81,7 +85,23 @@ const Settings = () => {
 
   const persist = (key: string, value: string) => localStorage.setItem(key, value);
 
-  const changeTheme = (t: Theme) => { setTheme(t); persist("gb_theme", t); toast.success(`Theme set to ${t}`); };
+  const changeTheme = (t: Theme) => {
+    setTheme(t);
+    toast.success(t === "system" ? "Theme follows your device" : `${t === "dark" ? "Dark" : "Light"} theme on`);
+  };
+
+  const toggleBiometrics = () => {
+    const next = !biometrics;
+    setBiometrics(next);
+    setAppLockEnabled(next);
+    toast.success(next ? `${biometricLabel(bioKind)} unlock on` : "App lock off");
+  };
+
+  const changeBioKind = (k: BiometricKind) => {
+    setBioKind(k);
+    setBiometricKind(k);
+    toast.success(`${biometricLabel(k)} selected`);
+  };
   const changeLang = (l: string) => { setLanguage(l); persist("gb_lang", l); toast.success("Language updated"); };
   const changeTz = (tz: string) => { setTimezone(tz); persist("gb_tz", tz); toast.success("Time zone updated"); };
 
@@ -215,11 +235,43 @@ const Settings = () => {
           <GlassCard className="divide-y divide-border p-0 overflow-hidden">
             <ToggleRow
               icon={Fingerprint}
-              label="Biometric unlock"
-              desc="Use Face ID or fingerprint to sign in"
+              label={`${biometricLabel(bioKind)} unlock`}
+              desc="Lock the app and reopen it with a biometric check"
               checked={biometrics}
-              onChange={() => toggle("gb_biometrics", setBiometrics, biometrics, "Biometric unlock")}
+              onChange={toggleBiometrics}
             />
+            {biometrics && (
+              <div className="px-4 py-3 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { key: "face", label: "Face ID" },
+                    { key: "fingerprint", label: "Fingerprint" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => changeBioKind(opt.key)}
+                      className={`py-2.5 rounded-xl text-xs font-semibold border transition-colors ${
+                        bioKind === opt.key
+                          ? "border-primary bg-primary/5 text-foreground"
+                          : "border-border bg-secondary text-muted-foreground"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => { lockNow(); }}
+                  className="w-full py-2.5 rounded-xl bg-secondary text-xs font-semibold text-foreground"
+                >
+                  Lock the app now
+                </button>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  The app relocks when you reopen it, or after a minute in the background.
+                  On the web the prompt is simulated for this demo.
+                </p>
+              </div>
+            )}
             <ToggleRow
               icon={Eye}
               label="Hide balances by default"
