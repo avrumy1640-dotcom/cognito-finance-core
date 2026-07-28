@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BankProvider } from "@/store/bankStore";
 import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import AppLock from "@/components/AppLock";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import MoveMoney from "./pages/MoveMoney";
@@ -75,6 +76,7 @@ const App = () => (
         <BankProvider>
           <Toaster />
           <Sonner />
+          <AppLock />
           <BrowserRouter>
             <Routes>
               <Route path="/welcome" element={<Welcome />} />
