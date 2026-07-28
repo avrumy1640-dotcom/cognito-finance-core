@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 const REASONS: DisputeReason[] = ["unauthorized", "wrong_amount", "duplicate", "not_received", "other"];
+const CATEGORIES = ["Food", "Transport", "Shopping", "Bills", "Income", "Transfer", "Other"];
 
 const TransactionDetail = () => {
   const { id } = useParams();
@@ -30,6 +31,12 @@ const TransactionDetail = () => {
   const [reason, setReason] = useState<DisputeReason>("unauthorized");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [catOpen, setCatOpen] = useState(false);
+  const [category, setCategory] = useState(tx?.category ?? "Other");
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savedNote, setSavedNote] = useState("");
+
 
   const submitDispute = async () => {
     if (!tx) return;
