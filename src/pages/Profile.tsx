@@ -21,7 +21,12 @@ import {
   ShieldAlert,
   Gift,
   Gauge,
+  Sun,
+  Moon,
+  Monitor,
 } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
+import type { Theme } from "@/lib/theme";
 
 const sections = [
   {
@@ -63,6 +68,7 @@ const ProfilePage = () => {
   const navigate = useNavigate();
   const { signOut, user: authUser } = useAuth();
   const { fullName, initials, memberSince, loading } = useProfile();
+  const { theme, setTheme } = useTheme();
 
   return (
     <AppLayout>
@@ -87,6 +93,36 @@ const ProfilePage = () => {
           </div>
         </motion.div>
 
+
+        {/* Appearance quick switch */}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}>
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
+            Appearance
+          </h2>
+          <GlassCard className="p-3">
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { key: "light", label: "Light", icon: Sun },
+                { key: "dark", label: "Dark", icon: Moon },
+                { key: "system", label: "Auto", icon: Monitor },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setTheme(opt.key as Theme)}
+                  aria-pressed={theme === opt.key}
+                  className={`py-2.5 rounded-xl text-xs font-semibold border transition-colors flex flex-col items-center gap-1 ${
+                    theme === opt.key
+                      ? "border-primary bg-primary/5 text-foreground"
+                      : "border-border bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  <opt.icon size={16} />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </GlassCard>
+        </motion.div>
 
         {/* Sections */}
         {sections.map((section, si) => (
