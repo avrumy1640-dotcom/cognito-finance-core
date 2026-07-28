@@ -62,7 +62,7 @@ type TxFilter = "all" | "in" | "out";
 
 const CardsPage = () => {
   const navigate = useNavigate();
-  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen, issueCard, columnLive, dataStatus, dataError, retry } = useBank();
+  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen, issueCard, columnLive, dataStatus, dataError, retry, cashback } = useBank();
   const { canMoveMoney, status: kycStatus } = useKyc();
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState<"actions" | "controls" | "transactions">("actions");
