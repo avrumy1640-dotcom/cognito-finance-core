@@ -23,7 +23,8 @@ type Phase = "idle" | "scanning" | "success" | "failed";
  */
 const AppLock = () => {
   const { user, signOut } = useAuth();
-  const { firstName } = useProfile();
+  const { fullName } = useProfile();
+  const firstName = (fullName || "").trim().split(" ")[0];
   const [locked, setLocked] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const kind = getBiometricKind();
