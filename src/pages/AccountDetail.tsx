@@ -47,6 +47,9 @@ const AccountDetail = () => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TxFilter>("all");
   const [limitsExport, setLimitsExport] = useState<ExportResult | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const { accounts, transactions, dataStatus, dataError, retry, cushion, spendable } = useBank(); const loading = false;
   const { status: kycStatus } = useKyc();
   const account = type === "savings" ? accounts.savings : accounts.checking;
@@ -449,15 +452,52 @@ const AccountDetail = () => {
 
           {activeTab === "settings" && (
             <motion.div key="settings" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2">
+              <GlassCard className="space-y-3">
+                <button
+                  onClick={() => {
+                    setNameDraft(displayName ?? account.name);
+                    setRenaming((r) => !r);
+                  }}
+                  className="w-full flex items-center justify-between gap-3 min-h-[44px] text-left"
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <Edit3 size={18} className="text-muted-foreground shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground leading-snug">Rename account</span>
+                      <span className="block text-xs text-muted-foreground leading-snug break-words">
+                        {displayName ?? account.name}
+                      </span>
+                    </span>
+                  </span>
+                  <ChevronRight
+                    size={16}
+                    className={`text-muted-foreground shrink-0 transition-transform ${renaming ? "rotate-90" : ""}`}
+                  />
+                </button>
+                {renaming && (
+                  <div className="space-y-2">
+                    <input
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value.slice(0, 40))}
+                      placeholder="Account nickname"
+                      className="w-full h-12 px-3 rounded-xl bg-secondary text-sm text-foreground outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        const next = nameDraft.trim();
+                        if (!next) { toast.error("Enter a name"); return; }
+                        setDisplayName(next);
+                        setRenaming(false);
+                        toast.success(`Renamed to "${next}"`);
+                      }}
+                      className="w-full min-h-[52px] px-5 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold leading-snug"
+                    >
+                      Save name
+                    </button>
+                  </div>
+                )}
+              </GlassCard>
               {[
-                {
-                  icon: Edit3,
-                  label: "Rename Account",
-                  action: () => {
-                    const next = prompt("Rename account", account.name);
-                    if (next && next.trim()) toast.success(`Renamed to "${next.trim()}"`);
-                  },
-                },
                 {
                   icon: Shield,
                   label: "Overdraft Preferences",
@@ -472,13 +512,13 @@ const AccountDetail = () => {
                 <GlassCard
                   key={item.label}
                   onClick={item.action}
-                  className="flex items-center justify-between py-3 cursor-pointer"
+                  className="flex items-center justify-between gap-3 py-3 min-h-[56px] cursor-pointer"
                 >
-                  <div className="flex items-center gap-3">
-                    <item.icon size={18} className="text-muted-foreground" />
-                    <span className="text-sm font-medium text-foreground">{item.label}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <item.icon size={18} className="text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium text-foreground leading-snug break-words">{item.label}</span>
                   </div>
-                  <ChevronRight size={16} className="text-muted-foreground" />
+                  <ChevronRight size={16} className="text-muted-foreground shrink-0" />
                 </GlassCard>
               ))}
             </motion.div>

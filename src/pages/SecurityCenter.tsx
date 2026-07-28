@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
 import ToggleRow from "@/components/glass/ToggleRow";
+import ConfirmDialog from "@/components/glass/ConfirmDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/deviceTracking";
@@ -204,7 +205,6 @@ const SecurityCenter = () => {
   };
 
   const disableFactor = async (factorId: string) => {
-    if (!confirm("Turn off two-factor authentication?")) return;
     setMfaLoading(true);
     const { error } = await supabase.auth.mfa.unenroll({ factorId });
     setMfaLoading(false);
@@ -218,11 +218,23 @@ const SecurityCenter = () => {
       toast.error("This is the device you're using. Sign out from Profile instead.");
       return;
     }
-    if (!confirm(`Remove ${row.label} from trusted devices?`)) return;
     const { error } = await supabase.from("trusted_devices").delete().eq("id", row.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Device removed");
     setDevices((d) => d.filter((x) => x.id !== row.id));
+  };
+
+  const [confirmState, setConfirmState] = useState<
+    | { kind: "signout-others" | "disable-2fa" | "remove-device"; title: string; description: string; confirmLabel: string; run: () => void }
+    | null
+  >(null);
+
+  const runSignOutOthers = () => {
+    toast.loading("Ending other sessions…", { id: "signout-others" });
+    signOutOthers().then(({ error }) => {
+      if (error) toast.error(error, { id: "signout-others" });
+      else toast.success("All other sessions ended.", { id: "signout-others" });
+    });
   };
 
   const action = (label: string) => () => {
@@ -245,11 +257,12 @@ const SecurityCenter = () => {
         toast.info(user?.email ? `Signed in as ${user.email}` : "1 active session on this device");
         break;
       case "Sign Out All Devices":
-        if (!confirm("Sign out of all other devices?")) break;
-        toast.loading("Ending other sessions…", { id: "signout-others" });
-        signOutOthers().then(({ error }) => {
-          if (error) toast.error(error, { id: "signout-others" });
-          else toast.success("All other sessions ended.", { id: "signout-others" });
+        setConfirmState({
+          kind: "signout-others",
+          title: "Sign out of all other devices?",
+          description: "You'll stay signed in here. Every other browser and phone will need to sign in again.",
+          confirmLabel: "Sign out others",
+          run: runSignOutOthers,
         });
         break;
       case "Fraud Center":
@@ -450,8 +463,18 @@ const SecurityCenter = () => {
                     <div className="p-3 rounded-xl bg-success/10 text-success text-sm">
                       Authenticator app is active on your account.
                     </div>
-                    <button onClick={() => disableFactor(verifiedFactor.id)} disabled={mfaLoading}
-                      className="w-full py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-semibold disabled:opacity-60">
+                    <button
+                      onClick={() =>
+                        setConfirmState({
+                          kind: "disable-2fa",
+                          title: "Turn off two-factor authentication?",
+                          description: "Your account will be protected by password only. You can turn it back on any time.",
+                          confirmLabel: "Turn it off",
+                          run: () => void disableFactor(verifiedFactor.id),
+                        })
+                      }
+                      disabled={mfaLoading}
+                      className="w-full min-h-[52px] px-5 py-3 rounded-2xl bg-destructive/10 text-destructive text-sm font-semibold leading-snug disabled:opacity-60">
                       {mfaLoading ? "Removing…" : "Turn off two-factor"}
                     </button>
                   </>
@@ -506,7 +529,18 @@ const SecurityCenter = () => {
                         </p>
                         <p className="text-[11px] text-muted-foreground">Last seen {new Date(d.last_seen_at).toLocaleString()}</p>
                       </div>
-                      <button onClick={() => removeDevice(d)} className="p-2 rounded-lg hover:bg-destructive/10">
+                      <button
+                        onClick={() =>
+                          setConfirmState({
+                            kind: "remove-device",
+                            title: `Remove ${d.label}?`,
+                            description: "That device will need to verify again the next time it signs in.",
+                            confirmLabel: "Remove device",
+                            run: () => void removeDevice(d),
+                          })
+                        }
+                        aria-label={`Remove ${d.label}`}
+                        className="p-2 rounded-lg hover:bg-destructive/10 shrink-0">
                         <Trash2 size={16} className="text-destructive" />
                       </button>
                     </div>
@@ -563,6 +597,19 @@ const SecurityCenter = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        title={confirmState?.title ?? ""}
+        description={confirmState?.description}
+        confirmLabel={confirmState?.confirmLabel}
+        destructive
+        onConfirm={() => {
+          confirmState?.run();
+          setConfirmState(null);
+        }}
+        onOpenChange={(o) => !o && setConfirmState(null)}
+      />
     </div>
   );
 };

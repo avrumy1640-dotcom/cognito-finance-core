@@ -7,6 +7,7 @@ import GlassCard from "@/components/glass/GlassCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBank } from "@/store/bankStore";
+import ConfirmDialog from "@/components/glass/ConfirmDialog";
 import { CalendarClock, Plus, X, Edit3, Play, ArrowLeft, CheckCircle2, AlertCircle, Pause } from "lucide-react";
 import { FEE_TIMING, formatUsd, type TransferKind } from "@/lib/txPolicy";
 
@@ -82,8 +83,9 @@ const ScheduledTransfers = () => {
 
   useEffect(() => { if (user) load(); }, [user]);
 
+  const [pendingCancel, setPendingCancel] = useState<ScheduledTransfer | null>(null);
+
   const cancel = async (r: ScheduledTransfer) => {
-    if (!confirm(`Cancel scheduled ${kindLabel[r.kind]} of ${formatUsd(r.amount)}?`)) return;
     const { error } = await supabase.from("scheduled_transfers").update({ status: "cancelled" }).eq("id", r.id);
     if (error) return toast.error("Cancel failed", { description: error.message });
     toast.success("Scheduled transfer cancelled");
@@ -188,7 +190,7 @@ const ScheduledTransfers = () => {
                     <button onClick={() => { setEditing(r); setShowForm(true); }} className="flex-1 py-2 rounded-lg bg-secondary text-foreground text-xs font-semibold flex items-center justify-center gap-1">
                       <Edit3 size={12} /> Edit
                     </button>
-                    <button onClick={() => cancel(r)} className="flex-1 py-2 rounded-lg bg-secondary text-destructive text-xs font-semibold flex items-center justify-center gap-1">
+                    <button onClick={() => setPendingCancel(r)} className="flex-1 min-h-[44px] px-3 py-2 rounded-xl bg-secondary text-destructive text-xs font-semibold flex items-center justify-center gap-1 leading-snug">
                       <X size={12} /> Cancel
                     </button>
                   </div>

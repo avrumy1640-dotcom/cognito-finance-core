@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 const REASONS: DisputeReason[] = ["unauthorized", "wrong_amount", "duplicate", "not_received", "other"];
+const CATEGORIES = ["Food", "Transport", "Shopping", "Bills", "Income", "Transfer", "Other"];
 
 const TransactionDetail = () => {
   const { id } = useParams();
@@ -30,6 +31,12 @@ const TransactionDetail = () => {
   const [reason, setReason] = useState<DisputeReason>("unauthorized");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [catOpen, setCatOpen] = useState(false);
+  const [category, setCategory] = useState(tx?.category ?? "Other");
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savedNote, setSavedNote] = useState("");
+
 
   const submitDispute = async () => {
     if (!tx) return;
@@ -117,15 +124,90 @@ const TransactionDetail = () => {
           <ChevronRight size={16} className="text-muted-foreground" />
         </GlassCard>
 
+        {/* Categorize — inline, in place */}
+        <GlassCard className="space-y-3">
+          <button
+            onClick={() => setCatOpen((o) => !o)}
+            className="w-full flex items-center justify-between gap-3 min-h-[44px] text-left"
+          >
+            <span className="flex items-center gap-3 min-w-0">
+              <Tag size={18} className="text-primary shrink-0" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground leading-snug">Category</span>
+                <span className="block text-xs text-muted-foreground leading-snug">{category}</span>
+              </span>
+            </span>
+            <ChevronRight
+              size={16}
+              className={`text-muted-foreground shrink-0 transition-transform ${catOpen ? "rotate-90" : ""}`}
+            />
+          </button>
+          {catOpen && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => {
+                    setCategory(c);
+                    setCatOpen(false);
+                    toast.success(`Categorized as ${c}`);
+                  }}
+                  className={`min-h-[40px] px-4 rounded-full text-xs font-semibold leading-snug break-words transition-colors ${
+                    category === c ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+        </GlassCard>
+
+        {/* Note — inline editor, never a prompt */}
+        <GlassCard className="space-y-3">
+          <button
+            onClick={() => setNoteOpen((o) => !o)}
+            className="w-full flex items-center justify-between gap-3 min-h-[44px] text-left"
+          >
+            <span className="flex items-center gap-3 min-w-0">
+              <MessageSquare size={18} className="text-primary shrink-0" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground leading-snug">Note</span>
+                <span className="block text-xs text-muted-foreground leading-snug break-words">
+                  {savedNote || "Add a note for your records"}
+                </span>
+              </span>
+            </span>
+            <ChevronRight
+              size={16}
+              className={`text-muted-foreground shrink-0 transition-transform ${noteOpen ? "rotate-90" : ""}`}
+            />
+          </button>
+          {noteOpen && (
+            <div className="space-y-2">
+              <textarea
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value.slice(0, 200))}
+                rows={3}
+                placeholder="e.g. Reimbursable client lunch"
+                className="w-full p-3 rounded-xl bg-secondary text-sm text-foreground outline-none resize-none leading-snug"
+              />
+              <button
+                onClick={() => {
+                  setSavedNote(noteDraft.trim());
+                  setNoteOpen(false);
+                  toast.success(noteDraft.trim() ? "Note saved" : "Note cleared");
+                }}
+                className="w-full min-h-[52px] px-5 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold leading-snug"
+              >
+                Save note
+              </button>
+            </div>
+          )}
+        </GlassCard>
+
         <div className="space-y-2">
           {[
-            { icon: Tag, label: "Categorize Transaction", action: () => {
-              const cats = ["Food", "Transport", "Shopping", "Bills", "Income", "Transfer", "Other"];
-              const pick = prompt(`Pick a category:\n${cats.map((c, i) => `${i + 1}. ${c}`).join("\n")}`);
-              const idx = pick ? parseInt(pick, 10) - 1 : -1;
-              if (idx >= 0 && cats[idx]) toast.success(`Categorized as ${cats[idx]}`);
-            } },
-            { icon: MessageSquare, label: "Add Note", action: () => { const n = prompt("Add a note"); if (n) toast.success("Note saved"); } },
             {
               icon: AlertTriangle,
               label: existingDispute ? `Dispute ${existingDispute.caseNumber}` : "Report a problem",
@@ -133,7 +215,7 @@ const TransactionDetail = () => {
               action: () => (existingDispute ? navigate("/disputes") : setSheetOpen(true)),
             },
             { icon: Download, label: "Download Receipt", action: () => {
-              const body = `Glass Bank Receipt\nTransaction ID: demo\nGenerated ${new Date().toLocaleString()}\n`;
+              const body = `Glass Bank Receipt\nTransaction ID: ${tx.id}\nGenerated ${new Date().toLocaleString()}\n`;
               const blob = new Blob([body], { type: "application/pdf" });
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
@@ -146,17 +228,22 @@ const TransactionDetail = () => {
               toast.success("Receipt downloaded");
             } },
           ].map((action) => (
-            <GlassCard key={action.label} onClick={action.action} className="flex items-center justify-between py-3">
-              <div className="flex items-center gap-3">
-                <action.icon size={18} className={action.destructive ? "text-destructive" : "text-primary"} />
-                <span className={`text-sm font-medium ${action.destructive ? "text-destructive" : "text-foreground"}`}>
+            <GlassCard
+              key={action.label}
+              onClick={action.action}
+              className="flex items-center justify-between gap-3 py-3 min-h-[56px]"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <action.icon size={18} className={action.destructive ? "text-destructive shrink-0" : "text-primary shrink-0"} />
+                <span className={`text-sm font-medium leading-snug break-words ${action.destructive ? "text-destructive" : "text-foreground"}`}>
                   {action.label}
                 </span>
               </div>
-              <ChevronRight size={16} className="text-muted-foreground" />
+              <ChevronRight size={16} className="text-muted-foreground shrink-0" />
             </GlassCard>
           ))}
         </div>
+
 
         {existingDispute && (
           <GlassCard

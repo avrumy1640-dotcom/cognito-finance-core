@@ -5,6 +5,8 @@ import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
+import ConfirmDialog from "@/components/glass/ConfirmDialog";
+import { useState } from "react";
 import {
   User,
   Shield,
@@ -69,6 +71,8 @@ const ProfilePage = () => {
   const { signOut, user: authUser } = useAuth();
   const { fullName, initials, memberSince, loading } = useProfile();
   const { theme, setTheme } = useTheme();
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+
 
   return (
     <AppLayout>
@@ -169,18 +173,28 @@ const ProfilePage = () => {
         {/* Sign Out */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
           <button
-            onClick={async () => {
-              if (!confirm("Sign out of Glass Bank?")) return;
-              await signOut();
-              toast.success("Signed out");
-              navigate("/login", { replace: true });
-            }}
-            className="w-full py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-semibold flex items-center justify-center gap-2"
+            onClick={() => setConfirmSignOut(true)}
+            className="w-full min-h-[52px] px-5 py-3 rounded-2xl bg-destructive/10 text-destructive text-sm font-semibold flex items-center justify-center gap-2 leading-snug text-center"
           >
             <LogOut size={16} />
             Sign Out
           </button>
         </motion.div>
+
+        <ConfirmDialog
+          open={confirmSignOut}
+          title="Sign out of Glass Bank?"
+          description="You'll need your password (and two-factor code, if enabled) to sign back in."
+          confirmLabel="Sign out"
+          destructive
+          onConfirm={async () => {
+            setConfirmSignOut(false);
+            await signOut();
+            toast.success("Signed out");
+            navigate("/login", { replace: true });
+          }}
+          onOpenChange={setConfirmSignOut}
+        />
 
         {/* App Version */}
         <p className="text-center text-xs text-muted-foreground pb-4">Glass Bank v2.1.0 · Build 2026.03</p>
