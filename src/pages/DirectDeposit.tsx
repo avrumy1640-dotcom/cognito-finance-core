@@ -11,6 +11,8 @@ import { ArrowLeft, Copy, Check, Download, Building2, ShieldCheck } from "lucide
  * Direct deposit setup — the routing/account pair an employer needs, plus a
  * one-page authorization form generated from the local ledger.
  */
+const BANK_NAME = "Glass Bank, N.A.";
+
 const DirectDeposit = () => {
   const navigate = useNavigate();
   const { accounts, dataStatus } = useBank();
@@ -35,6 +37,18 @@ const DirectDeposit = () => {
       toast.error("Copy failed — long-press to copy manually");
     }
   };
+
+  const copyAll = () =>
+    copy(
+      [
+        `Bank: ${BANK_NAME}`,
+        `Account holder: ${holder}`,
+        `Account type: ${which === "savings" ? "Savings" : "Checking"}`,
+        `Routing number: ${routing}`,
+        `Account number: ${fullNumber}`,
+      ].join("\n"),
+      "All details",
+    );
 
   const download = () => {
     if (!fullNumber) {
@@ -105,6 +119,17 @@ const DirectDeposit = () => {
             <Row label="Routing number" value={routing} />
             <Row label="Account number" value={fullNumber} />
             <Row label="Account holder" value={holder} />
+            <Row label="Bank name" value={BANK_NAME} />
+            <div className="pt-3">
+              <button
+                onClick={copyAll}
+                disabled={!fullNumber}
+                className="w-full py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {copied === "All details" ? <Check size={16} className="text-success" /> : <Copy size={16} />}
+                {copied === "All details" ? "Details copied" : "Copy details"}
+              </button>
+            </div>
             <div className="pt-3 flex items-start gap-2">
               <ShieldCheck size={16} className="text-success mt-0.5 shrink-0" />
               <p className="text-xs text-muted-foreground">
