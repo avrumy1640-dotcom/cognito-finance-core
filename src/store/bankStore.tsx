@@ -111,6 +111,28 @@ interface Ctx {
   issueCard: (args?: { type?: "physical" | "virtual" }) => Promise<boolean>;
 }
 
+// While the ledger loads, screens still need a shape to read from. These
+// carry zero balances (never fabricated numbers) and are swapped out the
+// moment the real ledger resolves.
+const placeholderAccount = (type: "checking" | "savings"): Account => ({
+  id: `pending_${type}`,
+  name: type === "checking" ? "Everyday Checking" : "High-Yield Savings",
+  type,
+  accountNumber: "••••0000",
+  routingNumber: "",
+  availableBalance: 0,
+  currentBalance: 0,
+  pendingAmount: 0,
+  status: "Pending",
+  openedDate: "",
+  depositDetails: { accountNumber: "", iban: "", holderName: "", currency: "USD", reference: "" },
+});
+
+const PLACEHOLDER_ACCOUNTS = {
+  checking: placeholderAccount("checking"),
+  savings: placeholderAccount("savings"),
+};
+
 const BankContext = createContext<Ctx | null>(null);
 
 function toCardState(c: DemoCard | undefined): CardState | null {
@@ -379,7 +401,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       : null;
 
   const value: Ctx = {
-    accounts: state.accounts,
+    accounts: state.accounts.checking ? state.accounts : PLACEHOLDER_ACCOUNTS,
     transactions: state.transactions,
     card: state.card,
     totalBalance,
