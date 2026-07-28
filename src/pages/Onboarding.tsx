@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, ReactNode, KeyboardEvent } from "react";
+import StepProgress from "@/components/StepProgress";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -722,21 +723,12 @@ const Onboarding = () => {
           >
             <ArrowLeft size={18} className="text-foreground" />
           </button>
-          <div className="flex-1 flex gap-1">
-            {steps.map((_, i) => (
-              <div key={i} className="flex-1 h-1 rounded-full bg-secondary overflow-hidden">
-                <motion.div
-                  className="h-full bg-primary"
-                  initial={false}
-                  animate={{ width: i <= clampedIndex ? "100%" : "0%" }}
-                  transition={{ duration: 0.4, ease: "easeOut" }}
-                />
-              </div>
-            ))}
-          </div>
-          <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
-            {clampedIndex + 1}/{steps.length}
-          </span>
+          <StepProgress
+            className="flex-1"
+            index={clampedIndex}
+            total={steps.length}
+            label={current.kicker.replace(/^\d+\s·\s/, "")}
+          />
         </div>
       </div>
 
