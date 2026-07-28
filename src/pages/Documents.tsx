@@ -45,33 +45,42 @@ const Documents = () => {
     const today = new Date();
     const currentYear = today.getFullYear();
 
-    // --- Monthly statements: last 12 completed months per account -------
+    // --- Monthly statements: one per month that actually has activity ------
     const acctList = [
       { key: "Checking", acc: accounts.checking },
       { key: "Savings", acc: accounts.savings },
-    ];
+    ].filter((a) => !!a.acc) as Array<{ key: string; acc: NonNullable<typeof accounts.checking> }>;
 
     for (const { key, acc } of acctList) {
-      for (let i = 0; i < 12; i++) {
-        const d = new Date(today.getFullYear(), today.getMonth() - i - 1, 1);
+      // Transactions carry the account's display name (e.g. "Everyday Checking").
+      const mine = (transactions as Transaction[]).filter((t) => t.account === acc.name);
+      const months = new Map<string, Date>();
+      for (const t of mine) {
+        const dt = parseTxDate(t.date);
+        if (!dt) continue;
+        months.set(`${dt.getFullYear()}-${dt.getMonth()}`, new Date(dt.getFullYear(), dt.getMonth(), 1));
+      }
+      const sorted = Array.from(months.values()).sort((a, b) => +b - +a);
+
+      sorted.forEach((d, idx) => {
         const periodStart = new Date(d.getFullYear(), d.getMonth(), 1);
-        const periodEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        const periodEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
         const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+        const isCurrentMonth =
+          d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
 
         list.push({
           id: `stmt-${key}-${d.getFullYear()}-${d.getMonth()}`,
-          name: `${label} Statement`,
+          name: isCurrentMonth ? `${label} Statement (in progress)` : `${label} Statement`,
           category: "Statements",
           date: `${MONTH_NAMES[d.getMonth()].slice(0, 3)} 1, ${d.getFullYear()}`,
           account: key,
-          read: i > 0,
+          read: idx > 0,
           icon: FileText,
           download: () => {
-            const txs = (transactions as Transaction[]).filter((t) => {
-              if (t.account !== key) return false;
+            const txs = mine.filter((t) => {
               const dt = parseTxDate(t.date);
-              if (!dt) return i === 0; // "Today" entries go into current statement
-              return dt >= periodStart && dt <= periodEnd;
+              return !!dt && dt >= periodStart && dt <= periodEnd;
             });
             generateMonthlyStatement({
               account: acc,
@@ -83,35 +92,38 @@ const Documents = () => {
             toast.success(`${label} statement downloaded`);
           },
         });
+      });
+    }
+
+    // --- Year-end 1099-INT tax documents ----------------------------------
+    const savings = accounts.savings;
+    if (savings) {
+      for (let y = 1; y <= 3; y++) {
+        const taxYear = currentYear - y;
+        const interest = Number(
+          (savings.interestEarned ?? Math.max(0, (savings.availableBalance * (savings.apy ?? 0)) / 100)).toFixed(2),
+        );
+        list.push({
+          id: `1099int-savings-${taxYear}`,
+          name: `1099-INT Tax Form (${taxYear})`,
+          category: "Tax Forms",
+          date: `Jan 31, ${taxYear + 1}`,
+          account: "Savings",
+          read: true,
+          icon: Receipt,
+          download: () => {
+            generate1099INT({
+              account: savings,
+              year: taxYear,
+              interestEarned: interest,
+              recipientName: savings.depositDetails?.holderName || "Account Holder",
+            });
+            toast.success(`1099-INT ${taxYear} downloaded`);
+          },
+        });
       }
     }
 
-    // --- Year-end 1099-INT tax documents (past 3 tax years) --------------
-    for (let y = 1; y <= 3; y++) {
-      const taxYear = currentYear - y;
-      const savings = accounts.savings;
-      const interest = Number(
-        (savings.interestEarned ?? Math.max(0, savings.availableBalance * (savings.apy ?? 0) / 100)).toFixed(2)
-      );
-      list.push({
-        id: `1099int-savings-${taxYear}`,
-        name: `1099-INT Tax Form (${taxYear})`,
-        category: "Tax Forms",
-        date: `Jan 31, ${taxYear + 1}`,
-        account: "Savings",
-        read: true,
-        icon: Receipt,
-        download: () => {
-          generate1099INT({
-            account: savings,
-            year: taxYear,
-            interestEarned: interest,
-            recipientName: "Account Holder",
-          });
-          toast.success(`1099-INT ${taxYear} downloaded`);
-        },
-      });
-    }
 
     // --- Standing agreements & notices -----------------------------------
     const disclosures: Array<{ name: string; category: Category; date: string; body: string; icon: typeof FileText }> = [
