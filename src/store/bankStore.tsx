@@ -675,7 +675,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     cushion: {
       limit: checking ? cushionLimitFor(checking) : OVERDRAFT_CUSHION,
       used: cushionUsed(checking),
-      remaining: round2((checking ? cushionLimitFor(checking) : OVERDRAFT_CUSHION) - cushionUsed(checking)),
+      remaining: Math.round(((checking ? cushionLimitFor(checking) : OVERDRAFT_CUSHION) - cushionUsed(checking)) * 100) / 100,
     },
     spendable: (which: "checking" | "savings" = "checking") => spendableBalance(state.accounts[which]),
   };
