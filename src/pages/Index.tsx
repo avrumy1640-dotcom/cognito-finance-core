@@ -22,6 +22,7 @@ import {
   Copy,
   Share2,
   ChevronRight,
+  Zap,
   TrendingUp,
   Wallet,
   Shield,
@@ -51,7 +52,7 @@ const Skeleton = ({ className = "" }: { className?: string }) => (
 const HomePage = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const navigate = useNavigate();
-  const { accounts, totalBalance, transactions, dataStatus, dataError, retry } = useBank();
+  const { accounts, totalBalance, transactions, dataStatus, dataError, retry, payroll } = useBank();
   const checking = accounts.checking;
   const savings = accounts.savings;
   const unread = useUnreadCount();
@@ -302,6 +303,28 @@ const HomePage = () => {
         </motion.div>
         )}
 
+
+        {/* Early paycheck access */}
+        {payroll && (payroll.eligibleNow || payroll.alreadyAdvanced) && (
+          <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible">
+            <GlassCard elevated onClick={() => navigate("/early-pay")} className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0">
+                <Zap size={20} className="text-primary" strokeWidth={2} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">
+                  {payroll.alreadyAdvanced ? "Paycheck released early" : "Get paid up to 2 days early"}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {payroll.alreadyAdvanced
+                    ? `${payroll.merchant} · settles on payday`
+                    : `${payroll.merchant} · $${payroll.averageAmount.toFixed(2)} available now`}
+                </p>
+              </div>
+              <ChevronRight size={18} className="text-muted-foreground shrink-0" />
+            </GlassCard>
+          </motion.div>
+        )}
 
         {/* Quick Actions */}
         <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible">

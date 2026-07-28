@@ -47,4 +47,21 @@ export async function recordSignIn(userId: string) {
       { onConflict: "user_id,device_id" }
     );
   } catch { /* ignore */ }
+
+  // Security alert, exactly like a real bank sends on every sign-in.
+  try {
+    const when = new Date();
+    await supabase.functions.invoke("notify", {
+      body: {
+        type: "security",
+        title: "New sign-in to your account",
+        body: `${label} · ${Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown location"} · ${when.toLocaleString(
+          "en-US",
+          { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
+        )}. If this wasn't you, secure your account now.`,
+        dedupe_key: `signin-${deviceId}-${when.toISOString().slice(0, 16)}`,
+        data: { device: label, deviceId },
+      },
+    });
+  } catch { /* ignore */ }
 }
