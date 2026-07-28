@@ -1006,6 +1006,20 @@ export const demoBank = {
     const ledger = read(userId) ?? generateLedger(userId, "Account holder");
     const acct = ledger.accounts.find((a) => a.id === args.accountId) ?? ledger.accounts[0];
     const now = new Date().toISOString();
+
+    // Overdraft cushion: checking may go up to $50 negative at no fee.
+    // Anything past that is declined rather than silently allowed.
+    const total = round2(Math.abs(args.amount) + Math.abs(args.fee ?? 0));
+    const cushionBefore = cushionUsed(acct);
+    const spendable = spendableBalance(acct);
+    if (total > spendable + 0.001) {
+      const cushionNote =
+        acct.type === "checking"
+          ? ` Your balance plus the $${OVERDRAFT_CUSHION} cushion covers ${spendable.toFixed(2)}.`
+          : "";
+      throw new Error(`Insufficient funds.${cushionNote}`);
+    }
+
     const post = (amount: number, merchant: string, category: string, icon: string) => {
       ledger.transactions.unshift({
         id: `tx_live_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -1022,12 +1036,28 @@ export const demoBank = {
     };
     post(-Math.abs(args.amount), args.merchant, args.category, args.icon ?? "💳");
     if (args.fee && args.fee > 0) post(-Math.abs(args.fee), `${args.merchant} — fee`, "Fees", "🧾");
-    const total = Math.abs(args.amount) + Math.abs(args.fee ?? 0);
     acct.currentBalance = round2(acct.currentBalance - total);
     acct.pendingAmount = round2(acct.pendingAmount + ((args.status ?? "pending") === "pending" ? total : 0));
     acct.availableBalance = round2(acct.currentBalance - acct.pendingAmount);
+    const cushionAfter = cushionUsed(acct);
+    if (cushionAfter > cushionBefore) {
+      // Make the cushion visible in the ledger itself, with no fee attached.
+      ledger.transactions.unshift({
+        id: `tx_cushion_${Date.now()}`,
+        merchant: "Overdraft cushion applied",
+        category: "Fees",
+        amount: 0,
+        date: now,
+        status: "posted",
+        type: "debit",
+        paymentMethod: "No-fee cushion",
+        icon: "🛟",
+        account: acct.id,
+      });
+    }
     write(userId, ledger);
     return ledger;
+
   },
 
   /** Post a credit into an account (deposits, card loads, incoming transfers). */
