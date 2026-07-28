@@ -12,6 +12,7 @@ import { Users } from "lucide-react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import ConfirmDialog from "@/components/glass/ConfirmDialog";
 
 type Beneficiary = {
   id: string;
@@ -115,12 +116,12 @@ const Beneficiaries = () => {
     load();
   };
 
+  const [pendingRemove, setPendingRemove] = useState<Beneficiary | null>(null);
   const toggleFavorite = async (b: Beneficiary) => {
     await supabase.from("beneficiaries").update({ favorite: !b.favorite }).eq("id", b.id);
     load();
   };
   const remove = async (b: Beneficiary) => {
-    if (!confirm(`Remove ${b.nickname}?`)) return;
     await supabase.from("beneficiaries").delete().eq("id", b.id);
     toast.success("Removed");
     load();
@@ -250,7 +251,7 @@ const Beneficiaries = () => {
                 <button onClick={() => payNow(b)} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium flex items-center gap-1">
                   <Send size={12} /> Pay
                 </button>
-                <button onClick={() => remove(b)} className="p-1.5 text-muted-foreground" aria-label="Delete">
+                <button onClick={() => setPendingRemove(b)} className="p-1.5 text-muted-foreground" aria-label="Delete">
                   <Trash2 size={16} />
                 </button>
               </GlassCard>

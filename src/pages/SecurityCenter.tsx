@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
 import ToggleRow from "@/components/glass/ToggleRow";
+import ConfirmDialog from "@/components/glass/ConfirmDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/deviceTracking";
@@ -204,7 +205,6 @@ const SecurityCenter = () => {
   };
 
   const disableFactor = async (factorId: string) => {
-    if (!confirm("Turn off two-factor authentication?")) return;
     setMfaLoading(true);
     const { error } = await supabase.auth.mfa.unenroll({ factorId });
     setMfaLoading(false);
@@ -218,7 +218,6 @@ const SecurityCenter = () => {
       toast.error("This is the device you're using. Sign out from Profile instead.");
       return;
     }
-    if (!confirm(`Remove ${row.label} from trusted devices?`)) return;
     const { error } = await supabase.from("trusted_devices").delete().eq("id", row.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Device removed");
@@ -245,7 +244,14 @@ const SecurityCenter = () => {
         toast.info(user?.email ? `Signed in as ${user.email}` : "1 active session on this device");
         break;
       case "Sign Out All Devices":
-        if (!confirm("Sign out of all other devices?")) break;
+        setConfirm({
+          kind: "signout-others",
+          title: "Sign out of all other devices?",
+          description: "You'll stay signed in here. Every other browser and phone will need to sign in again.",
+          confirmLabel: "Sign out others",
+        });
+        break;
+      case "__run_signout_others":
         toast.loading("Ending other sessions…", { id: "signout-others" });
         signOutOthers().then(({ error }) => {
           if (error) toast.error(error, { id: "signout-others" });
