@@ -677,7 +677,7 @@ const VerifyIdentity = () => {
             className="flex-1"
             index={step}
             total={steps.length}
-            label={current?.title}
+            label={current?.kicker.replace(/^\d+\s·\s/, "")}
           />
         </div>
       </div>
