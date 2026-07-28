@@ -12,11 +12,11 @@ export default defineTool({
     const sb = supabaseForUser(ctx);
     const { data, error } = await sb
       .from("kyc_profiles")
-      .select("id, legal_first_name, legal_last_name, country, city, employment_status, iberbanco_status_raw, created_at, updated_at")
+      .select("id, legal_first_name, legal_last_name, country, city, employment_status, created_at, updated_at")
       .eq("user_id", ctx.getUserId())
       .maybeSingle();
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
-    const status = (data as any)?.iberbanco_status_raw ?? (data ? "submitted" : "not_started");
+    const status = (data ? "submitted" : "not_started");
     return {
       content: [{ type: "text", text: `KYC status: ${status}\n\n${JSON.stringify(data ?? {}, null, 2)}` }],
       structuredContent: { status, profile: data },

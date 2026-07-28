@@ -1,3 +1,4 @@
+import { formatTxDate, txGroupLabel } from "@/lib/dates";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -86,7 +87,24 @@ const CardsPage = () => {
   const dailyUsed = Math.min(dailyCap, monthSpend / 30);
   const dailyPct = Math.min(100, Math.round((dailyUsed / dailyCap) * 100));
 
+  // The card comes from the ledger, which hydrates a tick after mount. Render a
+  // calm loading state rather than dereferencing a card that isn't there yet.
+  if (!card) {
+    return (
+      <AppLayout>
+        <div className="min-h-[60vh] flex items-center justify-center">
+          {dataStatus === "error" ? (
+            <DataErrorState message={dataError ?? "We couldn't load your card."} onRetry={retry} />
+          ) : (
+            <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          )}
+        </div>
+      </AppLayout>
+    );
+  }
+
   const fullNumber = `4829 1847 2946 ${card.last4}`;
+
   const cvv = "•••";
 
   const formatCurrency = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -100,7 +118,7 @@ const CardsPage = () => {
     }
   };
 
-  // Iberbanco v2 does not expose card lock/replace/report-stolen/PIN change/
+  // Card controls are handled by the in-app ledger:
   // travel-notice/control endpoints. We surface these as "not available" in
   // the UI so users can't be misled by fake success toasts.
   const CARD_CONTROLS_LIVE = false;
@@ -131,7 +149,7 @@ const CardsPage = () => {
       return;
     }
     const ok = await issueCard({ type: "virtual" });
-    if (ok) toast.success("Virtual card issued", { description: columnLive ? "Provisioned via Iberbanco" : "Ready to use" });
+    if (ok) toast.success("Virtual card issued", { description: "Ready to use" });
     else toast.error("Card issuance failed");
   };
 
@@ -446,7 +464,7 @@ const CardsPage = () => {
                         <span className="text-lg w-7 shrink-0">{tx.icon}</span>
                         <div className="text-left min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">{tx.merchant}</p>
-                          <p className="text-xs text-muted-foreground truncate">{tx.category} · {tx.date}</p>
+                          <p className="text-xs text-muted-foreground truncate">{tx.category} · {formatTxDate(tx.date)}</p>
                         </div>
                       </div>
                       <div className="text-right shrink-0 ml-2">

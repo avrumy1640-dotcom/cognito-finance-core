@@ -1,3 +1,4 @@
+import { formatTxDate, txGroupLabel } from "@/lib/dates";
 import { useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -265,7 +266,7 @@ const AccountDetail = () => {
                         <span className="text-lg w-7 shrink-0">{tx.icon}</span>
                         <div className="text-left min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">{tx.merchant}</p>
-                          <p className="text-xs text-muted-foreground truncate">{tx.category} · {tx.date}</p>
+                          <p className="text-xs text-muted-foreground truncate">{tx.category} · {formatTxDate(tx.date)}</p>
                         </div>
                       </div>
                       <div className="text-right shrink-0 ml-2">

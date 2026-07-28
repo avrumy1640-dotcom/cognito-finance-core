@@ -1,3 +1,4 @@
+import { formatTxDate, txGroupLabel } from "@/lib/dates";
 import { Bell, Search, Eye, EyeOff, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -59,7 +60,7 @@ const HomePage = () => {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-  // First-load skeleton: show while we don't yet have live Iberbanco data.
+  // First-load skeleton: show while account data is still loading.
   // `idle` means we haven't even started (auth still resolving). `loading`
   // means the first sync is in flight. Both should render skeletons instead
   // of the fallback seed numbers.
@@ -365,7 +366,7 @@ const HomePage = () => {
                     <div className="text-left">
                       <p className="text-sm font-medium text-foreground">{tx.merchant}</p>
                       <p className="text-xs text-muted-foreground">
-                        {tx.category} · {tx.date}
+                        {tx.category} · {formatTxDate(tx.date)}
                       </p>
                     </div>
                   </div>
@@ -423,7 +424,7 @@ const HomePage = () => {
           </motion.div>
         )}
 
-        {/* Direct Deposit — uses real Iberbanco account details when hydrated. */}
+        {/* Direct Deposit — uses the account deposit details when hydrated. */}
         {!hydrating && (
           <motion.div custom={5} variants={fadeUp} initial="hidden" animate="visible" className="pb-4">
             <GlassCard className="relative overflow-hidden">

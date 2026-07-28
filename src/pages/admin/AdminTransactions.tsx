@@ -54,7 +54,7 @@ const AdminTransactions = () => {
         ]}
       />
       <p className="text-xs text-muted-foreground mt-4">
-        Real-time card and wire settlement events sync from the Iberbanco webhook (see Webhook logs).
+        Real-time card and wire settlement events sync from the provider webhook (see Webhook logs).
       </p>
     </AdminPage>
   );

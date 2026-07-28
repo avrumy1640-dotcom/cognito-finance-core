@@ -1,3 +1,4 @@
+import { formatTxDate, txGroupLabel } from "@/lib/dates";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import GlassCard from "@/components/glass/GlassCard";
@@ -60,7 +61,7 @@ const TransactionDetail = () => {
         {/* Details */}
         <GlassCard className="space-y-3">
           {[
-            { label: "Date & Time", value: tx.date },
+            { label: "Date & Time", value: formatTxDate(tx.date) },
             { label: "Category", value: tx.category },
             { label: "Payment Method", value: tx.paymentMethod },
             { label: "Account", value: tx.account },
