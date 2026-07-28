@@ -50,6 +50,7 @@ const SecurityCenter = () => {
   });
 
   const [modal, setModal] = useState<ModalKind>(null);
+  const [alertSending, setAlertSending] = useState(false);
 
   // Password change
   const [newPw, setNewPw] = useState("");
