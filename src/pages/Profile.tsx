@@ -19,6 +19,8 @@ import {
   Star,
   BadgeCheck,
   ShieldAlert,
+  Gift,
+  Gauge,
 } from "lucide-react";
 
 const sections = [
@@ -35,6 +37,8 @@ const sections = [
       { icon: FileText, label: "Statements & Documents", path: "/profile/documents" },
       { icon: CreditCard, label: "Account Details", path: "/account/checking" },
       { icon: ShieldAlert, label: "Disputes", path: "/disputes" },
+      { icon: Gauge, label: "Credit Builder", path: "/credit" },
+      { icon: Gift, label: "Refer a Friend — Give $20, Get $20", path: "/referrals" },
     ],
   },
   {

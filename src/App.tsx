@@ -40,6 +40,9 @@ import DirectDeposit from "./pages/DirectDeposit";
 import Goals from "./pages/Goals";
 import EarlyPay from "./pages/EarlyPay";
 import Disputes from "./pages/Disputes";
+import Referrals from "./pages/Referrals";
+import Rewards from "./pages/Rewards";
+import Credit from "./pages/Credit";
 import RequireAdmin from "./components/RequireAdmin";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -116,6 +119,9 @@ const App = () => (
               <Route path="/goals" element={<Banking><Goals /></Banking>} />
               <Route path="/early-pay" element={<Banking><EarlyPay /></Banking>} />
               <Route path="/disputes" element={<Banking><Disputes /></Banking>} />
+              <Route path="/referrals" element={<Banking><Referrals /></Banking>} />
+              <Route path="/rewards" element={<Banking><Rewards /></Banking>} />
+              <Route path="/credit" element={<Banking><Credit /></Banking>} />
               <Route path="/scheduled" element={<Banking><ScheduledTransfers /></Banking>} />
               <Route path="/admin" element={<Guarded><RequireAdmin allow={["admin","support","compliance"]}><AdminLayout /></RequireAdmin></Guarded>}>
                 <Route index element={<AdminDashboard />} />

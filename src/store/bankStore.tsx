@@ -12,6 +12,16 @@ import {
   type DemoEarlyPayout,
   type DisputeReason,
   type PayrollPattern,
+  type DemoReferral,
+  type CashbackSummary,
+  type CreditProfile,
+  cashbackSummary,
+  creditProfile,
+  referralLinkFor,
+  spendableBalance,
+  cushionUsed,
+  cushionLimitFor,
+  OVERDRAFT_CUSHION,
 } from "@/lib/demoBank";
 import { loadCategoryRules, categorize } from "@/lib/categorize";
 import { supabase } from "@/integrations/supabase/client";
@@ -135,6 +145,20 @@ interface Ctx {
   // --- disputes ---
   disputes: DemoDispute[];
   openDispute: (args: { transactionId: string; merchant: string; amount: number; reason: DisputeReason; note?: string }) => Promise<DemoDispute | null>;
+  // --- referrals ---
+  referralCode: string;
+  referralLink: string;
+  referrals: DemoReferral[];
+  inviteReferral: (args: { name: string; contact: string }) => Promise<boolean>;
+  // --- cashback rewards ---
+  cashback: CashbackSummary | null;
+  redeemCashback: () => Promise<boolean>;
+  // --- credit building ---
+  credit: CreditProfile | null;
+  // --- overdraft cushion ---
+  cushion: { limit: number; used: number; remaining: number };
+  /** Available balance plus any unused no-fee cushion. */
+  spendable: (which?: "checking" | "savings") => number;
 }
 
 
@@ -188,6 +212,10 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [payroll, setPayroll] = useState<PayrollPattern | null>(null);
   const [earlyPayouts, setEarlyPayouts] = useState<DemoEarlyPayout[]>([]);
   const [disputes, setDisputes] = useState<DemoDispute[]>([]);
+  const [referralCode, setReferralCode] = useState("");
+  const [referrals, setReferrals] = useState<DemoReferral[]>([]);
+  const [cashback, setCashback] = useState<CashbackSummary | null>(null);
+  const [credit, setCredit] = useState<CreditProfile | null>(null);
   // Ids already seen, so a notification is only ever raised for genuinely new
   // activity (never for the whole history on first hydrate).
   const seenTxIds = useRef<Set<string> | null>(null);
@@ -204,6 +232,10 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     setPayroll(detectPayroll(ledger));
     setEarlyPayouts(ledger.earlyPayouts ?? []);
     setDisputes(ledger.disputes ?? []);
+    setReferralCode(ledger.referralCode ?? "");
+    setReferrals(ledger.referrals ?? []);
+    setCashback(cashbackSummary(ledger));
+    setCredit(creditProfile(ledger));
     const checking = ledger.accounts.find((a) => a.type === "checking") ?? ledger.accounts[0] ?? null;
 
     const savings = ledger.accounts.find((a) => a.type === "savings") ?? null;
@@ -362,7 +394,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     const from = accountFor(args.from), to = accountFor(args.to);
     const id = uid();
     if (!from || !to || !id) return false;
-    if (from.availableBalance < args.amount) return false;
+    if (spendableBalance(from) < args.amount) return false;
     void runMutation("Internal transfer", () => demoBank.internalTransfer(id, { fromId: from.id, toId: to.id, amount: args.amount, memo: args.memo }), `$${args.amount.toFixed(2)} to ${to.name}`);
     return true;
   }, [runMutation]);
@@ -371,7 +403,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0 || !args.recipient.trim()) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || from.availableBalance < args.amount) return false;
+    if (!from || !id || spendableBalance(from) < args.amount) return false;
     void runMutation("Payment", () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.recipient,
       category: "Transfers", paymentMethod: "Instant send", icon: "⚡️",
@@ -395,7 +427,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0 || !args.biller.trim()) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || from.availableBalance < args.amount) return false;
+    if (!from || !id || spendableBalance(from) < args.amount) return false;
     void runMutation(`Bill pay — ${args.biller}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.biller,
       category: "Bills & Utilities", paymentMethod: "Bill pay", icon: "🧾",
@@ -407,7 +439,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || from.availableBalance < args.amount) return false;
+    if (!from || !id || spendableBalance(from) < args.amount) return false;
     void runMutation(`ACH transfer to ${args.bank}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.bank,
       category: "Transfers", paymentMethod: "ACH transfer", icon: "🏦",
@@ -420,7 +452,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || from.availableBalance < args.amount + fee) return false;
+    if (!from || !id || spendableBalance(from) < args.amount + fee) return false;
     void runMutation(`Wire to ${args.beneficiaryName}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.beneficiaryName,
       category: "Transfers", paymentMethod: "Wire transfer", icon: "🌐", fee,
@@ -560,6 +592,36 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     [applyLedger],
   );
 
+  // --- referrals ------------------------------------------------------------
+  const inviteReferral = useCallback(async (args: { name: string; contact: string }) => {
+    const id = uid();
+    if (!id) return false;
+    return runMutation("Sending invite", () => demoBank.inviteReferral(id, args), `${args.name} was invited`);
+  }, [runMutation]);
+
+  // --- cashback rewards -----------------------------------------------------
+  const redeemCashback = useCallback(async () => {
+    const id = uid();
+    if (!id) return false;
+    const toastId = `cashback-${Date.now()}`;
+    toast.loading("Redeeming cashback…", { id: toastId });
+    try {
+      const { ledger, amount } = await demoBank.redeemCashback(id);
+      await applyLedger(ledger);
+      toast.success(`$${amount.toFixed(2)} cashback added to checking`, { id: toastId });
+      void raiseNotification({
+        type: "transfer",
+        title: `Cashback redeemed: $${amount.toFixed(2)}`,
+        body: "Your Glass Card rewards were credited to checking.",
+        dedupe_key: `cashback-${Date.now()}`,
+      });
+      return true;
+    } catch (err) {
+      toast.error("Couldn't redeem cashback", { id: toastId, description: err instanceof Error ? err.message : undefined });
+      return false;
+    }
+  }, [applyLedger]);
+
   const { checking, savings } = state.accounts;
   const totalBalance =
     dataStatus === "loaded" && checking
@@ -603,6 +665,19 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     releaseEarlyPaycheck,
     disputes,
     openDispute,
+    referralCode,
+    referralLink: referralLinkFor(referralCode || "GLASSBANK"),
+    referrals,
+    inviteReferral,
+    cashback,
+    redeemCashback,
+    credit,
+    cushion: {
+      limit: checking ? cushionLimitFor(checking) : OVERDRAFT_CUSHION,
+      used: cushionUsed(checking),
+      remaining: Math.round(((checking ? cushionLimitFor(checking) : OVERDRAFT_CUSHION) - cushionUsed(checking)) * 100) / 100,
+    },
+    spendable: (which: "checking" | "savings" = "checking") => spendableBalance(state.accounts[which]),
   };
 
 

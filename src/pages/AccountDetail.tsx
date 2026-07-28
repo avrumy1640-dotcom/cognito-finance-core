@@ -47,7 +47,7 @@ const AccountDetail = () => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TxFilter>("all");
   const [limitsExport, setLimitsExport] = useState<ExportResult | null>(null);
-  const { accounts, transactions, dataStatus, dataError, retry } = useBank(); const loading = false;
+  const { accounts, transactions, dataStatus, dataError, retry, cushion, spendable } = useBank(); const loading = false;
   const { status: kycStatus } = useKyc();
   const account = type === "savings" ? accounts.savings : accounts.checking;
 
@@ -163,6 +163,27 @@ const AccountDetail = () => {
                   </div>
                 )}
               </div>
+              {!isSavings && cushion.limit > 0 && (
+                <div className="mt-4 rounded-xl bg-secondary p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold text-foreground">
+                      Overdraft cushion: {formatCurrency(cushion.used)} of {formatCurrency(cushion.limit)} used
+                    </p>
+                    <span className="text-[10px] font-medium text-muted-foreground">No fees</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-background overflow-hidden mt-2">
+                    <div
+                      className={`h-full rounded-full ${cushion.used > 0 ? "bg-warning" : "gradient-hero"}`}
+                      style={{ width: `${Math.min(100, (cushion.used / cushion.limit) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-2">
+                    {cushion.used > 0
+                      ? `You're using your cushion — deposits pay it back automatically. ${formatCurrency(cushion.remaining)} still available.`
+                      : `Spend up to ${formatCurrency(spendable("checking"))} — that's your balance plus a ${formatCurrency(cushion.limit)} no-fee cushion.`}
+                  </p>
+                </div>
+              )}
               {kycStatus === "verified" && (
                 <div className="mt-4 inline-flex items-center gap-1.5 text-[11px] font-medium text-success bg-success/10 rounded-full px-2.5 py-1">
                   <ShieldCheck size={12} /> FDIC insured up to $250,000

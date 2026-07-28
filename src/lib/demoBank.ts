@@ -120,6 +120,26 @@ export interface DemoDispute {
   resolution?: string | null;
 }
 
+export type ReferralStatus = "invited" | "signed_up" | "completed";
+
+export interface DemoReferral {
+  id: string;
+  name: string;
+  contact: string;
+  status: ReferralStatus;
+  invitedAt: string;
+  updatedAt: string;
+  /** Set once the $20 bonus has been credited to checking. */
+  bonusPaidAt?: string | null;
+  bonusAmount: number;
+}
+
+export interface DemoCashbackRedemption {
+  id: string;
+  amount: number;
+  date: string;
+}
+
 export interface DemoLedger {
   version: 1;
   userNumber: string;
@@ -137,12 +157,23 @@ export interface DemoLedger {
   earlyPayouts?: DemoEarlyPayout[];
   /** Transaction disputes raised by the customer. */
   disputes?: DemoDispute[];
+  /** Referral program. */
+  referralCode?: string;
+  referrals?: DemoReferral[];
+  /** Cashback already paid out to checking. */
+  cashbackRedemptions?: DemoCashbackRedemption[];
 }
 
 
 
 const STORAGE_PREFIX = "glassbank.demo.v1:";
 const ROUTING = "084106768";
+
+/** No-fee overdraft cushion available on the checking account. */
+export const OVERDRAFT_CUSHION = 50;
+/** Cashback rate earned on Glass Card purchases. */
+export const CASHBACK_RATE = 0.01;
+
 
 // ---- deterministic pseudo-random ------------------------------------------
 function hashSeed(input: string): number {
@@ -539,6 +570,268 @@ function settleEarlyPayouts(ledger: DemoLedger): boolean {
   return changed;
 }
 
+// ---- overdraft cushion -----------------------------------------------------
+
+/** Cushion only applies to the everyday checking account. */
+export function cushionLimitFor(account: DemoAccount | null | undefined): number {
+  return account?.type === "checking" ? OVERDRAFT_CUSHION : 0;
+}
+
+/** How much of the cushion is currently drawn (0 when the balance is positive). */
+export function cushionUsed(account: DemoAccount | null | undefined): number {
+  if (!account || account.type !== "checking") return 0;
+  return round2(Math.min(OVERDRAFT_CUSHION, Math.max(0, -account.availableBalance)));
+}
+
+/**
+ * What the customer can actually spend: their available balance plus whatever
+ * remains of the no-fee cushion. Never below zero.
+ */
+export function spendableBalance(account: DemoAccount | null | undefined): number {
+  if (!account) return 0;
+  return round2(Math.max(0, account.availableBalance + (cushionLimitFor(account) - cushionUsed(account))));
+}
+
+// ---- referrals -------------------------------------------------------------
+
+const REFERRAL_BONUS = 20;
+
+function makeReferralCode(seed: number, holderName: string): string {
+  const initials = holderName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("") || "GB";
+  return `${initials}${(seed % 100000).toString().padStart(5, "0")}`;
+}
+
+export function referralLinkFor(code: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://glassbank.app";
+  return `${origin}/signup?ref=${code}`;
+}
+
+const SAMPLE_REFERRALS: Array<{ name: string; contact: string; status: ReferralStatus; daysAgo: number }> = [
+  { name: "Maya Rodriguez", contact: "maya.r@email.com", status: "completed", daysAgo: 26 },
+  { name: "Devin Clarke", contact: "(917) 555-0142", status: "signed_up", daysAgo: 11 },
+  { name: "Priya Anand", contact: "priya.anand@email.com", status: "invited", daysAgo: 3 },
+];
+
+/** Seed the referral program once, and credit bonuses for completed referrals. */
+function ensureReferrals(ledger: DemoLedger): boolean {
+  let changed = false;
+  if (!ledger.referralCode) {
+    ledger.referralCode = makeReferralCode(hashSeed(ledger.userNumber), ledger.holderName);
+    changed = true;
+  }
+  if (!ledger.referrals) {
+    ledger.referrals = SAMPLE_REFERRALS.map((s, i) => ({
+      id: `ref_seed_${i}`,
+      name: s.name,
+      contact: s.contact,
+      status: s.status,
+      invitedAt: isoDaysAgo(s.daysAgo, 10, 15),
+      updatedAt: isoDaysAgo(Math.max(0, s.daysAgo - 4), 10, 15),
+      bonusPaidAt: null,
+      bonusAmount: REFERRAL_BONUS,
+    }));
+    changed = true;
+  }
+  // Pay out any completed referral that hasn't been credited yet.
+  const checking = ledger.accounts.find((a) => a.type === "checking");
+  if (checking) {
+    for (const r of ledger.referrals) {
+      if (r.status !== "completed" || r.bonusPaidAt) continue;
+      const date = r.updatedAt || new Date().toISOString();
+      r.bonusPaidAt = date;
+      ledger.transactions.unshift({
+        id: `tx_referral_${r.id}`,
+        merchant: `Referral bonus — ${r.name}`,
+        category: "Rewards",
+        amount: r.bonusAmount,
+        date,
+        status: "posted",
+        type: "credit",
+        paymentMethod: "Referral bonus",
+        icon: "🎁",
+        account: checking.id,
+      });
+      checking.currentBalance = round2(checking.currentBalance + r.bonusAmount);
+      checking.availableBalance = round2(checking.currentBalance - checking.pendingAmount);
+      changed = true;
+    }
+  }
+  if (changed) {
+    ledger.transactions.sort((a, b) => +new Date(b.date) - +new Date(a.date));
+  }
+  return changed;
+}
+
+export const referralStatusLabel: Record<ReferralStatus, string> = {
+  invited: "Invited",
+  signed_up: "Signed up",
+  completed: "Completed",
+};
+
+// ---- cashback rewards ------------------------------------------------------
+
+export interface CashbackSummary {
+  rate: number;
+  allTimeEarned: number;
+  thisMonthEarned: number;
+  redeemed: number;
+  available: number;
+  entries: Array<{ id: string; merchant: string; date: string; spend: number; earned: number }>;
+}
+
+const isCardPurchase = (t: DemoTransaction) =>
+  t.amount < 0 && /card/i.test(t.paymentMethod) && t.category !== "Transfers" && t.category !== "Fees";
+
+export function cashbackSummary(ledger: DemoLedger): CashbackSummary {
+  const entries = ledger.transactions
+    .filter(isCardPurchase)
+    .map((t) => ({
+      id: t.id,
+      merchant: t.merchant,
+      date: t.date,
+      spend: round2(Math.abs(t.amount)),
+      earned: round2(Math.abs(t.amount) * CASHBACK_RATE),
+    }));
+  const allTimeEarned = round2(entries.reduce((s, e) => s + e.earned, 0));
+  const now = new Date();
+  const thisMonthEarned = round2(
+    entries
+      .filter((e) => {
+        const d = new Date(e.date);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      })
+      .reduce((s, e) => s + e.earned, 0),
+  );
+  const redeemed = round2((ledger.cashbackRedemptions ?? []).reduce((s, r) => s + r.amount, 0));
+  return {
+    rate: CASHBACK_RATE,
+    allTimeEarned,
+    thisMonthEarned,
+    redeemed,
+    available: round2(Math.max(0, allTimeEarned - redeemed)),
+    entries,
+  };
+}
+
+// ---- credit building -------------------------------------------------------
+
+export type CreditFactorStatus = "excellent" | "good" | "fair" | "poor";
+
+export interface CreditFactor {
+  key: string;
+  label: string;
+  status: CreditFactorStatus;
+  detail: string;
+  impact: "High" | "Medium" | "Low";
+}
+
+export interface CreditProfile {
+  score: number;
+  band: string;
+  delta: number;
+  history: Array<{ month: string; score: number }>;
+  factors: CreditFactor[];
+  utilization: number;
+  onTimePayments: number;
+  accountAgeMonths: number;
+}
+
+function scoreBand(score: number): string {
+  if (score >= 800) return "Exceptional";
+  if (score >= 740) return "Very good";
+  if (score >= 670) return "Good";
+  if (score >= 580) return "Fair";
+  return "Needs work";
+}
+
+export function creditProfile(ledger: DemoLedger): CreditProfile {
+  const seed = hashSeed(`credit:${ledger.userNumber}`);
+  const rng = makeRng(seed);
+  const checking = ledger.accounts.find((a) => a.type === "checking");
+
+  const opened = checking ? new Date(checking.openedDate) : new Date();
+  const accountAgeMonths = Math.max(
+    1,
+    Math.round((Date.now() - opened.getTime()) / (30.44 * DAY)),
+  );
+
+  // Utilization proxy: monthly card spend against a $2,000 secured-style line.
+  const cutoff = Date.now() - 30 * DAY;
+  const monthSpend = ledger.transactions
+    .filter((t) => isCardPurchase(t) && +new Date(t.date) >= cutoff)
+    .reduce((s, t) => s + Math.abs(t.amount), 0);
+  const utilization = Math.min(99, Math.round((monthSpend / 2000) * 100));
+
+  // Payments are on time unless a bill-pay debit was declined (none in the
+  // demo ledger), so this reflects the customer's real bill-pay volume.
+  const billPayments = ledger.transactions.filter((t) => t.paymentMethod === "Bill pay").length;
+  const onTimePayments = billPayments;
+
+  const base = 650 + Math.floor(rng() * 30); // 650–679 starting band
+  const utilPenalty = utilization > 30 ? Math.min(25, Math.round((utilization - 30) * 0.6)) : 0;
+  const agingBonus = Math.min(24, Math.round(accountAgeMonths * 1.2));
+  const payingBonus = Math.min(18, billPayments * 3);
+  const score = Math.max(520, Math.min(850, base + agingBonus + payingBonus - utilPenalty));
+
+  // 12 months of history walking up to today's score.
+  const history: Array<{ month: string; score: number }> = [];
+  let running = Math.max(500, score - 34);
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const step = i === 0 ? score - running : Math.round(rng() * 8) - 2;
+    running = Math.max(500, Math.min(850, running + step));
+    history.push({
+      month: d.toLocaleDateString("en-US", { month: "short" }),
+      score: i === 0 ? score : running,
+    });
+  }
+  const delta = score - history[0].score;
+
+  const utilStatus: CreditFactorStatus =
+    utilization <= 10 ? "excellent" : utilization <= 30 ? "good" : utilization <= 50 ? "fair" : "poor";
+  const ageStatus: CreditFactorStatus =
+    accountAgeMonths >= 60 ? "excellent" : accountAgeMonths >= 24 ? "good" : accountAgeMonths >= 12 ? "fair" : "poor";
+
+  const factors: CreditFactor[] = [
+    {
+      key: "payment_history",
+      label: "Payment history",
+      status: "excellent",
+      detail: `${onTimePayments} of ${onTimePayments} payments made on time`,
+      impact: "High",
+    },
+    {
+      key: "utilization",
+      label: "Credit utilization",
+      status: utilStatus,
+      detail: `${utilization}% of your $2,000 Glass Card line used this month`,
+      impact: "High",
+    },
+    {
+      key: "age",
+      label: "Account age",
+      status: ageStatus,
+      detail: `${accountAgeMonths} month${accountAgeMonths === 1 ? "" : "s"} since you opened Glass Bank`,
+      impact: "Medium",
+    },
+    {
+      key: "mix",
+      label: "Credit mix",
+      status: ledger.accounts.length > 1 ? "good" : "fair",
+      detail: `${ledger.accounts.length} deposit account${ledger.accounts.length === 1 ? "" : "s"} + 1 Glass Card`,
+      impact: "Low",
+    },
+  ];
+
+  return { score, band: scoreBand(score), delta, history, factors, utilization, onTimePayments, accountAgeMonths };
+}
+
 
 export const demoBank = {
   /** Load (or lazily create) the user's ledger. Never throws, never fails. */
@@ -553,10 +846,75 @@ export const demoBank = {
       ledger.accounts.forEach((a) => { a.depositDetails.holderName = holderName; });
       write(userId, ledger);
     }
-    // Time-based housekeeping: settle matured advances, age out disputes.
-    if (settleEarlyPayouts(ledger) || progressDisputes(ledger)) write(userId, ledger);
+    // Time-based housekeeping: settle matured advances, age out disputes,
+    // seed the referral program and pay any earned referral bonuses.
+    const housekeeping = [settleEarlyPayouts(ledger), progressDisputes(ledger), ensureReferrals(ledger)];
+    if (housekeeping.some(Boolean)) write(userId, ledger);
     return ledger;
   },
+
+  // ---- referrals -----------------------------------------------------------
+
+  /** Record a new invite against the user's referral code. */
+  async inviteReferral(userId: string, args: { name: string; contact: string }): Promise<DemoLedger> {
+    await delay(320);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    ensureReferrals(ledger);
+    const name = args.name.trim();
+    const contact = args.contact.trim();
+    if (!name) throw new Error("Add a name so you can track this invite");
+    const now = new Date().toISOString();
+    ledger.referrals = [
+      {
+        id: `ref_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        name,
+        contact,
+        status: "invited",
+        invitedAt: now,
+        updatedAt: now,
+        bonusPaidAt: null,
+        bonusAmount: REFERRAL_BONUS,
+      },
+      ...(ledger.referrals ?? []),
+    ];
+    write(userId, ledger);
+    return ledger;
+  },
+
+  // ---- cashback rewards ----------------------------------------------------
+
+  /** Pay the accrued cashback into checking as a real credit. */
+  async redeemCashback(userId: string): Promise<{ ledger: DemoLedger; amount: number }> {
+    await delay(460);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    const summary = cashbackSummary(ledger);
+    const amount = round2(summary.available);
+    if (amount < 1) throw new Error("You need at least $1.00 in cashback to redeem");
+    const checking = ledger.accounts.find((a) => a.type === "checking");
+    if (!checking) throw new Error("Checking account unavailable");
+    const now = new Date().toISOString();
+    ledger.transactions.unshift({
+      id: `tx_cashback_${Date.now()}`,
+      merchant: "Glass Card cashback",
+      category: "Rewards",
+      amount,
+      date: now,
+      status: "posted",
+      type: "credit",
+      paymentMethod: "Cashback redemption",
+      icon: "💚",
+      account: checking.id,
+    });
+    checking.currentBalance = round2(checking.currentBalance + amount);
+    checking.availableBalance = round2(checking.currentBalance - checking.pendingAmount);
+    ledger.cashbackRedemptions = [
+      { id: `cbr_${Date.now()}`, amount, date: now },
+      ...(ledger.cashbackRedemptions ?? []),
+    ];
+    write(userId, ledger);
+    return { ledger, amount };
+  },
+
 
   // ---- early paycheck access ----------------------------------------------
 
@@ -648,6 +1006,20 @@ export const demoBank = {
     const ledger = read(userId) ?? generateLedger(userId, "Account holder");
     const acct = ledger.accounts.find((a) => a.id === args.accountId) ?? ledger.accounts[0];
     const now = new Date().toISOString();
+
+    // Overdraft cushion: checking may go up to $50 negative at no fee.
+    // Anything past that is declined rather than silently allowed.
+    const total = round2(Math.abs(args.amount) + Math.abs(args.fee ?? 0));
+    const cushionBefore = cushionUsed(acct);
+    const spendable = spendableBalance(acct);
+    if (total > spendable + 0.001) {
+      const cushionNote =
+        acct.type === "checking"
+          ? ` Your balance plus the $${OVERDRAFT_CUSHION} cushion covers ${spendable.toFixed(2)}.`
+          : "";
+      throw new Error(`Insufficient funds.${cushionNote}`);
+    }
+
     const post = (amount: number, merchant: string, category: string, icon: string) => {
       ledger.transactions.unshift({
         id: `tx_live_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -664,12 +1036,13 @@ export const demoBank = {
     };
     post(-Math.abs(args.amount), args.merchant, args.category, args.icon ?? "💳");
     if (args.fee && args.fee > 0) post(-Math.abs(args.fee), `${args.merchant} — fee`, "Fees", "🧾");
-    const total = Math.abs(args.amount) + Math.abs(args.fee ?? 0);
     acct.currentBalance = round2(acct.currentBalance - total);
     acct.pendingAmount = round2(acct.pendingAmount + ((args.status ?? "pending") === "pending" ? total : 0));
     acct.availableBalance = round2(acct.currentBalance - acct.pendingAmount);
+    void cushionBefore; // cushion draw is surfaced from balances, not a fee line
     write(userId, ledger);
     return ledger;
+
   },
 
   /** Post a credit into an account (deposits, card loads, incoming transfers). */

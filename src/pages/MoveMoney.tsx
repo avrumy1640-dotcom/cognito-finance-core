@@ -244,7 +244,7 @@ const SuccessView = ({ title, subtitle, onDone }: { title: string; subtitle: str
 );
 
 const TransferSheet = ({ onClose }: { onClose: () => void }) => {
-  const { accounts, transfer } = useBank();
+  const { accounts, transfer, spendable } = useBank();
   const [from, setFrom] = useState<"checking" | "savings">("checking");
   const [amount, setAmount] = useState("");
   const [memo, setMemo] = useState("");
@@ -252,7 +252,7 @@ const TransferSheet = ({ onClose }: { onClose: () => void }) => {
   const to = from === "checking" ? "savings" : "checking";
   const fromAcc = accounts[from];
   const numAmount = Number(amount);
-  const insufficient = numAmount > 0 && numAmount > fromAcc.availableBalance;
+  const insufficient = numAmount > 0 && numAmount > spendable(from);
 
   const handleConfirm = () => {
     const ok = transfer({ from, to, amount: numAmount, memo });
@@ -369,13 +369,13 @@ const Row = ({ label, value, bold, success }: { label: string; value: string; bo
 );
 
 const SendMoneySheet = ({ onClose }: { onClose: () => void }) => {
-  const { accounts, send } = useBank();
+  const { accounts, send, spendable } = useBank();
   const [step, setStep] = useState<"form" | "review" | "success">("form");
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const numAmount = Number(amount);
-  const insufficient = numAmount > accounts.checking.availableBalance;
+  const insufficient = numAmount > spendable("checking");
 
   const confirm = () => {
     const ok = send({ from: "checking", amount: numAmount, recipient, note });
@@ -452,12 +452,12 @@ const SendMoneySheet = ({ onClose }: { onClose: () => void }) => {
 
 
 const BillPaySheet = ({ onClose }: { onClose: () => void }) => {
-  const { payBill, accounts } = useBank();
+  const { payBill, accounts, spendable } = useBank();
   const [biller, setBiller] = useState("");
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<"form" | "success">("form");
   const num = Number(amount);
-  const insufficient = num > accounts.checking.availableBalance;
+  const insufficient = num > spendable("checking");
 
   const pay = () => {
     const ok = payBill({ from: "checking", amount: num, biller });
@@ -519,12 +519,12 @@ const ExternalTransferSheet = ({ onClose }: { onClose: () => void }) => {
   const [account, setAccount] = useState("");
   const [amount, setAmount] = useState("");
   const [memo, setMemo] = useState("");
-  const { externalTransfer, accounts } = useBank();
+  const { externalTransfer, accounts, spendable } = useBank();
   const num = Number(amount);
 
   const submit = () => {
     if (num <= 0) { toast.error("Enter an amount"); return; }
-    if (num > accounts.checking.availableBalance) { toast.error("Insufficient funds"); return; }
+    if (num > spendable("checking")) { toast.error("Insufficient funds"); return; }
     if (routing.replace(/\D/g, "").length !== 9) { toast.error("Routing number must be 9 digits"); return; }
     const ok = externalTransfer({ from: "checking", amount: num, bank, routingNumber: routing, accountNumber: account, memo });
     if (!ok) { toast.error("Transfer failed"); return; }
@@ -579,13 +579,13 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
   const [account, setAccount] = useState("");
   const [amount, setAmount] = useState("");
   const [memo, setMemo] = useState("");
-  const { wireTransfer, accounts } = useBank();
+  const { wireTransfer, accounts, spendable } = useBank();
   const num = Number(amount);
   const fee = 25;
 
   const submit = () => {
     if (num <= 0) return toast.error("Enter amount");
-    if (num + fee > accounts.checking.availableBalance) return toast.error("Insufficient funds (includes $25 fee)");
+    if (num + fee > spendable("checking")) return toast.error("Insufficient funds (includes $25 fee)");
     if (routing.replace(/\D/g, "").length !== 9) return toast.error("Routing number must be 9 digits");
     const ok = wireTransfer({ from: "checking", amount: num, beneficiaryName: name, routingNumber: routing, accountNumber: account, memo, fee });
     if (!ok) return toast.error("Wire failed");
