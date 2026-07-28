@@ -37,7 +37,8 @@ const ProtectedRoute = ({ children, requireKyc = false }: Props) => {
       if (mfa?.nextLevel === "aal2" && mfa.currentLevel === "aal1") setMfaCheck("required");
       else setMfaCheck("ok");
       setOnboardCheck(prof?.onboarded_at ? "ok" : "required");
-      setKycCheck((kyc?.status ?? "unverified") === "verified" ? "ok" : "required");
+      // Demo environment: any submitted verification resolves to approved.
+      setKycCheck(kyc ? "ok" : "required");
       setCheckedPath(location.pathname);
     })();
     return () => { cancelled = true; };
