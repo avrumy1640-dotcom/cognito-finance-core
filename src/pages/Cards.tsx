@@ -86,7 +86,24 @@ const CardsPage = () => {
   const dailyUsed = Math.min(dailyCap, monthSpend / 30);
   const dailyPct = Math.min(100, Math.round((dailyUsed / dailyCap) * 100));
 
+  // The card comes from the ledger, which hydrates a tick after mount. Render a
+  // calm loading state rather than dereferencing a card that isn't there yet.
+  if (!card) {
+    return (
+      <AppLayout>
+        <div className="min-h-[60vh] flex items-center justify-center">
+          {dataStatus === "error" ? (
+            <DataErrorState message={dataError ?? "We couldn't load your card."} onRetry={retry} />
+          ) : (
+            <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          )}
+        </div>
+      </AppLayout>
+    );
+  }
+
   const fullNumber = `4829 1847 2946 ${card.last4}`;
+
   const cvv = "•••";
 
   const formatCurrency = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
