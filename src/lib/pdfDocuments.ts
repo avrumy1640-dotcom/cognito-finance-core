@@ -271,3 +271,68 @@ export function generate1099INT({
   footer(doc);
   triggerDownload(doc, `GlassBank_1099-INT_${year}_${account.name.replace(/\s+/g, "_")}.pdf`);
 }
+
+export interface DirectDepositFormOptions {
+  employerName: string;
+  employeeName: string;
+  accountName: string;
+  accountNumber: string; // full number
+  routingNumber: string;
+  accountType: string; // Checking / Savings
+  amountNote?: string; // e.g. "Entire net pay" or "$500 per pay period"
+}
+
+/** One-page direct deposit authorization an employer can accept as-is. */
+export function generateDirectDepositForm(o: DirectDepositFormOptions) {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  header(doc, "Direct Deposit Form", "Payroll direct deposit authorization");
+
+  let y = 108;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(70, 70, 70);
+  const intro = doc.splitTextToSize(
+    "Please use the information below to set up direct deposit of my pay into my Glass Bank account. This authorization remains in effect until I provide written notice of cancellation.",
+    532,
+  );
+  doc.text(intro, 40, y);
+  y += intro.length * 14 + 16;
+
+  const rows: [string, string][] = [
+    ["Employer", o.employerName || "—"],
+    ["Employee / Account holder", o.employeeName],
+    ["Bank", "Glass Bank, N.A."],
+    ["Account nickname", o.accountName],
+    ["Account type", o.accountType],
+    ["Routing number (ABA)", o.routingNumber],
+    ["Account number", o.accountNumber],
+    ["Deposit amount", o.amountNote || "Entire net pay"],
+  ];
+
+  rows.forEach(([k, v], i) => {
+    if (i % 2 === 0) {
+      doc.setFillColor(245, 248, 251);
+      doc.rect(40, y - 14, 532, 26, "F");
+    }
+    doc.setTextColor(110, 110, 110);
+    doc.setFont("helvetica", "normal");
+    doc.text(k, 56, y + 3);
+    doc.setTextColor(20, 20, 20);
+    doc.setFont("helvetica", "bold");
+    doc.text(String(v), 556, y + 3, { align: "right" });
+    y += 26;
+  });
+
+  y += 40;
+  doc.setDrawColor(150, 150, 150);
+  doc.line(40, y, 280, y);
+  doc.line(320, y, 500, y);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(110, 110, 110);
+  doc.text("Employee signature", 40, y + 14);
+  doc.text("Date", 320, y + 14);
+
+  footer(doc);
+  triggerDownload(doc, `GlassBank_Direct_Deposit_${(o.employerName || "Form").replace(/[^\w]+/g, "_")}.pdf`);
+}

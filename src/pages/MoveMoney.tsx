@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   QrCode,
   CalendarClock,
+  Target,
 } from "lucide-react";
 import AddMoneyPanel from "@/components/money/AddMoneyPanel";
 import { useBank } from "@/store/bankStore";
@@ -46,6 +47,8 @@ const moreActions = [
   { label: "Pay Bills", desc: "One-time or recurring · 1–2 days", icon: Receipt, path: null, id: "bills" as const },
   { label: "Beneficiaries", desc: "Manage saved recipients", icon: Building2, path: "/beneficiaries" },
   { label: "Payment Requests", desc: "Track incoming requests", icon: QrCode, path: "/payment-requests" },
+  { label: "Direct Deposit", desc: "Get your pay sent here", icon: Building2, path: "/direct-deposit" },
+  { label: "Savings Goals", desc: "Save for what's next", icon: Target, path: "/goals" },
 ];
 
 const MoveMoney = () => {

@@ -52,9 +52,11 @@ const AccountDetail = () => {
   const account = type === "savings" ? accounts.savings : accounts.checking;
 
   const acctTransactions = useMemo(() => {
-    const label = type === "savings" ? "Savings" : "Checking";
+    // Transactions carry the account's display name ("Everyday Checking"),
+    // so match on the resolved account rather than a hardcoded label.
+    const name = account?.name ?? "";
     return transactions
-      .filter((t) => t.account === label)
+      .filter((t) => t.account === name)
       .filter((t) => {
         if (filter === "in") return t.amount > 0;
         if (filter === "out") return t.amount < 0;
@@ -62,7 +64,7 @@ const AccountDetail = () => {
         return true;
       })
       .filter((t) => !search || t.merchant.toLowerCase().includes(search.toLowerCase()) || t.category?.toLowerCase().includes(search.toLowerCase()));
-  }, [transactions, type, filter, search]);
+  }, [transactions, account, filter, search]);
 
   const copy = async (text: string, label: string) => {
     try { await navigator.clipboard.writeText(text); toast.success(`${label} copied`); } catch { toast.error("Copy failed"); }
