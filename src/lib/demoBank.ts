@@ -162,6 +162,8 @@ export interface DemoLedger {
   referrals?: DemoReferral[];
   /** Cashback already paid out to checking. */
   cashbackRedemptions?: DemoCashbackRedemption[];
+  /** Whether the customer has opted in to the no-fee overdraft cushion. */
+  overdraftOptIn?: boolean;
 }
 
 
@@ -170,7 +172,7 @@ const STORAGE_PREFIX = "glassbank.demo.v1:";
 const ROUTING = "084106768";
 
 /** No-fee overdraft cushion available on the checking account. */
-export const OVERDRAFT_CUSHION = 50;
+export const OVERDRAFT_CUSHION = 200;
 /** Cashback rate earned on Glass Card purchases. */
 export const CASHBACK_RATE = 0.01;
 
@@ -572,24 +574,31 @@ function settleEarlyPayouts(ledger: DemoLedger): boolean {
 
 // ---- overdraft cushion -----------------------------------------------------
 
-/** Cushion only applies to the everyday checking account. */
-export function cushionLimitFor(account: DemoAccount | null | undefined): number {
-  return account?.type === "checking" ? OVERDRAFT_CUSHION : 0;
+/** Opt-in state for the cushion. Defaults to on for existing ledgers. */
+export function overdraftEnabled(ledger: DemoLedger | null | undefined): boolean {
+  return ledger?.overdraftOptIn !== false;
+}
+
+/** Cushion only applies to the everyday checking account, and only when opted in. */
+export function cushionLimitFor(account: DemoAccount | null | undefined, enabled = true): number {
+  return enabled && account?.type === "checking" ? OVERDRAFT_CUSHION : 0;
 }
 
 /** How much of the cushion is currently drawn (0 when the balance is positive). */
-export function cushionUsed(account: DemoAccount | null | undefined): number {
+export function cushionUsed(account: DemoAccount | null | undefined, enabled = true): number {
   if (!account || account.type !== "checking") return 0;
-  return round2(Math.min(OVERDRAFT_CUSHION, Math.max(0, -account.availableBalance)));
+  return round2(Math.min(cushionLimitFor(account, enabled), Math.max(0, -account.availableBalance)));
 }
 
 /**
  * What the customer can actually spend: their available balance plus whatever
  * remains of the no-fee cushion. Never below zero.
  */
-export function spendableBalance(account: DemoAccount | null | undefined): number {
+export function spendableBalance(account: DemoAccount | null | undefined, enabled = true): number {
   if (!account) return 0;
-  return round2(Math.max(0, account.availableBalance + (cushionLimitFor(account) - cushionUsed(account))));
+  return round2(
+    Math.max(0, account.availableBalance + (cushionLimitFor(account, enabled) - cushionUsed(account, enabled))),
+  );
 }
 
 // ---- referrals -------------------------------------------------------------
@@ -881,6 +890,23 @@ export const demoBank = {
     return ledger;
   },
 
+  // ---- overdraft cushion ---------------------------------------------------
+
+  /** Opt in to (or out of) the no-fee overdraft cushion. */
+  async setOverdraftOptIn(userId: string, enabled: boolean): Promise<DemoLedger> {
+    await delay(240);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    if (!enabled) {
+      const checking = ledger.accounts.find((a) => a.type === "checking");
+      if (checking && checking.availableBalance < 0) {
+        throw new Error("Bring your balance back above $0 before turning the cushion off");
+      }
+    }
+    ledger.overdraftOptIn = enabled;
+    write(userId, ledger);
+    return ledger;
+  },
+
   // ---- cashback rewards ----------------------------------------------------
 
   /** Pay the accrued cashback into checking as a real credit. */
@@ -1010,11 +1036,12 @@ export const demoBank = {
     // Overdraft cushion: checking may go up to $50 negative at no fee.
     // Anything past that is declined rather than silently allowed.
     const total = round2(Math.abs(args.amount) + Math.abs(args.fee ?? 0));
-    const cushionBefore = cushionUsed(acct);
-    const spendable = spendableBalance(acct);
+    const odEnabled = overdraftEnabled(ledger);
+    const cushionBefore = cushionUsed(acct, odEnabled);
+    const spendable = spendableBalance(acct, odEnabled);
     if (total > spendable + 0.001) {
       const cushionNote =
-        acct.type === "checking"
+        acct.type === "checking" && odEnabled
           ? ` Your balance plus the $${OVERDRAFT_CUSHION} cushion covers ${spendable.toFixed(2)}.`
           : "";
       throw new Error(`Insufficient funds.${cushionNote}`);
