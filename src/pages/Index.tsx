@@ -1,3 +1,4 @@
+import { formatTxDate, txGroupLabel } from "@/lib/dates";
 import { Bell, Search, Eye, EyeOff, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +12,6 @@ import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
 import { useProfile } from "@/hooks/useProfile";
 import {
-import { formatTxDate, txGroupLabel } from "@/lib/dates";
   ArrowUpRight,
   ArrowDownLeft,
   QrCode,

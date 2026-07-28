@@ -1,3 +1,4 @@
+import { formatTxDate, txGroupLabel } from "@/lib/dates";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -8,7 +9,6 @@ import { useBank } from "@/store/bankStore";
 import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
 import {
-import { formatTxDate, txGroupLabel } from "@/lib/dates";
   Lock,
   Unlock,
   RefreshCw,
