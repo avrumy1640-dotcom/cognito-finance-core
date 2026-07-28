@@ -403,6 +403,49 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     toast.success(`Categorised as ${category}`);
   }, []);
 
+  // --- savings goals --------------------------------------------------------
+  const createGoal = useCallback(async (args: { name: string; emoji?: string; targetAmount: number; targetDate: string }) => {
+    const id = uid();
+    if (!id) return false;
+    return runMutation("Creating goal", () => demoBank.createGoal(id, args));
+  }, [runMutation]);
+
+  const contributeToGoal = useCallback(async (args: { goalId: string; amount: number }) => {
+    const id = uid();
+    if (!id) return false;
+    return runMutation("Adding to goal", () => demoBank.contributeToGoal(id, args));
+  }, [runMutation]);
+
+  const deleteGoal = useCallback(async (goalId: string) => {
+    const id = uid();
+    if (!id) return false;
+    return runMutation("Removing goal", () => demoBank.deleteGoal(id, goalId));
+  }, [runMutation]);
+
+  const setRoundUpGoal = useCallback(async (goalId: string | null) => {
+    const id = uid();
+    if (!id) return false;
+    return runMutation(goalId ? "Enabling round-ups" : "Turning off round-ups", () => demoBank.setRoundUpGoal(id, goalId));
+  }, [runMutation]);
+
+  const runRoundUpSweep = useCallback(async () => {
+    const id = uid();
+    if (!id) return { swept: 0, count: 0 };
+    const toastId = `roundup-${Date.now()}`;
+    toast.loading("Sweeping round-ups…", { id: toastId });
+    try {
+      const { ledger, swept, count } = await demoBank.runRoundUpSweep(id);
+      await applyLedger(ledger);
+      setGoalsVersion((v) => v + 1);
+      if (swept > 0) toast.success(`Swept $${swept.toFixed(2)} from ${count} transactions`, { id: toastId });
+      else toast.info("Nothing new to round up yet", { id: toastId });
+      return { swept, count };
+    } catch (err) {
+      toast.error("Round-up sweep failed", { id: toastId, description: err instanceof Error ? err.message : undefined });
+      return { swept: 0, count: 0 };
+    }
+  }, [applyLedger]);
+
   const { checking, savings } = state.accounts;
   const totalBalance =
     dataStatus === "loaded" && checking
@@ -434,7 +477,15 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     replaceCard,
     reportStolen,
     issueCard,
+    goals,
+    roundUpGoalId,
+    createGoal,
+    contributeToGoal,
+    deleteGoal,
+    setRoundUpGoal,
+    runRoundUpSweep,
   };
+
 
   return <BankContext.Provider value={value}>{children}</BankContext.Provider>;
 };
