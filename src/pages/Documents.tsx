@@ -125,19 +125,23 @@ const Documents = () => {
     }
 
 
+    const openedLabel = accounts.checking?.openedDate
+      ? new Date(accounts.checking.openedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "Jan 15, 2024";
+
     // --- Standing agreements & notices -----------------------------------
     const disclosures: Array<{ name: string; category: Category; date: string; body: string; icon: typeof FileText }> = [
       {
         name: "Account Opening Disclosure",
         category: "Agreements",
-        date: accounts.checking.openedDate || "Jan 15, 2024",
+        date: openedLabel,
         body: "Terms, fee schedule, and account agreement disclosed at account opening.",
         icon: Shield,
       },
       {
         name: "E-Sign Consent",
         category: "Agreements",
-        date: accounts.checking.openedDate || "Jan 15, 2024",
+        date: openedLabel,
         body: "Your consent to receive statements, notices, and agreements electronically.",
         icon: Shield,
       },
