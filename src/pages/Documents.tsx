@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
+import EmptyState from "@/components/glass/EmptyState";
 import { ArrowLeft, FileText, Download, Search, Receipt, Shield, Bell } from "lucide-react";
 import { useBank } from "@/store/bankStore";
 import { generateMonthlyStatement, generate1099INT } from "@/lib/pdfDocuments";
@@ -216,16 +217,16 @@ const Documents = () => {
         {filtered.length === 0 ? (
           <EmptyState
             icon={FileText}
-            title={docs.length === 0 ? "No documents yet" : "Nothing matches that search"}
+            title={rows.length === 0 ? "No documents yet" : "Nothing matches that search"}
             description={
-              docs.length === 0
+              rows.length === 0
                 ? "Monthly statements are generated automatically once your account has activity. Tax forms appear each January."
                 : "Try another keyword, or switch back to the All category."
             }
             actions={
-              docs.length === 0
+              rows.length === 0
                 ? [{ label: "View activity", onClick: () => navigate("/activity") }]
-                : [{ label: "Clear search", onClick: () => { setSearch(""); setActiveCategory("All"); }, variant: "ghost" }]
+                : [{ label: "Clear search", onClick: () => { setSearchQuery(""); setActiveCategory("All"); }, variant: "ghost" }]
             }
           />
         ) : (
@@ -253,6 +254,7 @@ const Documents = () => {
             );
           })}
         </GlassCard>
+        )}
       </div>
     </div>
   );
