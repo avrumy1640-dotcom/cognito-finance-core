@@ -5,9 +5,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
+import ToggleRow from "@/components/glass/ToggleRow";
 import { useBank } from "@/store/bankStore";
 import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
+import { useCardPrefs } from "@/hooks/useCardPrefs";
+import { isTravelActive } from "@/lib/cardPrefs";
 import {
   Lock,
   Unlock,
@@ -62,11 +65,11 @@ type TxFilter = "all" | "in" | "out";
 
 const CardsPage = () => {
   const navigate = useNavigate();
-  const { card, transactions, toggleCardLock, toggleCardControl, replaceCard, reportStolen, issueCard, columnLive, dataStatus, dataError, retry, cashback } = useBank();
-  const { canMoveMoney, status: kycStatus } = useKyc();
+  const { card, transactions, toggleCardLock, toggleCardControl, columnLive, dataStatus, dataError, retry, cashback } = useBank();
+  const { status: kycStatus } = useKyc();
+  const { prefs, update: updatePrefs } = useCardPrefs();
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState<"actions" | "controls" | "transactions">("actions");
-  const [travelActive, setTravelActive] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TxFilter>("all");
 
@@ -118,40 +121,39 @@ const CardsPage = () => {
     }
   };
 
-  // Card controls are handled by the in-app ledger:
-  // travel-notice/control endpoints. We surface these as "not available" in
-  // the UI so users can't be misled by fake success toasts.
-  const CARD_CONTROLS_LIVE = false;
-
-  const doReplace = () => {
-    replaceCard(); // store now shows an honest "not available" toast
-  };
-
-  const doStolen = () => {
-    if (!confirm("Report this card as stolen? A support agent will call you back to arrange a replacement.")) return;
-    reportStolen();
-  };
-
   const doLock = () => {
     toggleCardLock();
   };
 
-  const toggleTravel = () => {
-    toast.error("Travel notice isn't available yet", {
-      description: "Contact support to enable international use before you travel.",
-    });
-  };
+  // Multi-step card operations live on their own screens (/cards/replace,
+  // /cards/report, /cards/pin, /cards/travel) instead of browser prompts.
+  const travelSummary = isTravelActive(prefs)
+    ? `Active until ${prefs.travel?.end}`
+    : prefs.travel
+    ? `Scheduled ${prefs.travel.start} – ${prefs.travel.end}`
+    : "Avoid holds while abroad";
 
-  const doIssueVirtual = async () => {
-    if (!canMoveMoney) {
-      toast.error("Verify your identity to issue a new card.");
-      navigate("/profile/verify");
+  const pinSummary = prefs.pinUpdatedAt
+    ? `Last changed ${new Date(prefs.pinUpdatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+    : "Effective on next card use";
+
+  const walletAdded = Boolean(prefs.walletProvisionedAt);
+
+  const addToWallet = () => {
+    if (walletAdded) {
+      toast.info("This card is already in your wallet on this device");
       return;
     }
-    const ok = await issueCard({ type: "virtual" });
-    if (ok) toast.success("Virtual card issued", { description: "Ready to use" });
-    else toast.error("Card issuance failed");
+    toast.loading("Provisioning card to Apple Wallet…", { id: "wallet" });
+    setTimeout(() => {
+      updatePrefs({ walletProvisionedAt: new Date().toISOString() });
+      toast.success("Added to Apple Wallet", {
+        id: "wallet",
+        description: `${card.network} •••• ${card.last4}`,
+      });
+    }, 1200);
   };
+
 
   const statusLabel = card.isLocked
     ? card.status === "stolen"
@@ -357,22 +359,45 @@ const CardsPage = () => {
                 onClick={() => setShowDetails(!showDetails)}
               />
               <ActionRow icon={Copy} label="Copy card number" sub="Paste into checkout" onClick={copyNumber} />
-              <ActionRow icon={Sparkles} label="Issue virtual card" sub="Ready in seconds for online use" onClick={doIssueVirtual} tone="primary" />
-              <ActionRow icon={Smartphone} label="Add to Apple Wallet" sub="Provision to your device" onClick={() => {
-                toast.loading("Provisioning card to Apple Wallet…", { id: "wallet" });
-                setTimeout(() => toast.success("Added to Apple Wallet", { id: "wallet", description: `${card.network} •••• ${card.last4}` }), 1200);
-              }} />
-              <ActionRow icon={Plane} label={travelActive ? "Remove travel notice" : "Set travel notice"} sub={travelActive ? "Notice active for 30 days" : "Avoid holds while abroad"} onClick={toggleTravel} />
-              <ActionRow icon={Settings} label="Change PIN" sub="Effective on next card use" onClick={() => {
-                const pin = prompt("Enter a new 4-digit PIN");
-                if (!pin) return;
-                if (!/^\d{4}$/.test(pin)) { toast.error("PIN must be 4 digits"); return; }
-                const confirm2 = prompt("Confirm your new PIN");
-                if (confirm2 !== pin) { toast.error("PINs did not match"); return; }
-                toast.success("PIN updated", { description: "Effective on next card use" });
-              }} />
-              <ActionRow icon={RefreshCw} label="Replace card" sub="Arrives in 5–7 business days" onClick={doReplace} />
-              <ActionRow icon={AlertTriangle} label="Report lost or stolen" sub="Overnight replacement shipped" onClick={doStolen} tone="destructive" />
+              <ActionRow
+                icon={Sparkles}
+                label="Issue virtual card"
+                sub="Ready in seconds for online use"
+                onClick={() => navigate("/cards/virtual")}
+                tone="primary"
+              />
+              <ActionRow
+                icon={Smartphone}
+                label="Add to Apple Wallet"
+                sub={walletAdded ? "Already on this device" : "Provision to your device"}
+                onClick={addToWallet}
+              />
+              <ActionRow
+                icon={Plane}
+                label="Travel notice"
+                sub={travelSummary}
+                onClick={() => navigate("/cards/travel")}
+              />
+              <ActionRow
+                icon={Settings}
+                label="Change PIN"
+                sub={pinSummary}
+                onClick={() => navigate("/cards/pin")}
+              />
+              <ActionRow
+                icon={RefreshCw}
+                label="Replace card"
+                sub="Arrives in 5–7 business days"
+                onClick={() => navigate("/cards/replace")}
+              />
+              <ActionRow
+                icon={AlertTriangle}
+                label="Report lost or stolen"
+                sub="Blocks the card and ships a new one"
+                onClick={() => navigate("/cards/report")}
+                tone="destructive"
+              />
+
             </motion.div>
           )}
 
@@ -387,33 +412,22 @@ const CardsPage = () => {
                   <p className="text-xs text-muted-foreground mt-0.5">Changes take effect instantly and can be reversed anytime.</p>
                 </div>
               </GlassCard>
-              {(Object.keys(controlLabels) as Array<keyof typeof controlLabels>).map((key) => {
-                const Icon = controlIcons[key];
-                const enabled = card.controls[key];
-                return (
-                  <GlassCard
+              <GlassCard className="p-0 overflow-hidden divide-y divide-border">
+                {(Object.keys(controlLabels) as Array<keyof typeof controlLabels>).map((key) => (
+                  <ToggleRow
                     key={key}
-                    onClick={() => {
+                    icon={controlIcons[key]}
+                    label={controlLabels[key]}
+                    desc={controlDescriptions[key]}
+                    checked={card.controls[key]}
+                    onChange={(next) => {
                       toggleCardControl(key);
-                      toast.success(`${controlLabels[key]} ${enabled ? "disabled" : "enabled"}`);
+                      toast.success(`${controlLabels[key]} ${next ? "enabled" : "disabled"}`);
                     }}
-                    className="flex items-center justify-between py-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${enabled ? "bg-primary/10" : "bg-secondary"}`}>
-                        <Icon size={18} className={enabled ? "text-primary" : "text-muted-foreground"} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{controlLabels[key]}</p>
-                        <p className="text-[11px] text-muted-foreground truncate">{controlDescriptions[key]}</p>
-                      </div>
-                    </div>
-                    <div className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${enabled ? "bg-primary" : "bg-secondary"}`}>
-                      <div className={`w-5 h-5 rounded-full bg-primary-foreground shadow-sm transition-transform ${enabled ? "translate-x-5" : "translate-x-0"}`} />
-                    </div>
-                  </GlassCard>
-                );
-              })}
+                  />
+                ))}
+              </GlassCard>
+
             </motion.div>
           )}
 
@@ -523,19 +537,20 @@ const ActionRow = ({ icon: Icon, label, sub, onClick, tone = "primary" }: Action
       : "bg-primary/10 text-primary";
   const labelClass = tone === "destructive" ? "text-destructive" : "text-foreground";
   return (
-    <GlassCard onClick={onClick} className="flex items-center justify-between py-3">
-      <div className="flex items-center gap-3 min-w-0">
+    <GlassCard onClick={onClick} className="flex items-center justify-between gap-3 py-3 min-h-[68px]">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${toneClasses}`}>
           <Icon size={18} />
         </div>
-        <div className="min-w-0">
-          <p className={`text-sm font-medium truncate ${labelClass}`}>{label}</p>
-          {sub && <p className="text-[11px] text-muted-foreground truncate">{sub}</p>}
+        <div className="min-w-0 flex-1">
+          <p className={`text-sm font-medium leading-snug break-words ${labelClass}`}>{label}</p>
+          {sub && <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 break-words">{sub}</p>}
         </div>
       </div>
       <ChevronRight size={16} className="text-muted-foreground shrink-0" />
     </GlassCard>
   );
 };
+
 
 export default CardsPage;

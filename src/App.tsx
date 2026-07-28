@@ -12,6 +12,11 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import MoveMoney from "./pages/MoveMoney";
 import Cards from "./pages/Cards";
+import ReplaceCard from "./pages/cards/ReplaceCard";
+import ReportCard from "./pages/cards/ReportCard";
+import ChangePin from "./pages/cards/ChangePin";
+import TravelNotice from "./pages/cards/TravelNotice";
+import VirtualCard from "./pages/cards/VirtualCard";
 import Activity from "./pages/Activity";
 import Profile from "./pages/Profile";
 import TransactionDetail from "./pages/TransactionDetail";
@@ -102,6 +107,11 @@ const App = () => (
               <Route path="/move-money" element={<Banking><MoveMoney /></Banking>} />
               <Route path="/move-money/:action" element={<Banking><MoveMoney /></Banking>} />
               <Route path="/cards" element={<Banking><Cards /></Banking>} />
+              <Route path="/cards/replace" element={<Banking><ReplaceCard /></Banking>} />
+              <Route path="/cards/report" element={<Banking><ReportCard /></Banking>} />
+              <Route path="/cards/pin" element={<Banking><ChangePin /></Banking>} />
+              <Route path="/cards/travel" element={<Banking><TravelNotice /></Banking>} />
+              <Route path="/cards/virtual" element={<Banking><VirtualCard /></Banking>} />
               <Route path="/activity" element={<Banking><Activity /></Banking>} />
               <Route path="/profile" element={<Guarded><Profile /></Guarded>} />
               <Route path="/profile/personal" element={<Guarded><PersonalInfo /></Guarded>} />
