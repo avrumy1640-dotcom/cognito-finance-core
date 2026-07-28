@@ -532,4 +532,152 @@ export const demoBank = {
     write(userId, ledger);
     return ledger;
   },
+
+  // ---- savings goals -------------------------------------------------------
+
+  async createGoal(
+    userId: string,
+    args: { name: string; emoji?: string; targetAmount: number; targetDate: string },
+  ): Promise<DemoLedger> {
+    await delay(280);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    ledger.goals = ledger.goals ?? [];
+    ledger.goals.push({
+      id: `goal_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name: args.name.trim(),
+      emoji: args.emoji || "🎯",
+      targetAmount: round2(Math.abs(args.targetAmount)),
+      targetDate: args.targetDate,
+      saved: 0,
+      createdAt: new Date().toISOString(),
+      contributions: [],
+    });
+    write(userId, ledger);
+    return ledger;
+  },
+
+  async deleteGoal(userId: string, goalId: string): Promise<DemoLedger> {
+    await delay(220);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    const goal = (ledger.goals ?? []).find((g) => g.id === goalId);
+    // Returning the money is the honest behaviour: the funds live in savings.
+    ledger.goals = (ledger.goals ?? []).filter((g) => g.id !== goalId);
+    if (ledger.roundUpGoalId === goalId) ledger.roundUpGoalId = null;
+    if (goal && goal.saved > 0) {
+      // Balance stays where it is (savings) — only the earmark disappears.
+    }
+    write(userId, ledger);
+    return ledger;
+  },
+
+  /** Move money from checking into savings and earmark it against a goal. */
+  async contributeToGoal(
+    userId: string,
+    args: { goalId: string; amount: number; source?: "manual" | "round-up"; note?: string },
+  ): Promise<DemoLedger> {
+    await delay(360);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    const goal = (ledger.goals ?? []).find((g) => g.id === args.goalId);
+    const from = ledger.accounts.find((a) => a.type === "checking");
+    const to = ledger.accounts.find((a) => a.type === "savings");
+    const amt = round2(Math.abs(args.amount));
+    if (!goal || !from || !to || amt <= 0) throw new Error("Goal or accounts unavailable");
+    if (from.availableBalance < amt) throw new Error("Not enough available in checking");
+
+    const now = new Date().toISOString();
+    ledger.transactions.unshift(
+      {
+        id: `tx_goal_${Date.now()}_out`,
+        merchant: `Goal contribution — ${goal.name}`,
+        category: "Transfers",
+        amount: -amt,
+        date: now,
+        status: "posted",
+        type: "debit",
+        paymentMethod: args.source === "round-up" ? "Round-up sweep" : "Goal contribution",
+        icon: goal.emoji,
+        account: from.id,
+      },
+      {
+        id: `tx_goal_${Date.now()}_in`,
+        merchant: `Goal contribution — ${goal.name}`,
+        category: "Transfers",
+        amount: amt,
+        date: now,
+        status: "posted",
+        type: "credit",
+        paymentMethod: args.source === "round-up" ? "Round-up sweep" : "Goal contribution",
+        icon: goal.emoji,
+        account: to.id,
+      },
+    );
+    from.currentBalance = round2(from.currentBalance - amt);
+    from.availableBalance = round2(from.currentBalance - from.pendingAmount);
+    to.currentBalance = round2(to.currentBalance + amt);
+    to.availableBalance = round2(to.currentBalance - to.pendingAmount);
+
+    goal.saved = round2(goal.saved + amt);
+    goal.contributions.unshift({
+      id: `gc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      amount: amt,
+      date: now,
+      source: args.source ?? "manual",
+      note: args.note,
+    });
+    write(userId, ledger);
+    return ledger;
+  },
+
+  async setRoundUpGoal(userId: string, goalId: string | null): Promise<DemoLedger> {
+    await delay(200);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    ledger.roundUpGoalId = goalId;
+    write(userId, ledger);
+    return ledger;
+  },
+
+  /**
+   * Round every unswept posted card debit up to the next dollar and sweep the
+   * difference into the round-up goal. Each transaction is only ever counted
+   * once (tracked by id), so repeated runs are idempotent.
+   */
+  async runRoundUpSweep(userId: string): Promise<{ ledger: DemoLedger; swept: number; count: number }> {
+    await delay(420);
+    const ledger = read(userId) ?? generateLedger(userId, "Account holder");
+    const goalId = ledger.roundUpGoalId;
+    const goal = (ledger.goals ?? []).find((g) => g.id === goalId);
+    if (!goal) return { ledger, swept: 0, count: 0 };
+    const done = new Set(ledger.roundUpSweptTxIds ?? []);
+    const checking = ledger.accounts.find((a) => a.type === "checking");
+    if (!checking) return { ledger, swept: 0, count: 0 };
+
+    let total = 0;
+    let count = 0;
+    const cutoff = Date.now() - 30 * 86_400_000;
+    for (const t of ledger.transactions) {
+      if (t.account !== checking.id || t.amount >= 0 || t.status !== "posted") continue;
+      if (done.has(t.id)) continue;
+      if (+new Date(t.date) < cutoff) continue;
+      if (t.category === "Transfers") continue;
+      const abs = Math.abs(t.amount);
+      const diff = round2(Math.ceil(abs) - abs);
+      done.add(t.id);
+      if (diff <= 0) continue;
+      total = round2(total + diff);
+      count += 1;
+    }
+    ledger.roundUpSweptTxIds = Array.from(done).slice(-2000);
+    write(userId, ledger);
+    if (total <= 0 || total > checking.availableBalance) {
+      return { ledger, swept: 0, count: 0 };
+    }
+    const updated = await demoBank.contributeToGoal(userId, {
+      goalId: goal.id,
+      amount: total,
+      source: "round-up",
+      note: `${count} transactions rounded up`,
+    });
+    return { ledger: updated, swept: total, count };
+  },
 };
+
