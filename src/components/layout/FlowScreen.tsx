@@ -50,11 +50,12 @@ const FlowScreen = ({ title, kicker, subtitle, children, footer, backTo }: FlowS
       </motion.div>
 
       {footer && (
-        <div className="sticky bottom-0 px-5 sm:px-6 lg:px-0 py-4 bg-gradient-to-t from-background via-background to-transparent">
+        <div className="sticky bottom-24 lg:bottom-6 z-10 px-5 sm:px-6 lg:px-0 py-4 bg-gradient-to-t from-background via-background to-transparent">
           {footer}
         </div>
       )}
     </div>
+
   );
 };
 
