@@ -163,7 +163,18 @@ const AccountDetail = () => {
                   </div>
                 )}
               </div>
-              {!isSavings && cushion.limit > 0 && (
+              {!isSavings && !cushion.enabled && (
+                <button
+                  onClick={() => navigate("/settings")}
+                  className="mt-4 w-full text-left rounded-xl bg-secondary p-3 press"
+                >
+                  <p className="text-[11px] font-semibold text-foreground">Overdraft cushion is off</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Turn it on in Settings to cover up to $200 with no fee →
+                  </p>
+                </button>
+              )}
+              {!isSavings && cushion.enabled && cushion.limit > 0 && (
                 <div className="mt-4 rounded-xl bg-secondary p-3">
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] font-semibold text-foreground">
@@ -450,7 +461,7 @@ const AccountDetail = () => {
                 {
                   icon: Shield,
                   label: "Overdraft Preferences",
-                  action: () => toast.success("Overdraft protection is ON", { description: "Linked to savings for coverage up to $500" }),
+                  action: () => navigate("/settings"),
                 },
                 {
                   icon: Settings,

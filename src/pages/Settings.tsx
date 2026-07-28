@@ -15,11 +15,13 @@ import {
   Eye,
   Shield,
   ChevronRight,
+  LifeBuoy,
 } from "lucide-react";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBank } from "@/store/bankStore";
 import { useTheme } from "@/hooks/useTheme";
 import type { Theme } from "@/lib/theme";
 import {
@@ -33,6 +35,8 @@ import {
 } from "@/lib/appLock";
 
 
+
+const OVERDRAFT_LIMIT = 200;
 
 const LANGUAGES = [
   { code: "en", label: "English" },
@@ -54,6 +58,8 @@ const TIMEZONES = [
 ];
 
 const Settings = () => {
+  const { cushion, setOverdraftOptIn } = useBank();
+  const [odBusy, setOdBusy] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -228,6 +234,47 @@ const Settings = () => {
             <span>Advanced alert thresholds</span>
             <ChevronRight size={16} className="text-muted-foreground" />
           </button>
+        </Section>
+
+        {/* Banking */}
+        <Section title="Banking">
+          <GlassCard className="divide-y divide-border p-0 overflow-hidden">
+            <ToggleRow
+              icon={LifeBuoy}
+              label="Overdraft cushion"
+              desc={
+                cushion.enabled
+                  ? `Checking can dip up to $${OVERDRAFT_LIMIT} below zero — never a fee`
+                  : "Payments over your available balance are declined"
+              }
+              checked={cushion.enabled}
+              onChange={() => {
+                if (odBusy) return;
+                setOdBusy(true);
+                void setOverdraftOptIn(!cushion.enabled).finally(() => setOdBusy(false));
+              }}
+            />
+            {cushion.enabled && (
+              <div className="px-4 py-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Cushion used</p>
+                  <p className="text-xs font-semibold text-foreground tabular-nums">
+                    ${cushion.used.toFixed(2)} of ${cushion.limit.toFixed(2)}
+                  </p>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${cushion.used > 0 ? "bg-warning" : "bg-primary"}`}
+                    style={{ width: `${cushion.limit ? Math.min(100, (cushion.used / cushion.limit) * 100) : 0}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  ${cushion.remaining.toFixed(2)} still available. Deposits repay the cushion automatically, and we
+                  never charge an overdraft fee.
+                </p>
+              </div>
+            )}
+          </GlassCard>
         </Section>
 
         {/* Privacy & Security */}

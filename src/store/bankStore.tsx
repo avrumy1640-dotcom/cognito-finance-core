@@ -21,6 +21,7 @@ import {
   spendableBalance,
   cushionUsed,
   cushionLimitFor,
+  overdraftEnabled,
   OVERDRAFT_CUSHION,
 } from "@/lib/demoBank";
 import { loadCategoryRules, categorize } from "@/lib/categorize";
@@ -156,7 +157,9 @@ interface Ctx {
   // --- credit building ---
   credit: CreditProfile | null;
   // --- overdraft cushion ---
-  cushion: { limit: number; used: number; remaining: number };
+  cushion: { limit: number; used: number; remaining: number; enabled: boolean };
+  /** Opt in to / out of the no-fee overdraft cushion. */
+  setOverdraftOptIn: (enabled: boolean) => Promise<boolean>;
   /** Available balance plus any unused no-fee cushion. */
   spendable: (which?: "checking" | "savings") => number;
 }
@@ -216,14 +219,17 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [referrals, setReferrals] = useState<DemoReferral[]>([]);
   const [cashback, setCashback] = useState<CashbackSummary | null>(null);
   const [credit, setCredit] = useState<CreditProfile | null>(null);
+  const [overdraftOptIn, setOverdraftOptIn] = useState(true);
   // Ids already seen, so a notification is only ever raised for genuinely new
   // activity (never for the whole history on first hydrate).
   const seenTxIds = useRef<Set<string> | null>(null);
   const lowBalanceNotified = useRef<string | null>(null);
   const userIdRef = useRef<string | null>(null);
   const ledgerRef = useRef<DemoLedger | null>(null);
+  const overdraftRef = useRef(true);
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
+  useEffect(() => { overdraftRef.current = overdraftOptIn; }, [overdraftOptIn]);
 
   const applyLedger = useCallback(async (ledger: DemoLedger) => {
     ledgerRef.current = ledger;
@@ -236,6 +242,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     setReferrals(ledger.referrals ?? []);
     setCashback(cashbackSummary(ledger));
     setCredit(creditProfile(ledger));
+    setOverdraftOptIn(overdraftEnabled(ledger));
     const checking = ledger.accounts.find((a) => a.type === "checking") ?? ledger.accounts[0] ?? null;
 
     const savings = ledger.accounts.find((a) => a.type === "savings") ?? null;
@@ -394,7 +401,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     const from = accountFor(args.from), to = accountFor(args.to);
     const id = uid();
     if (!from || !to || !id) return false;
-    if (spendableBalance(from) < args.amount) return false;
+    if (spendableBalance(from, overdraftRef.current) < args.amount) return false;
     void runMutation("Internal transfer", () => demoBank.internalTransfer(id, { fromId: from.id, toId: to.id, amount: args.amount, memo: args.memo }), `$${args.amount.toFixed(2)} to ${to.name}`);
     return true;
   }, [runMutation]);
@@ -403,7 +410,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0 || !args.recipient.trim()) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || spendableBalance(from) < args.amount) return false;
+    if (!from || !id || spendableBalance(from, overdraftRef.current) < args.amount) return false;
     void runMutation("Payment", () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.recipient,
       category: "Transfers", paymentMethod: "Instant send", icon: "⚡️",
@@ -427,7 +434,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0 || !args.biller.trim()) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || spendableBalance(from) < args.amount) return false;
+    if (!from || !id || spendableBalance(from, overdraftRef.current) < args.amount) return false;
     void runMutation(`Bill pay — ${args.biller}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.biller,
       category: "Bills & Utilities", paymentMethod: "Bill pay", icon: "🧾",
@@ -439,7 +446,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || spendableBalance(from) < args.amount) return false;
+    if (!from || !id || spendableBalance(from, overdraftRef.current) < args.amount) return false;
     void runMutation(`ACH transfer to ${args.bank}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.bank,
       category: "Transfers", paymentMethod: "ACH transfer", icon: "🏦",
@@ -452,7 +459,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || spendableBalance(from) < args.amount + fee) return false;
+    if (!from || !id || spendableBalance(from, overdraftRef.current) < args.amount + fee) return false;
     void runMutation(`Wire to ${args.beneficiaryName}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.beneficiaryName,
       category: "Transfers", paymentMethod: "Wire transfer", icon: "🌐", fee,
@@ -622,6 +629,28 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [applyLedger]);
 
+  // --- overdraft cushion ----------------------------------------------------
+  const setOverdraftPreference = useCallback(async (enabled: boolean) => {
+    const id = uid();
+    if (!id) return false;
+    const toastId = `overdraft-${Date.now()}`;
+    toast.loading(enabled ? "Turning on your cushion…" : "Turning off your cushion…", { id: toastId });
+    try {
+      const ledger = await demoBank.setOverdraftOptIn(id, enabled);
+      await applyLedger(ledger);
+      toast.success(enabled ? "Overdraft cushion is on" : "Overdraft cushion is off", {
+        id: toastId,
+        description: enabled
+          ? `Checking can dip up to $${OVERDRAFT_CUSHION} below zero with no fee.`
+          : "Payments over your available balance will be declined.",
+      });
+      return true;
+    } catch (err) {
+      toast.error("Couldn't update your cushion", { id: toastId, description: err instanceof Error ? err.message : undefined });
+      return false;
+    }
+  }, [applyLedger]);
+
   const { checking, savings } = state.accounts;
   const totalBalance =
     dataStatus === "loaded" && checking
@@ -673,11 +702,17 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     redeemCashback,
     credit,
     cushion: {
-      limit: checking ? cushionLimitFor(checking) : OVERDRAFT_CUSHION,
-      used: cushionUsed(checking),
-      remaining: Math.round(((checking ? cushionLimitFor(checking) : OVERDRAFT_CUSHION) - cushionUsed(checking)) * 100) / 100,
+      limit: overdraftOptIn ? (checking ? cushionLimitFor(checking, true) : OVERDRAFT_CUSHION) : 0,
+      used: cushionUsed(checking, overdraftOptIn),
+      remaining: Math.round(
+        (((overdraftOptIn ? (checking ? cushionLimitFor(checking, true) : OVERDRAFT_CUSHION) : 0)) -
+          cushionUsed(checking, overdraftOptIn)) * 100,
+      ) / 100,
+      enabled: overdraftOptIn,
     },
-    spendable: (which: "checking" | "savings" = "checking") => spendableBalance(state.accounts[which]),
+    setOverdraftOptIn: setOverdraftPreference,
+    spendable: (which: "checking" | "savings" = "checking") =>
+      spendableBalance(state.accounts[which], overdraftOptIn),
   };
 
 
