@@ -1039,22 +1039,7 @@ export const demoBank = {
     acct.currentBalance = round2(acct.currentBalance - total);
     acct.pendingAmount = round2(acct.pendingAmount + ((args.status ?? "pending") === "pending" ? total : 0));
     acct.availableBalance = round2(acct.currentBalance - acct.pendingAmount);
-    const cushionAfter = cushionUsed(acct);
-    if (cushionAfter > cushionBefore) {
-      // Make the cushion visible in the ledger itself, with no fee attached.
-      ledger.transactions.unshift({
-        id: `tx_cushion_${Date.now()}`,
-        merchant: "Overdraft cushion applied",
-        category: "Fees",
-        amount: 0,
-        date: now,
-        status: "posted",
-        type: "debit",
-        paymentMethod: "No-fee cushion",
-        icon: "🛟",
-        account: acct.id,
-      });
-    }
+    void cushionBefore; // cushion draw is surfaced from balances, not a fee line
     write(userId, ledger);
     return ledger;
 
