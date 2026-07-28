@@ -190,7 +190,7 @@ const ScheduledTransfers = () => {
                     <button onClick={() => { setEditing(r); setShowForm(true); }} className="flex-1 py-2 rounded-lg bg-secondary text-foreground text-xs font-semibold flex items-center justify-center gap-1">
                       <Edit3 size={12} /> Edit
                     </button>
-                    <button onClick={() => setPendingCancel(r)} className="flex-1 py-2 rounded-lg bg-secondary text-destructive text-xs font-semibold flex items-center justify-center gap-1">
+                    <button onClick={() => setPendingCancel(r)} className="flex-1 min-h-[44px] px-3 py-2 rounded-xl bg-secondary text-destructive text-xs font-semibold flex items-center justify-center gap-1 leading-snug">
                       <X size={12} /> Cancel
                     </button>
                   </div>

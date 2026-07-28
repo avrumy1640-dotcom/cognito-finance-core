@@ -179,6 +179,21 @@ const ProfilePage = () => {
           </button>
         </motion.div>
 
+        <ConfirmDialog
+          open={confirmSignOut}
+          title="Sign out of Glass Bank?"
+          description="You'll need your password (and two-factor code, if enabled) to sign back in."
+          confirmLabel="Sign out"
+          destructive
+          onConfirm={async () => {
+            setConfirmSignOut(false);
+            await signOut();
+            toast.success("Signed out");
+            navigate("/login", { replace: true });
+          }}
+          onOpenChange={setConfirmSignOut}
+        />
+
         {/* App Version */}
         <p className="text-center text-xs text-muted-foreground pb-4">Glass Bank v2.1.0 · Build 2026.03</p>
       </div>

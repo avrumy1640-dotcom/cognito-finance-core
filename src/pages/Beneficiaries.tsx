@@ -259,6 +259,19 @@ const Beneficiaries = () => {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        title={pendingRemove ? `Remove ${pendingRemove.nickname}?` : ""}
+        description="This payee will be deleted from your saved list. Past payments are not affected."
+        confirmLabel="Remove payee"
+        destructive
+        onConfirm={() => {
+          const b = pendingRemove;
+          setPendingRemove(null);
+          if (b) void remove(b);
+        }}
+        onOpenChange={(o) => !o && setPendingRemove(null)}
+      />
     </AppLayout>
   );
 };
