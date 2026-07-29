@@ -34,17 +34,17 @@ const INTRO_SEEN_KEY = "gb_intro_seen";
 /* ---------------- 3D tilted phone ---------------- */
 
 const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
-  <div className="relative w-full" style={{ perspective: "1400px" }}>
+  <div className="relative w-full" style={{ perspective: "1200px" }}>
     <motion.div
       initial={{ opacity: 0, y: 26 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className="relative mx-auto w-[262px] sm:w-[300px]"
+      className="relative mx-auto w-[248px] sm:w-[286px]"
       style={{
-        transformStyle: "preserve-3d",
-        transform: "rotateX(11deg) rotateY(-17deg) rotateZ(3deg)",
+        transform: "rotateX(9deg) rotateY(-21deg) rotateZ(3.5deg) translateX(10px)",
       }}
     >
+
       {/* cast shadow on the background */}
       <div className="pointer-events-none absolute -bottom-6 left-6 right-2 h-16 rounded-[50%] bg-black/60 blur-2xl" />
 
