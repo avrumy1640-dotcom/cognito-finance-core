@@ -16,7 +16,9 @@ import {
   Shield,
   ChevronRight,
   LifeBuoy,
+  Sparkles,
 } from "lucide-react";
+
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import SharedToggleRow from "@/components/glass/ToggleRow";
