@@ -11,13 +11,26 @@ export interface FeeTiming {
   cutoff?: string;
 }
 
+// Honest timing copy. These reflect how the banking partner actually behaves:
+// ACH is a batch network (not instant), outgoing debits stay pending until the
+// settlement window closes, and wires are business-hours only.
 export const FEE_TIMING: Record<TransferKind, FeeTiming> = {
-  internal: { feeCents: 0, feeLabel: "Free", timing: "Instant", eta: "Available immediately" },
-  send:     { feeCents: 0, feeLabel: "Free", timing: "Instant", eta: "Usually within seconds" },
-  external: { feeCents: 0, feeLabel: "Free", timing: "1–3 business days", eta: "ACH standard", cutoff: "Cut-off 5:00 PM ET" },
-  wire:     { feeCents: 2500, feeLabel: "$25.00", timing: "Same-day if sent before 4:00 PM ET", eta: "Domestic wire", cutoff: "Cut-off 4:00 PM ET" },
-  bill:     { feeCents: 0, feeLabel: "Free", timing: "1–2 business days", eta: "Delivered by biller" },
-  deposit:  { feeCents: 0, feeLabel: "Free", timing: "Next business day", eta: "Funds available after review" },
+  internal: { feeCents: 0, feeLabel: "Free", timing: "Instant between your accounts", eta: "Available immediately" },
+  send:     { feeCents: 0, feeLabel: "Free", timing: "Not available", eta: "Use a bank transfer or wire instead" },
+  external: {
+    feeCents: 0, feeLabel: "Free",
+    timing: "1–3 business days (ACH)",
+    eta: "Standard ACH · PPD consumer entry",
+    cutoff: "Submitted in the next batch; cut-off 5:00 PM ET on business days. The money stays pending in your balance until it settles — usually two business days.",
+  },
+  wire:     {
+    feeCents: 2500, feeLabel: "$25.00",
+    timing: "Same business day if sent before 4:00 PM ET",
+    eta: "Domestic wire",
+    cutoff: "Wires are processed on business days only — no weekends or bank holidays. Final cut-off is 6:45 PM ET; after that it sends the next business day.",
+  },
+  bill:     { feeCents: 0, feeLabel: "Free", timing: "1–3 business days (ACH)", eta: "Delivered by the biller's bank", cutoff: "Sent as a standard ACH credit; allow up to three business days." },
+  deposit:  { feeCents: 0, feeLabel: "Free", timing: "1–3 business days (ACH pull)", eta: "Funds clear once the debit settles", cutoff: "Incoming ACH debits can be returned by the sending bank for up to two business days." },
 };
 
 export interface Limit {
