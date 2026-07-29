@@ -435,6 +435,7 @@ const CardsPage = () => {
 
           {activeTab === "transactions" && (
             <motion.div key="tx" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <h2 className="sr-only">Card transactions</h2>
               <div className="relative mb-3">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
