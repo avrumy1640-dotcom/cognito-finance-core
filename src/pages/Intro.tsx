@@ -567,6 +567,8 @@ const Intro = () => {
   const [index, setIndex] = useState(0);
   const [dir, setDir] = useState(1);
   const touchX = useRef<number | null>(null);
+  const { reducedMotion } = useReducedMotionPref();
+
 
   useEffect(() => {
     try { localStorage.setItem(INTRO_SEEN_KEY, "1"); } catch { /* ignore */ }
