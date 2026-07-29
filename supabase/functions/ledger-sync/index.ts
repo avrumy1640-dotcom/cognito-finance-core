@@ -259,9 +259,11 @@ async function syncKycStatus(userId: string, verification?: string) {
 
 async function createAccount(userId: string, entityId: string, kind: "checking" | "savings") {
   const description = kind === "checking" ? "Everyday Checking" : "Savings";
+  // Keyed on user + kind: a retry can never open a second checking account.
   const acct = await column<any>("/bank-accounts", {
     method: "POST",
     body: { entity_id: entityId, description },
+    idempotencyKey: `bank-account-${userId}-${kind}`,
   });
 
   // The default account number is created with the account; fall back to
@@ -274,10 +276,13 @@ async function createAccount(userId: string, entityId: string, kind: "checking" 
   if (!numbers) {
     try {
       numbers = await column<any>(`/bank-accounts/${acct.id}/account-numbers`, {
-        method: "POST", body: { description: "Primary" },
+        method: "POST",
+        body: { description: "Primary" },
+        idempotencyKey: `account-number-${acct.id}-primary`,
       });
     } catch { /* account numbers are optional for read-only sync */ }
   }
+
 
   const acctNum: string | undefined = numbers?.account_number;
   const { data: row, error } = await admin.from("column_bank_accounts").insert({
