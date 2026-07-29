@@ -126,6 +126,16 @@ async function handleEvent(type: string, data: any) {
       : !!(t.receiver_bank_account_id && (await userForBankAccount(t.receiver_bank_account_id)));
 
     const status = String(t.status ?? type.split(".").pop() ?? "pending").toLowerCase();
+    const occurredAt = t.created_at ?? new Date().toISOString();
+
+    // Out-of-order safety: never regress a transfer we already know is further
+    // along. Re-delivery of the same event is a no-op, not a state change.
+    const { data: prev } = await admin.from("column_transfers")
+      .select("status, occurred_at").eq("transfer_id", transferId).maybeSingle();
+    if (!shouldApply(prev as any, status, occurredAt)) {
+      return `${kind} transfer ${transferId}: ignored out-of-order "${status}" (have "${prev?.status}")`;
+    }
+
     await admin.from("column_transfers").upsert({
       user_id: userId,
       transfer_id: transferId,
@@ -137,10 +147,17 @@ async function handleEvent(type: string, data: any) {
       direction: isCredit ? "credit" : "debit",
       description: t.description ?? `${kind.toUpperCase()} transfer`,
       raw: t,
-      occurred_at: t.created_at ?? new Date().toISOString(),
+      occurred_at: occurredAt,
     }, { onConflict: "transfer_id" });
 
-    if (["completed", "settled", "posted"].includes(status)) {
+    if (["returned", "rejected", "failed", "canceled", "cancelled"].includes(status)) {
+      await notify(userId, {
+        type: "alert",
+        title: `Transfer ${status}: $${(cents(t.amount) / 100).toFixed(2)}`,
+        body: t.return_reason ?? t.reason ?? `${kind.toUpperCase()} transfer was ${status}.`,
+        dedupe_key: `column-transfer-${transferId}-${status}`,
+      });
+    } else if (["completed", "settled", "posted"].includes(status)) {
       await notify(userId, {
         type: "transfer",
         title: `${isCredit ? "Money in" : "Money out"}: $${(cents(t.amount) / 100).toFixed(2)}`,
@@ -148,6 +165,7 @@ async function handleEvent(type: string, data: any) {
         dedupe_key: `column-transfer-${transferId}-${status}`,
       });
     }
+
     return `${kind} transfer ${transferId} → ${status}`;
   }
 
