@@ -404,6 +404,7 @@ const CardsPage = () => {
 
           {activeTab === "controls" && (
             <motion.div key="controls" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2">
+              <h2 className="sr-only">Card controls</h2>
               <GlassCard className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <Shield size={18} className="text-primary" />
