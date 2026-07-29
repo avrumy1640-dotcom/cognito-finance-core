@@ -279,13 +279,48 @@ async function refreshAccounts(userId: string) {
   return out;
 }
 
-async function syncTransfers(userId: string, bankAccountIds: string[]) {
-  if (!bankAccountIds.length) return [];
+const TX_PAGE_SIZE = 50;
+
+/**
+ * Pulls every transfer of every kind for the user's accounts.
+ *
+ * Efficiency: transfers come back newest-first, so on a normal sync we stop
+ * paginating as soon as a page is entirely older than the newest record we
+ * already mirrored locally. A full walk (up to the safety cap) only happens on
+ * the first sync, or when we still hold transfers in a non-terminal status that
+ * are older than that watermark and therefore need their status re-read.
+ */
+async function syncTransfers(
+  userId: string,
+  bankAccountIds: string[],
+  page: { limit?: number; offset?: number } = {},
+) {
+  if (!bankAccountIds.length) return { rows: [], hasMore: false, total: 0 };
+
+  const [{ data: newest }, { count: stalePending }] = await Promise.all([
+    admin.from("column_transfers").select("occurred_at").eq("user_id", userId)
+      .order("occurred_at", { ascending: false }).limit(1).maybeSingle(),
+    admin.from("column_transfers").select("transfer_id", { count: "exact", head: true })
+      .eq("user_id", userId).not("status", "in", '("completed","settled","posted","returned","canceled")'),
+  ]);
+  const watermark = newest?.occurred_at ? Date.parse(newest.occurred_at as string) : null;
+  const fullWalk = watermark === null || (stalePending ?? 0) > 0;
+
   const collected: any[] = [];
   for (const kind of ["ach", "book", "wire"] as const) {
     try {
-      const list = await column<any>(`/transfers/${kind}`, { query: { limit: 100 } });
-      const items: any[] = list?.transfers ?? list?.[`${kind}_transfers`] ?? list?.data ?? [];
+      const items = await columnPaginated<any>(`/transfers/${kind}`, {
+        key: `${kind}_transfers`,
+        pageSize: 100,
+        max: 1000,
+        // Incremental stop: once the oldest row on this page predates everything
+        // we already have, later pages hold nothing new.
+        stopAfterPage: (pageItems) => {
+          if (fullWalk || !pageItems.length) return false;
+          const oldest = pageItems[pageItems.length - 1]?.created_at;
+          return !!oldest && Date.parse(oldest) <= (watermark as number);
+        },
+      });
       for (const t of items) {
         const accId = t.bank_account_id ?? t.sender_bank_account_id ?? t.receiver_bank_account_id;
         const involved =
@@ -315,15 +350,25 @@ async function syncTransfers(userId: string, bankAccountIds: string[]) {
           occurred_at: t.created_at ?? new Date().toISOString(),
         });
       }
-    } catch { /* a transfer type may be unavailable in sandbox */ }
+    } catch (e) {
+      // A transfer type may be unavailable in sandbox — log rather than swallow.
+      console.warn(`transfer sync failed for ${kind}:`, (e as Error).message);
+    }
   }
   if (collected.length) {
     await admin.from("column_transfers").upsert(collected, { onConflict: "transfer_id" });
   }
-  const { data } = await admin
-    .from("column_transfers").select("*").eq("user_id", userId)
-    .order("occurred_at", { ascending: false }).limit(200);
-  return data ?? [];
+
+  // Select-back is paged (load-more), not a hard cap, so the Activity feed can
+  // walk the full history the same way the rest of the app paginates.
+  const limit = Math.min(Math.max(Number(page.limit) || TX_PAGE_SIZE, 1), 200);
+  const offset = Math.max(Number(page.offset) || 0, 0);
+  const { data, count } = await admin
+    .from("column_transfers").select("*", { count: "exact" }).eq("user_id", userId)
+    .order("occurred_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  const rows = data ?? [];
+  return { rows, hasMore: offset + rows.length < (count ?? rows.length), total: count ?? rows.length };
 }
 
 async function snapshot(userId: string, opts: { provision: boolean }) {
