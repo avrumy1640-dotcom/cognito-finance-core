@@ -75,7 +75,8 @@ const ScheduledTransfers = () => {
     const { data, error } = await supabase
       .from("scheduled_transfers")
       .select("*")
-      .order("scheduled_for", { ascending: true });
+      .order("scheduled_for", { ascending: true })
+      .limit(200);
     if (error) toast.error("Couldn't load scheduled transfers", { description: error.message });
     else setRows((data as ScheduledTransfer[]) || []);
     setLoading(false);

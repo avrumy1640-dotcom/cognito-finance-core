@@ -6,11 +6,11 @@ import GlassCard from "@/components/glass/GlassCard";
 import ConfirmDialog from "@/components/glass/ConfirmDialog";
 import { useRoles } from "@/hooks/useRole";
 import {
-  columnClient,
+  ledgerProvider,
   getDataSource,
   setDataSource,
   type DataSource,
-} from "@/lib/columnClient";
+} from "@/lib/ledgerProvider";
 
 const TAPS_TO_UNLOCK = 7;
 const TAP_WINDOW_MS = 2500;
@@ -48,7 +48,7 @@ const DevDataSourceMenu = () => {
   const switchSource = (next: DataSource) => {
     setSource(next);
     setDataSource(next);
-    toast.success(next === "column" ? "Live Column sandbox mode" : "Mock data mode", {
+    toast.success(next === "live" ? "Live sandbox mode" : "Mock data mode", {
       description: "Reload the app to re-hydrate balances from the new source.",
     });
   };
@@ -56,13 +56,13 @@ const DevDataSourceMenu = () => {
   const wipe = async () => {
     setConfirmWipe(false);
     setWiping(true);
-    const id = toast.loading("Deleting all Column test data…");
+    const id = toast.loading("Deleting all sandbox test data…");
     try {
-      const res = await columnClient.adminWipe(false);
+      const res = await ledgerProvider.adminWipe(false);
       const failed = res.results.filter((r) => !r.ok).length;
       toast.success(`Deleted ${res.wiped - failed} object(s)`, {
         id,
-        description: failed ? `${failed} could not be deleted` : "Column sandbox is clean.",
+        description: failed ? `${failed} could not be deleted` : "Sandbox is clean.",
       });
     } catch (e) {
       toast.error("Wipe failed", { id, description: (e as Error).message });
@@ -90,7 +90,7 @@ const DevDataSourceMenu = () => {
           <div className="grid grid-cols-2 gap-2">
             {([
               { key: "demo", label: "Mock data", hint: "Default" },
-              { key: "column", label: "Column sandbox", hint: "Test only" },
+              { key: "live", label: "Live sandbox", hint: "Test only" },
             ] as const).map((opt) => (
               <button
                 key={opt.key}
@@ -116,14 +116,14 @@ const DevDataSourceMenu = () => {
 
           <button
             onClick={() => setConfirmWipe(true)}
-            disabled={wiping || source !== "column"}
+            disabled={wiping || source !== "live"}
             className="w-full h-11 rounded-xl bg-destructive/10 text-destructive text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-40"
           >
-            <Trash2 size={15} /> Reset / delete all Column test data
+            <Trash2 size={15} /> Reset / delete all sandbox test data
           </button>
-          {source !== "column" && (
+          {source !== "live" && (
             <p className="text-[11px] text-muted-foreground text-center -mt-2">
-              Enable Column sandbox mode to use the reset action.
+              Enable live sandbox mode to use the reset action.
             </p>
           )}
         </GlassCard>
@@ -132,8 +132,8 @@ const DevDataSourceMenu = () => {
       <ConfirmDialog
         open={confirmWipe}
         onOpenChange={setConfirmWipe}
-        title="Delete all Column test data?"
-        description="Removes every counterparty, bank account and entity created in the Column sandbox, and clears the local mirror tables. Mock demo data is untouched."
+        title="Delete all sandbox test data?"
+        description="Removes every counterparty, bank account and entity created in the provider sandbox, and clears the local mirror tables. Mock demo data is untouched."
         confirmLabel="Delete test data"
         destructive
         onConfirm={() => void wipe()}

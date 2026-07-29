@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -7,6 +7,30 @@ import { supabase } from "@/integrations/supabase/client";
 import Seo from "@/components/Seo";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Client-side brute-force damper. The server enforces its own rate limits;
+// this stops a local attacker from firing hundreds of guesses per minute and
+// gives honest users clear feedback instead of an opaque 429.
+const THROTTLE_KEY = "glassbank.signin.throttle";
+const MAX_ATTEMPTS = 5;
+const LOCK_MS = 60_000;
+
+type Throttle = { fails: number; until: number };
+
+function readThrottle(): Throttle {
+  try {
+    const raw = localStorage.getItem(THROTTLE_KEY);
+    if (!raw) return { fails: 0, until: 0 };
+    const t = JSON.parse(raw) as Throttle;
+    return { fails: Number(t.fails) || 0, until: Number(t.until) || 0 };
+  } catch {
+    return { fails: 0, until: 0 };
+  }
+}
+
+function writeThrottle(t: Throttle) {
+  try { localStorage.setItem(THROTTLE_KEY, JSON.stringify(t)); } catch { /* storage disabled */ }
+}
 
 function humanizeSignInError(msg: string): { text: string; unconfirmed?: boolean; rateLimited?: boolean } {
   const m = msg.toLowerCase();
@@ -37,12 +61,31 @@ const SignIn = () => {
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [resending, setResending] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [lockedFor, setLockedFor] = useState(() => Math.max(0, readThrottle().until - Date.now()));
 
-  const canSubmit = EMAIL_RE.test(email.trim()) && password.length >= 1 && !loading;
+  // Countdown while the local lockout is active.
+  useEffect(() => {
+    if (lockedFor <= 0) return;
+    const id = window.setInterval(() => {
+      setLockedFor(Math.max(0, readThrottle().until - Date.now()));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [lockedFor]);
+
+  const lockedSeconds = Math.ceil(lockedFor / 1000);
+  const canSubmit = EMAIL_RE.test(email.trim()) && password.length >= 1 && !loading && lockedFor <= 0;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
+
+    const t = readThrottle();
+    if (t.until > Date.now()) {
+      setLockedFor(t.until - Date.now());
+      toast.error(`Too many attempts. Try again in ${Math.ceil((t.until - Date.now()) / 1000)}s.`);
+      return;
+    }
+
     setUnconfirmed(false);
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({
@@ -51,11 +94,21 @@ const SignIn = () => {
     });
     if (error) {
       setLoading(false);
+      const fails = t.fails + 1;
+      const until = fails >= MAX_ATTEMPTS ? Date.now() + LOCK_MS : 0;
+      writeThrottle({ fails: until ? 0 : fails, until });
+      if (until) setLockedFor(LOCK_MS);
       const h = humanizeSignInError(error.message);
       if (h.unconfirmed) setUnconfirmed(true);
-      toast.error(h.text);
+      toast.error(
+        until
+          ? `Too many attempts. Try again in ${LOCK_MS / 1000}s.`
+          : h.text + (fails >= 3 ? ` (${MAX_ATTEMPTS - fails} attempts left)` : ""),
+      );
       return;
     }
+
+    writeThrottle({ fails: 0, until: 0 });
 
     // MFA gate: must clear challenge before landing anywhere else.
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
@@ -194,7 +247,7 @@ const SignIn = () => {
             className="w-full py-3.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Signing in…" : lockedFor > 0 ? `Locked · ${lockedSeconds}s` : "Sign in"}
           </button>
 
           <p className="text-xs text-center text-muted-foreground">

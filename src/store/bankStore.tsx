@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import type { Transaction } from "@/types/transaction";
-import { columnClient, isColumnMode, mergeColumnIntoLedger } from "@/lib/columnClient";
+import { ledgerProvider, isLiveMode, mergeProviderIntoLedger } from "@/lib/ledgerProvider";
 
 import {
   demoBank,
@@ -67,7 +67,7 @@ interface CardState {
   isLocked: boolean;
   isVirtual: boolean;
   controls: CardControls;
-  columnCardId?: string;
+  providerCardId?: string;
 }
 
 /** loading = first load in flight · loaded = ledger available · error = nothing to show */
@@ -114,10 +114,10 @@ interface Ctx {
   dataStatus: DataStatus;
   dataError: string | null;
   /** Retained for existing screens: true once the ledger is available. */
-  columnLive: boolean;
-  columnError: string | null;
-  columnStatus: DataStatus;
-  refreshColumn: (opts?: { silent?: boolean }) => Promise<void>;
+  liveLedger: boolean;
+  ledgerError: string | null;
+  ledgerStatus: DataStatus;
+  refreshLedger: (opts?: { silent?: boolean }) => Promise<void>;
   retry: () => void;
   setTransactionCategory: (id: string, category: string) => Promise<void>;
   transfer: (args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => boolean;
@@ -211,7 +211,7 @@ function toCardState(c: DemoCard | undefined): CardState | null {
     isLocked: c.isLocked,
     isVirtual: c.isVirtual,
     controls: c.controls,
-    columnCardId: c.id,
+    providerCardId: c.id,
   };
 }
 
@@ -351,7 +351,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     setDataStatus("loaded");
   }, []);
 
-  const refreshColumn = useCallback(async (opts?: { silent?: boolean }) => {
+  const refreshLedger = useCallback(async (opts?: { silent?: boolean }) => {
     if (!stateRef.current.accounts.checking) setDataStatus("loading");
     try {
       const { data: userRes } = await supabase.auth.getUser();
@@ -378,18 +378,18 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
       let ledger = await demoBank.load(user.id, holder, user.email ?? undefined);
 
-      // Feature-flagged data-layer swap: when Column sandbox mode is on, live
-      // balances/transactions overlay the local ledger. Flip it back in
-      // Admin → Column sandbox to return to the demo ledger instantly.
-      if (isColumnMode()) {
+      // Feature-flagged data-layer swap: when live provider mode is on, live
+      // balances/transactions overlay the local ledger. Flip it back in the
+      // internal admin console to return to the demo ledger instantly.
+      if (isLiveMode()) {
         try {
-          const snap = await columnClient.sync();
-          ledger = mergeColumnIntoLedger(ledger, snap);
+          const snap = await ledgerProvider.sync();
+          ledger = mergeProviderIntoLedger(ledger, snap);
         } catch (e) {
-          console.warn("Column sync failed, staying on local ledger", e);
+          if (import.meta.env.DEV) console.warn("Ledger sync failed, staying on local ledger", e);
           if (!opts?.silent) {
-            toast.error("Column sandbox unavailable", {
-              description: e instanceof Error ? e.message : "Showing local ledger.",
+            toast.error("Live balances unavailable", {
+              description: "Showing your most recent saved balances.",
             });
           }
         }
@@ -406,9 +406,9 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   }, [applyLedger]);
 
   useEffect(() => {
-    void refreshColumn({ silent: true });
+    void refreshLedger({ silent: true });
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      void refreshColumn({ silent: true });
+      void refreshLedger({ silent: true });
     });
     return () => sub.subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -718,11 +718,11 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     totalBalance,
     dataStatus,
     dataError,
-    columnLive: dataStatus === "loaded" && !!checking,
-    columnError: dataError,
-    columnStatus: dataStatus,
-    refreshColumn,
-    retry: () => void refreshColumn(),
+    liveLedger: dataStatus === "loaded" && !!checking,
+    ledgerError: dataError,
+    ledgerStatus: dataStatus,
+    refreshLedger,
+    retry: () => void refreshLedger(),
     setTransactionCategory,
     transfer,
     send,

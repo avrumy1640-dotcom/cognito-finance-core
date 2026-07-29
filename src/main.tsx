@@ -1,5 +1,4 @@
 import { createRoot } from "react-dom/client";
-import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
 import { applyMotionPref } from "./hooks/useReducedMotionPref";
@@ -15,8 +14,4 @@ import { applyMotionPref } from "./hooks/useReducedMotionPref";
 applyMotionPref();
 
 
-createRoot(document.getElementById("root")!).render(
-  <HelmetProvider>
-    <App />
-  </HelmetProvider>,
-);
+createRoot(document.getElementById("root")!).render(<App />);

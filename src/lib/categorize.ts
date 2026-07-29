@@ -189,7 +189,8 @@ export async function fetchStoredCategories(userId: string): Promise<Map<string,
   const { data } = await supabase
     .from("transaction_categories")
     .select("transaction_ref, category, is_override")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .limit(5000);
   for (const row of (data ?? []) as Array<{ transaction_ref: string; category: string; is_override: boolean }>) {
     map.set(row.transaction_ref, { category: row.category, is_override: row.is_override });
   }
