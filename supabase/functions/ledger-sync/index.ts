@@ -1026,6 +1026,13 @@ Deno.serve(async (req) => {
 
       case "admin_list":
         return json(await adminList());
+      case "admin_register_webhook":
+        return json(await registerWebhook(Array.isArray(body.events) ? body.events : undefined));
+      case "admin_simulate_ach_return":
+        return json(await simulateAchReturn(user.id, body));
+      case "admin_simulate_incoming_wire":
+        return json(await simulateIncomingWire(user.id, body));
+
       case "admin_compliance":
         return json(await entityCompliance(String(body.entityId ?? "")));
       case "admin_delete":
