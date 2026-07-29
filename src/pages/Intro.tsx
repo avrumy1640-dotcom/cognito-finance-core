@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -54,8 +54,52 @@ const EdgeButton = ({ top, height }: { top: number; height: number }) => (
 );
 
 
-const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
-  <div className="relative w-full" style={{ perspective: "1000px", perspectiveOrigin: "62% 38%" }}>
+const PhoneFrame = ({ children }: { children: React.ReactNode }) => {
+  const reduceMotion = useReducedMotion();
+
+  /* normalized pointer position, -0.5 .. 0.5 */
+  const px = useMotionValue(0);
+  const py = useMotionValue(0);
+
+  const spring = { stiffness: 140, damping: 18, mass: 0.35 };
+  const sx = useSpring(px, spring);
+  const sy = useSpring(py, spring);
+
+  const rotateY = useTransform(sx, (v) => 29 + v * 11);
+  const rotateX = useTransform(sy, (v) => 7 - v * 9);
+  const rotateZ = useTransform(sx, (v) => -2 + v * 2);
+  const translateX = useTransform(sx, (v) => 8 + v * 6);
+
+  /* the highlight sweeps across the metal / glass as the phone turns */
+  const glarePos = useTransform(sx, (v) => `${50 - v * 60}%`);
+  const glareOpacity = useTransform(sy, (v) => 0.85 + v * 0.25);
+  const bezelPos = useTransform(sx, (v) => `${50 + v * 45}%`);
+
+  /* contact shadow drifts opposite the tilt and softens as the phone lifts */
+  const shadowX = useTransform(sx, (v) => v * -26);
+  const shadowScale = useTransform(sy, (v) => 1 + v * 0.12);
+  const shadowOpacity = useTransform(sx, (v) => 0.7 - Math.abs(v) * 0.18);
+
+  const handlePointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (reduceMotion) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    px.set(Math.max(-0.5, Math.min(0.5, (e.clientX - r.left) / r.width - 0.5)));
+    py.set(Math.max(-0.5, Math.min(0.5, (e.clientY - r.top) / r.height - 0.5)));
+  };
+  const resetPointer = () => {
+    px.set(0);
+    py.set(0);
+  };
+
+  return (
+  <div
+    className="relative w-full touch-pan-y"
+    style={{ perspective: "1000px", perspectiveOrigin: "62% 38%" }}
+    onPointerMove={handlePointer}
+    onPointerLeave={resetPointer}
+    onPointerCancel={resetPointer}
+    onPointerUp={resetPointer}
+  >
     <motion.div
       initial={{ opacity: 0, y: 26 }}
       animate={{ opacity: 1, y: 0 }}
@@ -63,15 +107,21 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
       className="relative mx-auto w-[196px] sm:w-[220px]"
       style={{ transformStyle: "preserve-3d" }}
     >
-    <div
-      className="relative"
+    <motion.div
+      className="relative [will-change:transform]"
       style={{
         transformStyle: "preserve-3d",
-        transform: "rotateX(7deg) rotateY(29deg) rotateZ(-2deg) translateX(8px)",
+        rotateX,
+        rotateY,
+        rotateZ,
+        translateX,
       }}
     >
       {/* ambient contact shadow, offset along the tilt direction */}
-      <div className="pointer-events-none absolute -bottom-8 -left-2 right-8 h-20 rounded-[50%] bg-black/70 blur-2xl" />
+      <motion.div
+        className="pointer-events-none absolute -bottom-8 -left-2 right-8 h-20 rounded-[50%] bg-black blur-2xl"
+        style={{ x: shadowX, scaleY: shadowScale, opacity: shadowOpacity }}
+      />
 
 
       {/* ---- left side body slab (gives real thickness on the edge facing us) ---- */}
@@ -102,6 +152,18 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
             "0 48px 80px -26px hsl(224 60% 2% / 0.9), 0 12px 30px -10px hsl(224 60% 2% / 0.75), inset 0 0 0 0.5px hsl(0 0% 100% / 0.22)",
         }}
       >
+        {/* travelling specular highlight on the metal frame */}
+        <motion.div
+          className="pointer-events-none absolute inset-0 z-10"
+          style={{
+            borderRadius: SQUIRCLE,
+            backgroundImage:
+              "radial-gradient(60% 40% at var(--bezel-x) 12%, hsl(0 0% 100% / 0.55), transparent 70%)",
+            ["--bezel-x" as string]: bezelPos,
+            mixBlendMode: "screen",
+          }}
+        />
+
         {/* inner chamfer line */}
         <div
           className="pointer-events-none absolute inset-[1.5px] z-20"
@@ -134,21 +196,26 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
           </div>
 
           {/* glass glare across the display */}
-          <div
-            className="pointer-events-none absolute inset-0 z-20"
+          <motion.div
+            className="pointer-events-none absolute inset-0 z-20 [will-change:opacity]"
             style={{
               borderRadius: SQUIRCLE_INNER,
-              background:
+              backgroundImage:
                 "linear-gradient(108deg, hsl(0 0% 100% / 0.20) 0%, hsl(0 0% 100% / 0.07) 16%, transparent 34%, transparent 62%, hsl(0 0% 100% / 0.05) 84%, hsl(0 0% 100% / 0.12) 100%)",
+              backgroundSize: "220% 100%",
+              backgroundPositionX: glarePos,
+              opacity: glareOpacity,
             }}
           />
         </div>
       </div>
-    </div>
+    </motion.div>
     </motion.div>
 
   </div>
-);
+  );
+};
+
 
 
 /* ---------------- shared screen primitives ---------------- */
