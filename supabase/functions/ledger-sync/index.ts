@@ -803,6 +803,90 @@ async function diagnose() {
   return out;
 }
 
+/**
+ * Registers (or re-points) the webhook endpoint for this deployment so Column
+ * actually calls back into the app. Idempotent: if an endpoint already exists
+ * for our URL it is returned untouched.
+ */
+async function registerWebhook(events?: string[]) {
+  const url = `${SUPABASE_URL}/functions/v1/column-webhook`;
+  const existing = await columnPaginated<any>("/webhook-endpoints", {
+    key: "webhook_endpoints", max: 500,
+  }).catch(() => [] as any[]);
+  const match = existing.find((h) => String(h.url ?? "") === url);
+  if (match) return { created: false, endpoint: match, url };
+
+  const created = await column<any>("/webhook-endpoints", {
+    method: "POST",
+    body: {
+      url,
+      description: "Glass Bank sandbox receiver",
+      // Sandbox: subscribe to everything so no callback is ever missed.
+      enabled_events: events?.length ? events : ["*"],
+    },
+    idempotencyKey: `webhook-endpoint-${url}`,
+  });
+  return { created: true, endpoint: created, url };
+}
+
+/**
+ * Sandbox-only unhappy-path simulator. Column returns an ACH credit when the
+ * counterparty name is one of the documented magic values, which fires the
+ * real `ach.outgoing_transfer.returned` webhook back at us.
+ */
+const ACH_RETURN_NAMES = ["RETURN_NSF", "RETURN_ACCOUNT_CLOSED", "RETURN_STOP_PAYMENT", "RETURN_UNAUTH"];
+
+async function simulateAchReturn(userId: string, body: any) {
+  assertSandboxKey();
+  const magic = String(body.receiverName ?? "RETURN_NSF").toUpperCase();
+  if (!ACH_RETURN_NAMES.includes(magic)) throw new Error(`Unknown return code "${magic}"`);
+  const amount = body.amount ? toCents(body.amount) : 1500;
+
+  const rows = await accountsFor(userId);
+  const from = pickAccount(rows, "checking");
+  const counterpartyId = await ensureCounterparty(userId, {
+    name: magic,
+    routingNumber: String(body.routingNumber ?? "121145307"),
+    accountNumber: String(body.accountNumber ?? "1234567890"),
+  });
+  const t = await column<any>("/transfers/ach", {
+    method: "POST",
+    body: {
+      bank_account_id: from.bank_account_id,
+      counterparty_id: counterpartyId,
+      type: "CREDIT",
+      amount,
+      currency_code: "USD",
+      entry_class_code: "PPD",
+      description: "SIMRTN",
+    },
+    idempotencyKey: `sim-return-${userId}-${magic}-${crypto.randomUUID()}`,
+  });
+  await recordTransfer(userId, "ach", from.bank_account_id, t, "debit", `Simulated ${magic}`);
+  return { transferId: t.id, status: t.status, expectedReturn: magic };
+}
+
+/** Sandbox-only incoming-wire simulator. */
+async function simulateIncomingWire(userId: string, body: any) {
+  assertSandboxKey();
+  const amount = body.amount ? toCents(body.amount) : 50000;
+  const rows = await accountsFor(userId);
+  const to = pickAccount(rows, body.to ?? "checking");
+  if (!to.account_number_id) throw new Error("That account has no account number to receive into");
+
+  const t = await column<any>("/simulate/receive-a-wire-transfer", {
+    method: "POST",
+    body: {
+      account_number_id: to.account_number_id,
+      amount,
+      currency_code: "USD",
+      description: String(body.description ?? "SIMULATED INCOMING WIRE").slice(0, 120),
+      originator_name: String(body.originatorName ?? "ACME PAYROLL").slice(0, 64),
+    },
+  });
+  return { transferId: t?.id ?? null, status: t?.status ?? "submitted", amount };
+}
+
 
 // ---------------------------------------------------------------------------
 // Admin / cleanup utilities
