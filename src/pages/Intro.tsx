@@ -3,9 +3,20 @@ import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
+  ArrowUpRight,
   BadgeCheck,
+  Bell,
+  Car,
+  Coins,
+  CreditCard,
+  Fingerprint,
   Gift,
+  Home,
+  Plane,
+  PlusCircle,
+  Repeat,
   ShieldCheck,
+  ShoppingBag,
   Target,
   TrendingUp,
   Zap,
@@ -20,92 +31,187 @@ import Seo from "@/components/Seo";
 
 const INTRO_SEEN_KEY = "gb_intro_seen";
 
+/* ---------------- 3D tilted phone ---------------- */
+
 const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
-  <div className="relative mx-auto w-[210px] sm:w-[230px]">
-    <div className="absolute -inset-8 -z-10 rounded-[3rem] bg-[radial-gradient(60%_60%_at_50%_30%,hsl(82_92%_62%/0.14),transparent_70%)]" />
-    <div className="rounded-[2.2rem] border border-border/70 bg-card/60 p-2 shadow-2xl backdrop-blur-xl">
-      <div className="glow-surface gradient-hero relative h-[330px] overflow-hidden rounded-[1.75rem] border border-white/10 p-4">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
-        {children}
+  <div className="relative w-full" style={{ perspective: "1400px" }}>
+    <motion.div
+      initial={{ opacity: 0, y: 26 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="relative mx-auto w-[262px] sm:w-[300px]"
+      style={{
+        transformStyle: "preserve-3d",
+        transform: "rotateX(11deg) rotateY(-17deg) rotateZ(3deg)",
+      }}
+    >
+      {/* cast shadow on the background */}
+      <div className="pointer-events-none absolute -bottom-6 left-6 right-2 h-16 rounded-[50%] bg-black/60 blur-2xl" />
+
+      {/* metallic bezel */}
+      <div
+        className="relative rounded-[2.6rem] p-[3px]"
+        style={{
+          background:
+            "linear-gradient(150deg, hsl(0 0% 96% / 0.85) 0%, hsl(220 12% 42% / 0.7) 22%, hsl(220 14% 12%) 52%, hsl(220 10% 48% / 0.7) 78%, hsl(0 0% 92% / 0.8) 100%)",
+          boxShadow:
+            "0 42px 70px -24px hsl(224 60% 2% / 0.85), 0 8px 24px -8px hsl(224 60% 2% / 0.7), inset 0 0 0 1px hsl(0 0% 100% / 0.08)",
+        }}
+      >
+        {/* side buttons */}
+        <div className="absolute -left-[3px] top-[110px] h-9 w-[3px] rounded-l-sm bg-gradient-to-b from-zinc-300 to-zinc-500" />
+        <div className="absolute -left-[3px] top-[156px] h-9 w-[3px] rounded-l-sm bg-gradient-to-b from-zinc-300 to-zinc-500" />
+        <div className="absolute -right-[3px] top-[132px] h-14 w-[3px] rounded-r-sm bg-gradient-to-b from-zinc-300 to-zinc-500" />
+
+        <div className="relative overflow-hidden rounded-[2.35rem] bg-[hsl(224_48%_5%)]">
+          {/* dynamic island */}
+          <div className="absolute left-1/2 top-2.5 z-20 h-[18px] w-[74px] -translate-x-1/2 rounded-full bg-black shadow-[inset_0_0_0_1px_hsl(0_0%_100%/0.06)]">
+            <span className="absolute right-2.5 top-1/2 h-[7px] w-[7px] -translate-y-1/2 rounded-full bg-[hsl(224_30%_18%)] ring-1 ring-white/10" />
+          </div>
+
+          {/* screen */}
+          <div className="gradient-hero relative h-[430px] w-full overflow-hidden px-3.5 pb-4 pt-9 text-white">
+            <div className="pointer-events-none absolute -top-16 left-1/2 h-52 w-52 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,hsl(82_92%_62%/0.22),transparent_70%)]" />
+            {/* status bar */}
+            <div className="relative mb-2 flex items-center justify-between px-1 text-[9px] font-semibold tracking-tight text-white/85">
+              <span>9:41</span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-[7px] w-[10px] rounded-[1px] bg-white/70" />
+                <span className="inline-block h-[7px] w-[14px] rounded-[2px] border border-white/60" />
+              </span>
+            </div>
+            <div className="relative h-[calc(100%-1.25rem)] overflow-hidden">{children}</div>
+            {/* glass reflection */}
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,hsl(0_0%_100%/0.14)_0%,transparent_38%,transparent_70%,hsl(0_0%_100%/0.05)_100%)]" />
+            {/* home indicator */}
+            <div className="absolute bottom-1.5 left-1/2 h-1 w-24 -translate-x-1/2 rounded-full bg-white/40" />
+          </div>
+        </div>
       </div>
+    </motion.div>
+  </div>
+);
+
+/* ---------------- shared screen primitives ---------------- */
+
+const Row = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <div className={`glass-card rounded-xl px-2.5 py-2 ${className}`}>{children}</div>
+);
+
+const ScreenHeader = ({ title, sub }: { title: string; sub: string }) => (
+  <div className="mb-2 flex items-center justify-between">
+    <div>
+      <p className="text-[7.5px] uppercase tracking-[0.16em] text-white/45">{sub}</p>
+      <p className="font-display text-[14px] font-bold leading-tight">{title}</p>
+    </div>
+    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10">
+      <Bell size={11} className="text-white/70" />
     </div>
   </div>
 );
 
-const MiniCard = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <div className={`glass-card rounded-2xl p-3 ${className}`}>{children}</div>
-);
-
-const Bar = ({ pct }: { pct: number }) => (
-  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+const Bar = ({ pct, delay = 0 }: { pct: number; delay?: number }) => (
+  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
     <motion.div
       initial={{ width: 0 }}
       animate={{ width: `${pct}%` }}
-      transition={{ duration: 0.9, ease: "easeOut" }}
-      className="h-full rounded-full gradient-lime"
+      transition={{ duration: 0.9, delay, ease: "easeOut" }}
+      className="gradient-lime h-full rounded-full"
     />
   </div>
 );
 
+/* ---------------- slide screens ---------------- */
+
 const GoalsMock = () => (
-  <div className="space-y-2.5 text-white">
-    <p className="kicker text-white/60">Savings goals</p>
-    <MiniCard>
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="font-semibold">Emergency fund</span>
-        <span className="text-white/70">$2,400 / $5,000</span>
-      </div>
-      <Bar pct={48} />
-    </MiniCard>
-    <MiniCard>
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="font-semibold">Japan trip</span>
-        <span className="text-white/70">$1,150 / $3,000</span>
-      </div>
-      <Bar pct={38} />
-    </MiniCard>
-    <MiniCard>
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="font-semibold">New laptop</span>
-        <span className="text-white/70">$780 / $1,200</span>
-      </div>
-      <Bar pct={65} />
-    </MiniCard>
-    <MiniCard className="flex items-center gap-2">
-      <Target size={14} className="text-primary" />
-      <span className="text-[10px] text-white/80">Round-ups added $18.42 this week</span>
-    </MiniCard>
+  <div className="space-y-2">
+    <ScreenHeader sub="Savings" title="Your goals" />
+    <div className="glow-surface rounded-2xl border border-white/10 bg-white/[0.06] p-3">
+      <p className="text-[8px] text-white/55">Total saved</p>
+      <p className="text-balance-display mt-0.5 text-[26px] leading-none">$4,330.00</p>
+      <p className="mt-1 text-[8px] text-primary">+$182.40 this month</p>
+      <Bar pct={54} />
+    </div>
+    {[
+      [Home, "Emergency fund", "$2,400", "$5,000", 48],
+      [Plane, "Japan trip", "$1,150", "$3,000", 38],
+      [Car, "New car fund", "$780", "$1,200", 65],
+      [ShoppingBag, "Holiday gifts", "$220", "$600", 36],
+    ].map(([Icon, name, cur, tgt, pct], i) => {
+      const I = Icon as typeof Home;
+      return (
+        <Row key={name as string}>
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/15">
+              <I size={11} className="text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between text-[9.5px]">
+                <span className="truncate font-semibold">{name as string}</span>
+                <span className="text-white/60">
+                  {cur as string} / {tgt as string}
+                </span>
+              </div>
+              <Bar pct={pct as number} delay={0.1 * i} />
+            </div>
+          </div>
+        </Row>
+      );
+    })}
+    <Row className="flex items-center gap-2">
+      <Repeat size={11} className="text-primary" />
+      <span className="text-[8.5px] text-white/75">Round-ups added $18.42 this week</span>
+    </Row>
   </div>
 );
 
 const EarlyPayMock = () => (
-  <div className="space-y-3 text-white">
-    <p className="kicker text-white/60">Direct deposit</p>
-    <MiniCard className="text-center">
-      <p className="text-[10px] text-white/60">Paycheck arriving</p>
-      <p className="text-balance-display mt-1 text-2xl">$2,184.30</p>
-      <p className="mt-1 text-[10px] text-primary">Up to 2 days early</p>
-    </MiniCard>
-    <MiniCard>
-      <div className="flex items-center justify-between text-[10px] text-white/75">
-        <span>Routing</span><span className="font-mono">084106768</span>
+  <div className="space-y-2">
+    <ScreenHeader sub="Direct deposit" title="Get paid early" />
+    <div className="glow-surface rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
+      <p className="text-[8px] text-white/55">Paycheck arriving</p>
+      <p className="text-balance-display mt-0.5 text-[26px] leading-none">$2,184.30</p>
+      <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[8px] text-primary">
+        <Zap size={9} /> Up to 2 days early
+      </p>
+    </div>
+    <Row>
+      <p className="mb-1 text-[8px] uppercase tracking-[0.14em] text-white/45">Account details</p>
+      <div className="flex items-center justify-between text-[9px] text-white/75">
+        <span>Routing</span>
+        <span className="font-mono">084106768</span>
       </div>
-      <div className="mt-1.5 flex items-center justify-between text-[10px] text-white/75">
-        <span>Account</span><span className="font-mono">•••• 4192</span>
+      <div className="mt-1 flex items-center justify-between text-[9px] text-white/75">
+        <span>Account</span>
+        <span className="font-mono">•••• 4192</span>
       </div>
-    </MiniCard>
-    <MiniCard className="flex items-center gap-2">
-      <Zap size={14} className="text-primary" />
-      <span className="text-[10px] text-white/80">Employer setup in one tap</span>
-    </MiniCard>
+      <div className="mt-1 flex items-center justify-between text-[9px] text-white/75">
+        <span>Type</span>
+        <span>Checking</span>
+      </div>
+    </Row>
+    <p className="px-1 pt-0.5 text-[8px] uppercase tracking-[0.14em] text-white/45">Recent deposits</p>
+    {[
+      ["Acme Corp payroll", "Jul 26", "+$2,184.30"],
+      ["Acme Corp payroll", "Jul 12", "+$2,184.30"],
+      ["Side gig transfer", "Jul 05", "+$420.00"],
+    ].map(([m, d, a]) => (
+      <Row key={d} className="flex items-center justify-between">
+        <div className="min-w-0">
+          <p className="truncate text-[9.5px] font-semibold">{m}</p>
+          <p className="text-[8px] text-white/50">{d}</p>
+        </div>
+        <span className="text-[9.5px] font-semibold text-primary">{a}</span>
+      </Row>
+    ))}
   </div>
 );
 
 const CreditMock = () => (
-  <div className="space-y-3 text-white">
-    <p className="kicker text-white/60">Credit builder</p>
-    <MiniCard className="text-center">
-      <svg viewBox="0 0 120 68" className="mx-auto w-[130px]">
+  <div className="space-y-2">
+    <ScreenHeader sub="Credit builder" title="Your score" />
+    <div className="glow-surface rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
+      <svg viewBox="0 0 120 68" className="mx-auto w-[132px]">
         <path d="M10 62 A50 50 0 0 1 110 62" fill="none" stroke="hsl(0 0% 100% / 0.12)" strokeWidth="9" strokeLinecap="round" />
         <motion.path
           d="M10 62 A50 50 0 0 1 110 62"
@@ -119,62 +225,118 @@ const CreditMock = () => (
           transition={{ duration: 1.1, ease: "easeOut" }}
         />
       </svg>
-      <p className="text-balance-display -mt-3 text-2xl">728</p>
-      <p className="text-[10px] text-white/60">Very good</p>
-    </MiniCard>
-    <MiniCard className="flex items-center justify-between text-[10px]">
-      <span className="text-white/75">On-time payments</span>
-      <span className="text-primary">100%</span>
-    </MiniCard>
-    <MiniCard className="flex items-center gap-2">
-      <TrendingUp size={14} className="text-primary" />
-      <span className="text-[10px] text-white/80">+22 pts in the last 3 months</span>
-    </MiniCard>
-  </div>
-);
-
-const RewardsMock = () => (
-  <div className="space-y-3 text-white">
-    <p className="kicker text-white/60">Rewards</p>
-    <MiniCard className="text-center">
-      <p className="text-[10px] text-white/60">Cashback earned</p>
-      <p className="text-balance-display mt-1 text-2xl">$146.80</p>
-      <Bar pct={72} />
-    </MiniCard>
+      <p className="text-balance-display -mt-4 text-[26px] leading-none">728</p>
+      <p className="mt-0.5 text-[8px] text-white/55">Very good · updated today</p>
+    </div>
+    <Row className="flex items-center gap-2">
+      <TrendingUp size={11} className="text-primary" />
+      <span className="text-[8.5px] text-white/80">+22 pts in the last 3 months</span>
+    </Row>
+    <p className="px-1 pt-0.5 text-[8px] uppercase tracking-[0.14em] text-white/45">Score factors</p>
     {[
-      ["Groceries", "1% back", "$12.40"],
-      ["Fuel", "1% back", "$6.15"],
-      ["Streaming", "1% back", "$1.99"],
-    ].map(([a, b, c]) => (
-      <MiniCard key={a} className="flex items-center justify-between">
-        <div className="min-w-0">
-          <p className="truncate text-[11px] font-semibold">{a}</p>
-          <p className="text-[9px] text-white/55">{b}</p>
+      ["On-time payments", "100%", 100],
+      ["Credit utilization", "12%", 88],
+      ["Account age", "3y 2m", 62],
+      ["Recent inquiries", "1", 76],
+    ].map(([label, val, pct], i) => (
+      <Row key={label as string}>
+        <div className="flex items-center justify-between text-[9.5px]">
+          <span className="font-semibold">{label as string}</span>
+          <span className="text-primary">{val as string}</span>
         </div>
-        <span className="text-[11px] text-primary">{c}</span>
-      </MiniCard>
+        <Bar pct={pct as number} delay={0.08 * i} />
+      </Row>
     ))}
   </div>
 );
 
-const SecurityMock = () => (
-  <div className="space-y-3 text-white">
-    <p className="kicker text-white/60">Protection</p>
-    <MiniCard className="text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl gradient-lime">
-        <ShieldCheck size={22} className="text-primary-foreground" />
+const RewardsMock = () => (
+  <div className="space-y-2">
+    <ScreenHeader sub="Glass Card" title="Cashback" />
+    <div className="glow-surface rounded-2xl border border-white/10 bg-white/[0.06] p-3">
+      <div className="flex items-center gap-1.5">
+        <Coins size={11} className="text-primary" />
+        <p className="text-[8px] text-white/55">Available to redeem</p>
       </div>
-      <p className="mt-2 text-[11px] font-semibold">Overdraft cushion active</p>
-      <p className="text-[10px] text-white/60">Up to $200, no fees</p>
-    </MiniCard>
-    <MiniCard className="flex items-center justify-between">
-      <span className="text-[10px] text-white/80">Biometric app lock</span>
-      <span className="h-4 w-7 rounded-full gradient-lime" />
-    </MiniCard>
-    <MiniCard className="flex items-center justify-between">
-      <span className="text-[10px] text-white/80">Real-time alerts</span>
-      <span className="h-4 w-7 rounded-full gradient-lime" />
-    </MiniCard>
+      <p className="text-balance-display mt-0.5 text-[26px] leading-none">$146.80</p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="rounded-lg bg-white/[0.07] p-1.5">
+          <p className="text-[7.5px] text-white/50">This month</p>
+          <p className="text-[11px] font-semibold">$24.16</p>
+        </div>
+        <div className="rounded-lg bg-white/[0.07] p-1.5">
+          <p className="text-[7.5px] text-white/50">All time</p>
+          <p className="text-[11px] font-semibold">$612.40</p>
+        </div>
+      </div>
+      <div className="gradient-lime mt-2 rounded-lg py-1.5 text-center text-[9px] font-semibold text-primary-foreground">
+        Redeem to checking
+      </div>
+    </div>
+    <p className="px-1 text-[8px] uppercase tracking-[0.14em] text-white/45">Recent earnings</p>
+    {[
+      [ShoppingBag, "Whole Foods", "$124.00", "+$1.24"],
+      [Car, "Shell Fuel", "$61.50", "+$0.62"],
+      [CreditCard, "Netflix", "$19.99", "+$0.20"],
+      [ShoppingBag, "Target", "$88.40", "+$0.88"],
+    ].map(([Icon, m, spend, earned]) => {
+      const I = Icon as typeof Home;
+      return (
+        <Row key={m as string} className="flex items-center justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/10">
+              <I size={11} className="text-white/70" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[9.5px] font-semibold">{m as string}</p>
+              <p className="text-[8px] text-white/50">{spend as string} · 1% back</p>
+            </div>
+          </div>
+          <span className="text-[9.5px] font-semibold text-primary">{earned as string}</span>
+        </Row>
+      );
+    })}
+  </div>
+);
+
+const SecurityMock = () => (
+  <div className="space-y-2">
+    <ScreenHeader sub="Protection" title="Security center" />
+    <div className="glow-surface rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
+      <div className="gradient-lime mx-auto flex h-11 w-11 items-center justify-center rounded-2xl">
+        <ShieldCheck size={20} className="text-primary-foreground" />
+      </div>
+      <p className="mt-1.5 text-[11px] font-semibold">Overdraft cushion active</p>
+      <p className="text-[8px] text-white/55">Up to $200, no fees</p>
+    </div>
+    {[
+      [Fingerprint, "Biometric app lock", true],
+      [Bell, "Real-time alerts", true],
+      [ShieldCheck, "Two-factor auth", true],
+      [CreditCard, "Card freeze", false],
+    ].map(([Icon, label, on]) => {
+      const I = Icon as typeof Home;
+      return (
+        <Row key={label as string} className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <I size={11} className="text-white/70" />
+            <span className="text-[9.5px] font-semibold">{label as string}</span>
+          </div>
+          <span
+            className={`flex h-4 w-7 items-center rounded-full px-0.5 ${on ? "gradient-lime justify-end" : "justify-start bg-white/15"}`}
+          >
+            <span className="h-3 w-3 rounded-full bg-white" />
+          </span>
+        </Row>
+      );
+    })}
+    <Row className="flex items-center justify-between">
+      <div className="min-w-0">
+        <p className="text-[9.5px] font-semibold">iPhone 16 Pro</p>
+        <p className="text-[8px] text-white/50">New York · Active now</p>
+      </div>
+      <ArrowUpRight size={11} className="text-white/50" />
+    </Row>
   </div>
 );
 
@@ -259,27 +421,12 @@ const Intro = () => {
   const Icon = slide.icon;
 
   return (
-    <div className="ambient-glow relative flex min-h-dvh flex-col overflow-hidden bg-background">
+    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-background">
       <Seo
         title="Glass Bank — Save, spend and build credit"
         description="See what Glass Bank does: automatic savings goals, direct deposit up to 2 days early, credit building, cashback rewards and a no-fee overdraft cushion."
         path="/intro"
       />
-
-      <header className="flex items-center justify-between px-6 pt-6">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary">
-            <span className="font-display text-sm font-bold text-primary-foreground">G</span>
-          </div>
-          <span className="font-display text-sm font-semibold text-foreground">Glass Bank</span>
-        </div>
-        <button
-          onClick={() => navigate("/welcome")}
-          className="text-xs font-semibold text-muted-foreground hover:text-foreground"
-        >
-          Skip
-        </button>
-      </header>
 
       <div
         className="flex flex-1 flex-col"
@@ -291,52 +438,75 @@ const Intro = () => {
           touchX.current = null;
         }}
       >
-        <AnimatePresence mode="wait" custom={dir}>
-          <motion.div
-            key={slide.id}
-            custom={dir}
-            initial={{ opacity: 0, x: dir * 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: dir * -40 }}
-            transition={{ duration: 0.28, ease: "easeOut" }}
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.18}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -60) go(index + 1);
-              else if (info.offset.x > 60) go(index - 1);
-            }}
-            className="flex flex-1 flex-col"
-          >
-            <div className="flex flex-[0_0_auto] items-center justify-center px-6 pt-6 pb-4">
-              <PhoneFrame>{slide.mock}</PhoneFrame>
-            </div>
+        {/* ---- full-bleed hero stage ---- */}
+        <div className="gradient-hero relative overflow-hidden rounded-b-[2.5rem] pb-14">
+          <div className="pointer-events-none absolute -top-24 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,hsl(82_92%_62%/0.20),transparent_68%)]" />
+          <div className="pointer-events-none absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-[radial-gradient(circle,hsl(82_92%_62%/0.12),transparent_70%)]" />
 
-            <div className="mx-auto w-full max-w-md px-7 pt-2">
-              <div className="flex items-center gap-2">
-                <Icon size={14} className="text-primary" />
-                <span className="kicker text-primary">{slide.kicker}</span>
+          <header className="relative flex items-center justify-between px-6 pt-6">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary">
+                <span className="font-display text-sm font-bold text-primary-foreground">G</span>
               </div>
-              <h1 className="mt-2 whitespace-pre-line font-display text-[2rem] font-bold leading-[1.08] tracking-tight text-foreground">
-                {slide.title}
-              </h1>
-              <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">{slide.body}</p>
+              <span className="font-display text-sm font-semibold text-white">Glass Bank</span>
             </div>
-          </motion.div>
-        </AnimatePresence>
-
-        <div className="mx-auto flex w-full max-w-md items-center justify-center gap-2 py-5">
-          {SLIDES.map((s, i) => (
             <button
-              key={s.id}
-              onClick={() => go(i)}
-              aria-label={`Go to slide ${i + 1}: ${s.kicker}`}
-              aria-current={i === index}
-              className={`h-1.5 rounded-full transition-all ${
-                i === index ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/35"
-              }`}
-            />
-          ))}
+              onClick={() => navigate("/welcome")}
+              className="text-xs font-semibold text-white/70 hover:text-white"
+            >
+              Skip
+            </button>
+          </header>
+
+          <div className="relative mt-6 px-5">
+            <AnimatePresence mode="wait" custom={dir}>
+              <motion.div
+                key={slide.id}
+                custom={dir}
+                initial={{ opacity: 0, x: dir * 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: dir * -40 }}
+                transition={{ duration: 0.28, ease: "easeOut" }}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.18}
+                onDragEnd={(_, info) => {
+                  if (info.offset.x < -60) go(index + 1);
+                  else if (info.offset.x > 60) go(index - 1);
+                }}
+              >
+                <PhoneFrame>{slide.mock}</PhoneFrame>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* ---- copy section ---- */}
+        <div className="relative -mt-6 flex flex-1 flex-col">
+          <div className="mx-auto w-full max-w-md px-7 pt-4">
+            <div className="flex items-center gap-2">
+              <Icon size={14} className="text-primary" />
+              <span className="kicker text-primary">{slide.kicker}</span>
+            </div>
+            <h1 className="mt-2 whitespace-pre-line font-display text-[1.9rem] font-bold leading-[1.08] tracking-tight text-foreground">
+              {slide.title}
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{slide.body}</p>
+          </div>
+
+          <div className="mx-auto flex w-full max-w-md items-center justify-center gap-2 py-5">
+            {SLIDES.map((s, i) => (
+              <button
+                key={s.id}
+                onClick={() => go(i)}
+                aria-label={`Go to slide ${i + 1}: ${s.kicker}`}
+                aria-current={i === index}
+                className={`h-1.5 rounded-full transition-all ${
+                  i === index ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/35"
+                }`}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
