@@ -481,19 +481,25 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
   // Live mode: webhook-driven updates land in the mirror tables, so subscribe
   // to them and re-hydrate the UI the moment our banking partner tells us
-  // something changed — no manual refresh required.
+  // something changed — no manual refresh required. Events caused by our own
+  // sync are ignored (see selfWriteUntilRef) and the rest are debounced, so a
+  // burst of row updates costs exactly one provider call.
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onChange = () => {
+      if (Date.now() < selfWriteUntilRef.current) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void refreshLedger({ silent: true }); }, 1200);
+    };
     const channel = supabase
       .channel("ledger-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "column_bank_accounts" },
-        () => void refreshLedger({ silent: true }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "column_transfers" },
-        () => void refreshLedger({ silent: true }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "column_entities" },
-        () => void refreshLedger({ silent: true }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "column_bank_accounts" }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "column_transfers" }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "column_entities" }, onChange)
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { if (timer) clearTimeout(timer); void supabase.removeChannel(channel); };
   }, [refreshLedger]);
+
 
   const uid = () => userIdRef.current;
 
