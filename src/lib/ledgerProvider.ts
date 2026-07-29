@@ -129,7 +129,7 @@ export function mergeProviderIntoLedger(ledger: DemoLedger, snap: ProviderSnapsh
 
   const transactions: DemoTransaction[] = snap.transactions.map((t) => ({
     ...t,
-    icon: t.type === "credit" ? "ArrowDownLeft" : "ArrowUpRight",
+    icon: t.type === "credit" ? "↓" : "↑",
     account: idMap.get(t.account) ?? fallbackId ?? t.account,
   }));
 
