@@ -33,44 +33,92 @@ const INTRO_SEEN_KEY = "gb_intro_seen";
 
 /* ---------------- 3D tilted phone ---------------- */
 
+/* Apple-style continuous corners: elliptical radii approximate the squircle
+   far better than a uniform rounded-rect. */
+const SQUIRCLE = "13.5% / 6.4%";
+const SQUIRCLE_INNER = "12.8% / 6.1%";
+
+/* recessed metal side button rendered on the visible left edge slab */
+const EdgeButton = ({ top, height }: { top: number; height: number }) => (
+  <div
+    className="absolute left-[3px] right-[3px] rounded-[2.5px]"
+    style={{
+      top,
+      height,
+      background:
+        "linear-gradient(90deg, hsl(220 8% 22%) 0%, hsl(220 10% 70%) 30%, hsl(0 0% 92%) 52%, hsl(220 10% 46%) 74%, hsl(220 8% 20%) 100%)",
+      boxShadow:
+        "0 -1.5px 1.5px hsl(0 0% 0% / 0.7), 0 1.5px 1.5px hsl(0 0% 0% / 0.7), inset 0 0 0 0.5px hsl(0 0% 100% / 0.4)",
+    }}
+  />
+);
+
+
 const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
-  <div className="relative w-full" style={{ perspective: "1200px" }}>
+  <div className="relative w-full" style={{ perspective: "1000px", perspectiveOrigin: "62% 38%" }}>
     <motion.div
       initial={{ opacity: 0, y: 26 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: "easeOut" }}
-      className="relative mx-auto w-[248px] sm:w-[286px]"
+      transition={{ duration: 0.55, ease: "easeOut" }}
+      className="relative mx-auto w-[196px] sm:w-[220px]"
+      style={{ transformStyle: "preserve-3d" }}
+    >
+    <div
+      className="relative"
       style={{
-        transform: "rotateX(9deg) rotateY(-21deg) rotateZ(3.5deg) translateX(10px)",
+        transformStyle: "preserve-3d",
+        transform: "rotateX(7deg) rotateY(29deg) rotateZ(-2deg) translateX(8px)",
       }}
     >
+      {/* ambient contact shadow, offset along the tilt direction */}
+      <div className="pointer-events-none absolute -bottom-8 -left-2 right-8 h-20 rounded-[50%] bg-black/70 blur-2xl" />
 
-      {/* cast shadow on the background */}
-      <div className="pointer-events-none absolute -bottom-6 left-6 right-2 h-16 rounded-[50%] bg-black/60 blur-2xl" />
 
-      {/* metallic bezel */}
+      {/* ---- left side body slab (gives real thickness on the edge facing us) ---- */}
       <div
-        className="relative rounded-[2.6rem] p-[3px]"
+        className="pointer-events-none absolute bottom-[7px] left-0 top-[7px] w-[22px] rounded-[7px]"
         style={{
+          transformOrigin: "left center",
+          transform: "rotateY(90deg)",
           background:
-            "linear-gradient(150deg, hsl(0 0% 96% / 0.85) 0%, hsl(220 12% 42% / 0.7) 22%, hsl(220 14% 12%) 52%, hsl(220 10% 48% / 0.7) 78%, hsl(0 0% 92% / 0.8) 100%)",
-          boxShadow:
-            "0 42px 70px -24px hsl(224 60% 2% / 0.85), 0 8px 24px -8px hsl(224 60% 2% / 0.7), inset 0 0 0 1px hsl(0 0% 100% / 0.08)",
+            "linear-gradient(90deg, hsl(220 12% 7%) 0%, hsl(220 10% 34%) 16%, hsl(220 8% 74%) 38%, hsl(0 0% 96%) 47%, hsl(220 9% 48%) 66%, hsl(220 12% 18%) 88%, hsl(220 14% 8%) 100%)",
         }}
       >
-        {/* side buttons */}
-        <div className="absolute -left-[1.5px] top-[112px] h-8 w-[3px] rounded-l-full bg-gradient-to-b from-zinc-400/80 to-zinc-600/80" />
-        <div className="absolute -left-[1.5px] top-[152px] h-8 w-[3px] rounded-l-full bg-gradient-to-b from-zinc-400/80 to-zinc-600/80" />
-        <div className="absolute -right-[1.5px] top-[136px] h-12 w-[3px] rounded-r-full bg-gradient-to-b from-zinc-400/80 to-zinc-600/80" />
+        {/* volume up / volume down / power live on the visible edge */}
+        <EdgeButton top={82} height={26} />
+        <EdgeButton top={116} height={26} />
+        <EdgeButton top={162} height={38} />
+      </div>
 
-        <div className="relative overflow-hidden rounded-[2.35rem] bg-[hsl(224_48%_5%)] [clip-path:inset(0_round_2.35rem)] [isolation:isolate]">
-          {/* dynamic island */}
-          <div className="absolute left-1/2 top-2.5 z-20 h-[18px] w-[74px] -translate-x-1/2 rounded-full bg-black shadow-[inset_0_0_0_1px_hsl(0_0%_100%/0.06)]">
-            <span className="absolute right-2.5 top-1/2 h-[7px] w-[7px] -translate-y-1/2 rounded-full bg-[hsl(224_30%_18%)] ring-1 ring-white/10" />
+
+      {/* ---- titanium bezel / body ---- */}
+      <div
+        className="relative p-[2.5px]"
+        style={{
+          borderRadius: SQUIRCLE,
+          background:
+            "linear-gradient(122deg, hsl(220 14% 10%) 0%, hsl(220 10% 52%) 8%, hsl(0 0% 94%) 14%, hsl(220 12% 38%) 26%, hsl(220 16% 11%) 52%, hsl(220 10% 44%) 74%, hsl(0 0% 88%) 88%, hsl(220 14% 12%) 100%)",
+          boxShadow:
+            "0 48px 80px -26px hsl(224 60% 2% / 0.9), 0 12px 30px -10px hsl(224 60% 2% / 0.75), inset 0 0 0 0.5px hsl(0 0% 100% / 0.22)",
+        }}
+      >
+        {/* inner chamfer line */}
+        <div
+          className="pointer-events-none absolute inset-[1.5px] z-20"
+          style={{ borderRadius: SQUIRCLE_INNER, boxShadow: "inset 0 0 0 0.75px hsl(0 0% 0% / 0.85)" }}
+        />
+
+        <div
+          className="relative overflow-hidden bg-[hsl(224_48%_5%)] [isolation:isolate]"
+          style={{ borderRadius: SQUIRCLE_INNER }}
+        >
+          {/* dynamic island — real proportions */}
+          <div className="absolute left-1/2 top-[9px] z-30 h-[15px] w-[54px] -translate-x-1/2 rounded-full bg-black shadow-[inset_0_0_0_0.5px_hsl(0_0%_100%/0.07)]">
+            <span className="absolute right-[7px] top-1/2 h-[6px] w-[6px] -translate-y-1/2 rounded-full bg-[hsl(224_28%_16%)] ring-[0.5px] ring-white/10" />
           </div>
 
-          {/* screen */}
-          <div className="gradient-hero relative h-[386px] w-full overflow-hidden px-3.5 pb-4 pt-9 text-white">
+          {/* screen — 9 : 19.5 */}
+          <div className="gradient-hero relative aspect-[9/19.5] w-full overflow-hidden px-3.5 pb-4 pt-8 text-white">
             <div className="pointer-events-none absolute -top-16 left-1/2 h-52 w-52 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,hsl(82_92%_62%/0.22),transparent_70%)]" />
             {/* status bar */}
             <div className="relative mb-2 flex items-center justify-between px-1 text-[9px] font-semibold tracking-tight text-white/85">
@@ -80,17 +128,28 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
                 <span className="inline-block h-[7px] w-[14px] rounded-[2px] border border-white/60" />
               </span>
             </div>
-            <div className="relative h-[calc(100%-1.25rem)] overflow-hidden">{children}</div>
-            {/* glass reflection */}
-            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,hsl(0_0%_100%/0.14)_0%,transparent_38%,transparent_70%,hsl(0_0%_100%/0.05)_100%)]" />
+            <div className="relative h-[calc(100%-1.75rem)] overflow-hidden">{children}</div>
             {/* home indicator */}
-            <div className="absolute bottom-1.5 left-1/2 h-1 w-24 -translate-x-1/2 rounded-full bg-white/40" />
+            <div className="absolute bottom-1.5 left-1/2 h-1 w-20 -translate-x-1/2 rounded-full bg-white/40" />
           </div>
+
+          {/* glass glare across the display */}
+          <div
+            className="pointer-events-none absolute inset-0 z-20"
+            style={{
+              borderRadius: SQUIRCLE_INNER,
+              background:
+                "linear-gradient(108deg, hsl(0 0% 100% / 0.20) 0%, hsl(0 0% 100% / 0.07) 16%, transparent 34%, transparent 62%, hsl(0 0% 100% / 0.05) 84%, hsl(0 0% 100% / 0.12) 100%)",
+            }}
+          />
         </div>
       </div>
+    </div>
     </motion.div>
+
   </div>
 );
+
 
 /* ---------------- shared screen primitives ---------------- */
 
@@ -148,7 +207,7 @@ const GoalsMock = () => (
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between text-[9.5px]">
                 <span className="truncate font-semibold">{name as string}</span>
-                <span className="text-white/60">
+                <span className="shrink-0 whitespace-nowrap text-white/60">
                   {cur as string} / {tgt as string}
                 </span>
               </div>
