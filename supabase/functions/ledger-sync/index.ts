@@ -622,12 +622,15 @@ async function diagnose() {
     webhookSecret: !!Deno.env.get("COLUMN_WEBHOOK_SECRET"),
   };
   try {
+    // Probe only — a single record is enough to prove credentials work.
     const res = await column<any>("/entities", { query: { limit: 1 } });
     out.reachable = true;
-    out.entityCount = (res?.entities ?? res?.data ?? []).length;
-    const hooks = await column<any>("/webhook-endpoints", { query: { limit: 50 } })
-      .catch(() => null);
-    const list: any[] = hooks?.webhook_endpoints ?? hooks?.data ?? [];
+    out.entityCount = pickList(res, "entities").length;
+    // Endpoint lists can exceed one page, and `webhookRegistered` must consider
+    // all of them, so this one is fully paginated.
+    const list = await columnPaginated<any>("/webhook-endpoints", {
+      key: "webhook_endpoints", max: 500,
+    }).catch(() => [] as any[]);
     out.webhookEndpoints = list.map((h) => ({ id: h.id, url: h.url, enabled: h.enabled ?? true }));
     out.webhookRegistered = list.some((h) => String(h.url ?? "").includes("column-webhook"));
   } catch (e) {
@@ -641,22 +644,30 @@ async function diagnose() {
 // ---------------------------------------------------------------------------
 // Admin / cleanup utilities
 // ---------------------------------------------------------------------------
+/**
+ * Every resource is fully paginated: the wipe/delete tooling is only correct if
+ * it can see the entire sandbox, not just the first 100 of each kind.
+ */
 async function adminList() {
+  const fetchAll = (path: string, key: string) =>
+    columnPaginated<any>(path, { key, max: 2000 })
+      .then((items) => ({ items }))
+      .catch((e: Error) => ({ items: [] as any[], error: String(e.message) }));
+
   const [entities, accounts, counterparties, webhooks] = await Promise.all([
-    column<any>("/entities", { query: { limit: 100 } }).catch((e) => ({ error: String(e.message) })),
-    column<any>("/bank-accounts", { query: { limit: 100 } }).catch((e) => ({ error: String(e.message) })),
-    column<any>("/counterparties", { query: { limit: 100 } }).catch((e) => ({ error: String(e.message) })),
-    column<any>("/webhook-endpoints", { query: { limit: 100 } }).catch((e) => ({ error: String(e.message) })),
+    fetchAll("/entities", "entities"),
+    fetchAll("/bank-accounts", "bank_accounts"),
+    fetchAll("/counterparties", "counterparties"),
+    fetchAll("/webhook-endpoints", "webhook_endpoints"),
   ]);
-  const pick = (r: any, k: string) => (Array.isArray(r) ? r : r?.[k] ?? r?.data ?? []);
   return {
-    entities: pick(entities, "entities"),
-    bankAccounts: pick(accounts, "bank_accounts"),
-    counterparties: pick(counterparties, "counterparties"),
-    webhookEndpoints: pick(webhooks, "webhook_endpoints"),
+    entities: entities.items,
+    bankAccounts: accounts.items,
+    counterparties: counterparties.items,
+    webhookEndpoints: webhooks.items,
     errors: {
-      entities: entities?.error, bankAccounts: accounts?.error,
-      counterparties: counterparties?.error, webhookEndpoints: webhooks?.error,
+      entities: (entities as any).error, bankAccounts: (accounts as any).error,
+      counterparties: (counterparties as any).error, webhookEndpoints: (webhooks as any).error,
     },
   };
 }
