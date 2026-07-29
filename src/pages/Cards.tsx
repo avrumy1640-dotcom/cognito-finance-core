@@ -345,6 +345,7 @@ const CardsPage = () => {
         <AnimatePresence mode="wait">
           {activeTab === "actions" && (
             <motion.div key="actions" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid gap-2 sm:grid-cols-2">
+              <h2 className="sr-only">Card actions</h2>
               <ActionRow
                 icon={card.isLocked ? Unlock : Lock}
                 label={card.isLocked ? "Unlock card" : "Lock card"}
