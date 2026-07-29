@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { ledgerProvider } from "@/lib/ledgerProvider";
 import { AdminHeader, AdminPage, DataTable, StatusPill } from "./AdminShell";
 
 type Row = {
@@ -22,6 +23,33 @@ const AdminKyc = () => {
   const [tab, setTab] = useState<Row["status"]>("pending");
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  // Provider compliance detail, keyed by kyc row id, so a reviewer can see
+  // exactly which requirements are outstanding instead of a bare "pending".
+  const [compliance, setCompliance] = useState<Record<string, string>>({});
+  const [checking, setChecking] = useState<string | null>(null);
+
+  const checkCompliance = async (row: Row) => {
+    setChecking(row.id);
+    try {
+      const { data: entity } = await supabase
+        .from("column_entities").select("entity_id").eq("user_id", row.user_id).maybeSingle();
+      if (!entity?.entity_id) {
+        setCompliance((c) => ({ ...c, [row.id]: "No banking-partner entity for this customer yet." }));
+        return;
+      }
+      const res = await ledgerProvider.adminCompliance(entity.entity_id);
+      const missing = (res as { missing_fields?: string[]; requirements?: unknown })?.missing_fields;
+      setCompliance((c) => ({
+        ...c,
+        [row.id]: missing?.length ? `Missing: ${missing.join(", ")}` : JSON.stringify(res).slice(0, 400),
+      }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Compliance lookup failed");
+    } finally {
+      setChecking(null);
+    }
+  };
+
 
   const load = async () => {
     setLoading(true);
