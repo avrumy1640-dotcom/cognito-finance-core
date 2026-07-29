@@ -392,21 +392,24 @@ async function syncTransfers(
         },
       });
       for (const t of items) {
-        const accId = t.bank_account_id ?? t.sender_bank_account_id ?? t.receiver_bank_account_id;
-        const involved =
-          bankAccountIds.includes(accId) ||
-          bankAccountIds.includes(t.sender_bank_account_id) ||
-          bankAccountIds.includes(t.receiver_bank_account_id);
+        const sender = t.sender_bank_account_id ?? null;
+        const receiver = t.receiver_bank_account_id ?? null;
+        const accId = t.bank_account_id ?? sender ?? receiver;
+        const weSend = !!sender && bankAccountIds.includes(sender);
+        const weReceive = !!receiver && bankAccountIds.includes(receiver);
+        const involved = weSend || weReceive || bankAccountIds.includes(accId);
         if (!involved) continue;
+
+        const dir = String(t.direction ?? t.type ?? "").toLowerCase();
         // ACH semantics are inverted relative to intuition: an ACH DEBIT pulls
         // money INTO our account, a CREDIT pushes it out. Book/wire transfers
-        // are keyed off which side of the transfer we hold.
+        // are keyed off which side of the transfer we hold; incoming wires only
+        // carry a direction/CREDIT marker on the receiving account.
         const isCredit = kind === "ach"
-          ? t.type === "DEBIT"
-          : bankAccountIds.includes(t.receiver_bank_account_id ?? "") ||
-            t.direction === "credit";
+          ? String(t.type ?? "").toUpperCase() === "DEBIT"
+          : weReceive || (!weSend && (dir === "credit" || t.is_incoming === true));
 
-        collected.push({
+        const base = {
           user_id: userId,
           transfer_id: t.id,
           transfer_type: kind,
@@ -418,7 +421,16 @@ async function syncTransfers(
           description: t.description ?? t.merchant_name ?? `${kind.toUpperCase()} transfer`,
           raw: t,
           occurred_at: t.created_at ?? new Date().toISOString(),
-        });
+        };
+
+        if (weSend && weReceive) {
+          // Internal book transfer: one Column record, but the customer should
+          // see both sides — money leaving one account and landing in the other.
+          collected.push({ ...base, transfer_id: `${t.id}:out`, bank_account_id: sender!, direction: "debit" });
+          collected.push({ ...base, transfer_id: `${t.id}:in`, bank_account_id: receiver!, direction: "credit" });
+        } else {
+          collected.push({ ...base, bank_account_id: weReceive ? receiver! : weSend ? sender! : base.bank_account_id });
+        }
       }
     } catch (e) {
       // A transfer type may be unavailable in sandbox — log rather than swallow.
