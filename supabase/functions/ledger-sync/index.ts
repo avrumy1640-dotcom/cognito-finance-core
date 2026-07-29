@@ -1036,6 +1036,22 @@ Deno.serve(async (req) => {
       case "admin_simulate_incoming_wire":
         return json(await simulateIncomingWire(user.id, body));
 
+      // User-scoped: what the partner still needs from THIS caller. Never
+      // accepts an entity id from the client — it resolves the caller's own.
+      case "my_compliance": {
+        const { data: mine } = await admin.from("column_entities")
+          .select("entity_id, verification_status").eq("user_id", user.id).maybeSingle();
+        if (!mine) return json({ entityId: null, verificationStatus: null, requirements: [] });
+        const c = await entityCompliance(mine.entity_id);
+        const reqs = (c?.requirements ?? c?.missing_fields ?? c?.details ?? []) as unknown;
+        return json({
+          entityId: mine.entity_id,
+          verificationStatus: c?.verification_status ?? mine.verification_status,
+          requirements: Array.isArray(reqs) ? reqs : [],
+          raw: c,
+        });
+      }
+
       case "admin_compliance":
         return json(await entityCompliance(String(body.entityId ?? "")));
       case "admin_delete":

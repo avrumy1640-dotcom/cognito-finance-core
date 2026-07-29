@@ -130,6 +130,11 @@ export const ledgerProvider = {
   /** Uploads a KYC document and links it to the entity as verification evidence. */
   submitEvidence: (args: { dataUrl: string; documentType: string; purpose?: string }) =>
     call<{ documentId: string | null; entityId: string; status: string }>({ action: "submit_evidence", ...args }),
+  /** What the banking partner still needs from the signed-in user, if anything. */
+  myCompliance: () =>
+    call<{ entityId: string | null; verificationStatus: string | null; requirements: unknown[] }>({
+      action: "my_compliance",
+    }),
   adminList: () => call<Record<string, unknown>>({ action: "admin_list" }),
   adminLocal: () => call<Record<string, unknown>>({ action: "admin_local" }),
   adminCompliance: (entityId: string) => call<Record<string, unknown>>({ action: "admin_compliance", entityId }),
