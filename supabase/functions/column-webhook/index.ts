@@ -83,9 +83,18 @@ async function handleEvent(type: string, data: any) {
     const entityId = data?.id ?? data?.entity_id;
     if (!entityId) return "ignored: no entity id";
     const status = data?.verification_status ?? (type.endsWith("verified") ? "verified" : "pending");
+    // Out-of-order safety: a late "pending" must not undo a decided verdict.
+    const { data: current } = await admin.from("column_entities")
+      .select("verification_status").eq("entity_id", entityId).maybeSingle();
+    const decided = ["verified", "denied", "rejected"];
+    if (current && decided.includes(String(current.verification_status ?? "").toLowerCase())
+        && !decided.includes(String(status).toLowerCase())) {
+      return `entity ${entityId}: ignored out-of-order "${status}" (have "${current.verification_status}")`;
+    }
     const { data: row } = await admin.from("column_entities")
       .update({ verification_status: status, details: data })
       .eq("entity_id", entityId).select("user_id").maybeSingle();
+
     if (row?.user_id) {
       // Mirror the partner's verdict onto our own KYC gate so access changes
       // in real time, without the user re-submitting anything.
