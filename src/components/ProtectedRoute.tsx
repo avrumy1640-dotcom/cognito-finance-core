@@ -53,7 +53,10 @@ const ProtectedRoute = ({ children, requireKyc = false }: Props) => {
   }
 
   if (!session) {
-    return <Navigate to="/welcome" replace state={{ from: location.pathname }} />;
+    // First-time visitors see the pre-login intro carousel once.
+    let seenIntro = true;
+    try { seenIntro = localStorage.getItem("gb_intro_seen") === "1"; } catch { /* ignore */ }
+    return <Navigate to={seenIntro ? "/welcome" : "/intro"} replace state={{ from: location.pathname }} />;
   }
 
   if (mfaCheck === "required") {
