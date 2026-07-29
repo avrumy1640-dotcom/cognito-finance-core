@@ -54,8 +54,37 @@ const EdgeButton = ({ top, height }: { top: number; height: number }) => (
 );
 
 
+/* Breakpoint-aware presentation: the mock scales as a whole (so the fixed-px
+   screen content stays proportional and readable) and the perspective grows
+   with it so the tilt never looks warped on wide screens. */
+type Stage = { zoom: number; perspective: number; baseRotY: number; baseRotX: number };
+
+const STAGES: Record<"mobile" | "tablet" | "desktop", Stage> = {
+  mobile: { zoom: 1, perspective: 900, baseRotY: 23, baseRotX: 6 },
+  tablet: { zoom: 1.3, perspective: 1500, baseRotY: 26, baseRotX: 6.5 },
+  desktop: { zoom: 1.55, perspective: 2000, baseRotY: 29, baseRotX: 7 },
+};
+
+const useStage = (): Stage => {
+  const [key, setKey] = useState<"mobile" | "tablet" | "desktop">("mobile");
+  useEffect(() => {
+    const tablet = window.matchMedia("(min-width: 640px)");
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setKey(desktop.matches ? "desktop" : tablet.matches ? "tablet" : "mobile");
+    sync();
+    tablet.addEventListener("change", sync);
+    desktop.addEventListener("change", sync);
+    return () => {
+      tablet.removeEventListener("change", sync);
+      desktop.removeEventListener("change", sync);
+    };
+  }, []);
+  return STAGES[key];
+};
+
 const PhoneFrame = ({ children }: { children: React.ReactNode }) => {
   const reduceMotion = useReducedMotion();
+  const stage = useStage();
 
   /* normalized pointer position, -0.5 .. 0.5 */
   const px = useMotionValue(0);
@@ -65,8 +94,8 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => {
   const sx = useSpring(px, spring);
   const sy = useSpring(py, spring);
 
-  const rotateY = useTransform(sx, (v) => 29 + v * 11);
-  const rotateX = useTransform(sy, (v) => 7 - v * 9);
+  const rotateY = useTransform(sx, (v) => stage.baseRotY + v * 11);
+  const rotateX = useTransform(sy, (v) => stage.baseRotX - v * 9);
   const rotateZ = useTransform(sx, (v) => -2 + v * 2);
   const translateX = useTransform(sx, (v) => 8 + v * 6);
 
@@ -94,7 +123,11 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => {
   return (
   <div
     className="relative w-full touch-pan-y"
-    style={{ perspective: "1000px", perspectiveOrigin: "62% 38%" }}
+    style={{
+      perspective: `${stage.perspective}px`,
+      perspectiveOrigin: "62% 38%",
+      zoom: stage.zoom,
+    }}
     onPointerMove={handlePointer}
     onPointerLeave={resetPointer}
     onPointerCancel={resetPointer}
@@ -104,9 +137,10 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => {
       initial={{ opacity: 0, y: 26 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.55, ease: "easeOut" }}
-      className="relative mx-auto w-[196px] sm:w-[220px]"
+      className="relative mx-auto w-[196px]"
       style={{ transformStyle: "preserve-3d" }}
     >
+
     <motion.div
       className="relative [will-change:transform]"
       style={{
