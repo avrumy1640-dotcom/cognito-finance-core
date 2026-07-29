@@ -467,6 +467,11 @@ async function diagnose() {
     const res = await column<any>("/entities", { query: { limit: 1 } });
     out.reachable = true;
     out.entityCount = (res?.entities ?? res?.data ?? []).length;
+    const hooks = await column<any>("/webhook-endpoints", { query: { limit: 50 } })
+      .catch(() => null);
+    const list: any[] = hooks?.webhook_endpoints ?? hooks?.data ?? [];
+    out.webhookEndpoints = list.map((h) => ({ id: h.id, url: h.url, enabled: h.enabled ?? true }));
+    out.webhookRegistered = list.some((h) => String(h.url ?? "").includes("column-webhook"));
   } catch (e) {
     out.reachable = false;
     out.error = (e as Error).message;
