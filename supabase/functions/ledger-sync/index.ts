@@ -170,16 +170,24 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: 
 // ---------------------------------------------------------------------------
 const cents = (n: unknown) => (typeof n === "number" ? n : 0);
 
+/**
+ * Column bank-account balances. The real field names are
+ * `available_balance`, `pending_balance` and `locked_balance` — there is no
+ * `holding_balance`. `current` = available + pending (money already committed
+ * but not yet settled), which is the balance a customer expects to see.
+ */
 function mapBalances(acct: any) {
   const b = acct?.balances ?? {};
+  const available = cents(b.available_balance) / 100;
+  const pending = cents(b.pending_balance) / 100;
   return {
-    available: cents(b.available_amount) / 100,
-    current: cents(b.available_amount ?? 0) / 100 + cents(b.pending_amount) / 100,
-    pending: cents(b.pending_amount) / 100,
-    holding: cents(b.holding_amount) / 100,
-    locked: cents(b.locked_amount) / 100,
+    available,
+    current: available + pending,
+    pending,
+    locked: cents(b.locked_balance) / 100,
   };
 }
+
 
 // ---------------------------------------------------------------------------
 // Core flows
