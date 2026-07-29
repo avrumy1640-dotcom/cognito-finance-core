@@ -450,7 +450,7 @@ const HomePage = () => {
                   {formatCurrency(cashFlow.moneyIn)}
                 </p>
               </GlassCard>
-              <GlassCard onClick={() => navigate("/insights")}>
+              <GlassCard onClick={() => navigate("/insights")} className="glow-surface">
                 <div className="flex items-center gap-2 mb-2">
                   <ArrowUpRight size={16} className="text-destructive" />
                   <span className="text-xs text-muted-foreground font-medium">Money Out</span>
