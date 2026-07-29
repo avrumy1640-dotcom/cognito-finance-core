@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import type { Transaction } from "@/types/transaction";
-import { ledgerProvider, isLiveMode, mergeProviderIntoLedger } from "@/lib/ledgerProvider";
+import { ledgerProvider, isLiveMode, mergeProviderIntoLedger, friendlyProviderMessage } from "@/lib/ledgerProvider";
 
 import {
   demoBank,
