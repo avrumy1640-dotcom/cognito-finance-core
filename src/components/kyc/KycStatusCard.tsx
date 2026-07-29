@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { KycProfile, KycStatus } from "@/hooks/useKyc";
+import { ledgerProvider } from "@/lib/ledgerProvider";
 
 type DisplayState = "unverified" | "pending" | "under_review" | "verified" | "rejected";
 
@@ -67,6 +68,29 @@ const KycStatusCard = ({
       : status === "pending"
       ? "pending"
       : "unverified";
+
+  // What our banking partner still needs, straight from their compliance
+  // endpoint — so a stuck application says exactly what's missing.
+  const [requirements, setRequirements] = useState<string[]>([]);
+  useEffect(() => {
+    if (display === "verified" || display === "unverified") { setRequirements([]); return; }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await ledgerProvider.myCompliance();
+        if (cancelled) return;
+        const list = (res.requirements ?? [])
+          .map((r) => {
+            if (typeof r === "string") return r;
+            const o = r as Record<string, unknown>;
+            return String(o.description ?? o.message ?? o.field ?? o.name ?? "");
+          })
+          .filter(Boolean);
+        setRequirements(list);
+      } catch { /* the status card must render even if compliance is unreachable */ }
+    })();
+    return () => { cancelled = true; };
+  }, [display, status]);
 
   useEffect(() => {
     if (display !== "pending" && display !== "under_review") return;
@@ -182,6 +206,19 @@ const KycStatusCard = ({
           )}
         </div>
       </div>
+
+      {requirements.length > 0 && (
+        <div className="rounded-2xl bg-background/60 p-3.5 space-y-1.5">
+          <p className="text-xs font-semibold">Still needed by our banking partner</p>
+          <ul className="space-y-1">
+            {requirements.map((r) => (
+              <li key={r} className="text-xs opacity-80 flex gap-2">
+                <span aria-hidden>•</span><span>{r}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Progress rail */}
       <div className="flex items-center gap-2">
