@@ -131,6 +131,12 @@ const HomePage = () => {
 
   return (
     <AppLayout>
+      <Seo
+        title="Dashboard — Glass Bank"
+        description="Your Glass Bank dashboard: balances, recent activity, cash flow, and quick actions for transfers and cards."
+        path="/"
+        noindex
+      />
       <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 lg:pt-10 space-y-5">
         {/* Header */}
         <motion.div
