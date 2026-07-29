@@ -223,6 +223,12 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [dataStatus, setDataStatus] = useState<DataStatus>("loading");
   const [dataError, setDataError] = useState<string | null>(null);
+  // Live-mode Activity window. The provider mirror is paged, so the feed grows
+  // in 50-row steps instead of being hard-capped.
+  const LIVE_TX_PAGE = 50;
+  const liveTxWindowRef = useRef(LIVE_TX_PAGE);
+  const [hasMoreTransactions, setHasMoreTransactions] = useState(false);
+  const [loadingMoreTransactions, setLoadingMoreTransactions] = useState(false);
   const [goals, setGoals] = useState<DemoGoal[]>([]);
   const [roundUpGoalId, setRoundUpGoalId] = useState<string | null>(null);
   const [payroll, setPayroll] = useState<PayrollPattern | null>(null);
