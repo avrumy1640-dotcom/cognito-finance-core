@@ -129,7 +129,7 @@ interface Ctx {
   depositCheck: (args: { to: "checking" | "savings"; amount: number }) => boolean;
   payBill: (args: { from: "checking" | "savings"; amount: number; biller: string; routingNumber?: string; accountNumber?: string }) => boolean;
   externalTransfer: (args: { from: "checking" | "savings"; amount: number; bank: string; routingNumber: string; accountNumber: string; memo?: string }) => boolean;
-  wireTransfer: (args: { from: "checking" | "savings"; amount: number; beneficiaryName: string; routingNumber: string; accountNumber: string; memo?: string; fee?: number }) => boolean;
+  wireTransfer: (args: WireTransferArgs) => boolean;
   /** Credit an account — used by the Add Money flows. */
   addFunds: (args: { to?: "checking" | "savings"; amount: number; source: string }) => Promise<boolean>;
   toggleCardLock: () => Promise<void> | void;
