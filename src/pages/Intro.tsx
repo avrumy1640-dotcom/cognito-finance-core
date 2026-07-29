@@ -393,8 +393,6 @@ const CreditMock = () => {
           transition={reducedMotion ? { duration: 0 } : { duration: 1.1, ease: "easeOut" }}
         />
       </svg>
-
-      </svg>
       <p className="text-balance-display -mt-4 text-[26px] leading-none">728</p>
       <p className="mt-0.5 text-[8px] text-white/55">Very good · updated today</p>
     </div>
