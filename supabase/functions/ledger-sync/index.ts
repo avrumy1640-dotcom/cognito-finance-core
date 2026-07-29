@@ -56,6 +56,7 @@ async function column<T = any>(
   try { parsed = text ? JSON.parse(text) : null; } catch { parsed = { raw: text }; }
   if (!res.ok) {
     const msg = parsed?.message || parsed?.code || `Column ${res.status}`;
+    console.error("provider call failed", init.method ?? "GET", path, res.status, JSON.stringify(parsed));
     throw Object.assign(new Error(`${msg}`), { status: res.status, detail: parsed });
   }
   return parsed as T;
