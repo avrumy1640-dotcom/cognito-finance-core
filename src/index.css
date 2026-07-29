@@ -337,6 +337,33 @@
     z-index: -1;
   }
 
+  /* Contained version of the hero wash — same signature lime tint, but
+     clipped to the surface so it can be reused on any card/tile. */
+  .glow-surface {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .glow-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      radial-gradient(75% 110% at 12% 8%, hsl(82 92% 62% / 0.16), transparent 68%),
+      radial-gradient(70% 90% at 95% 20%, hsl(224 60% 30% / 0.07), transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow-surface > * { position: relative; z-index: 1; }
+
+  .dark .glow-surface::before {
+    background:
+      radial-gradient(75% 110% at 12% 8%, hsl(82 92% 62% / 0.10), transparent 68%),
+      radial-gradient(70% 90% at 95% 20%, hsl(224 60% 40% / 0.12), transparent 70%);
+  }
+
+
   /* Button press micro-interaction */
   .press {
     transition: transform 120ms ease, box-shadow 120ms ease;
