@@ -280,7 +280,7 @@
     inset: 0;
     border-radius: inherit;
     background:
-      radial-gradient(120% 80% at 85% 15%, hsl(82 92% 62% / 0.22), transparent 55%),
+      radial-gradient(120% 85% at 88% 12%, hsl(82 92% 62% / 0.34), transparent 58%),
       radial-gradient(90% 60% at 15% 90%, hsl(224 60% 40% / 0.25), transparent 55%);
     mix-blend-mode: screen;
     pointer-events: none;
