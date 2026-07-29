@@ -267,7 +267,14 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const userIdRef = useRef<string | null>(null);
   const ledgerRef = useRef<DemoLedger | null>(null);
   const overdraftRef = useRef(true);
+  // Guards against the realtime feedback loop: every `sync` writes to the
+  // mirror tables, which emits postgres_changes, which would trigger another
+  // sync. We de-dupe concurrent refreshes and ignore change events that land
+  // in the short window right after our own write.
+  const inFlightRef = useRef<Promise<void> | null>(null);
+  const selfWriteUntilRef = useRef(0);
   const stateRef = useRef(state);
+
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { overdraftRef.current = overdraftOptIn; }, [overdraftOptIn]);
 
@@ -382,56 +389,73 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const refreshLedger = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!stateRef.current.accounts.checking) setDataStatus("loading");
-    try {
-      const { data: userRes } = await supabase.auth.getUser();
-      const user = userRes.user;
-      if (!user) {
-        // Signed out — nothing to show, and nothing broken.
-        dispatch({ type: "CLEAR" });
-        setDataStatus("loaded");
-        setDataError(null);
-        return;
-      }
-      userIdRef.current = user.id;
-      let holder = (user.user_metadata?.full_name as string) || "";
-      if (!holder) {
-        const { data: prof } = await supabase
-          .from("profiles")
-          .select("preferred_name")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        holder = (prof?.preferred_name ?? "").trim();
-      }
+    // Collapse concurrent refreshes onto a single in-flight call. Without this
+    // the realtime subscription below can fan a single change event out into
+    // dozens of `ledger-sync` requests and trip the server rate limit.
+    if (inFlightRef.current) return inFlightRef.current;
+    const run = (async () => {
+      if (!stateRef.current.accounts.checking) setDataStatus("loading");
+      try {
+        const { data: userRes } = await supabase.auth.getUser();
+        const user = userRes.user;
+        if (!user) {
+          // Signed out — nothing to show, and nothing broken.
+          dispatch({ type: "CLEAR" });
+          setDataStatus("loaded");
+          setDataError(null);
+          return;
+        }
+        userIdRef.current = user.id;
+        let holder = (user.user_metadata?.full_name as string) || "";
+        if (!holder) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("preferred_name")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          holder = (prof?.preferred_name ?? "").trim();
+        }
 
-      if (!holder) holder = user.email?.split("@")[0] ?? "Account holder";
+        if (!holder) holder = user.email?.split("@")[0] ?? "Account holder";
 
-      let ledger = await demoBank.load(user.id, holder, user.email ?? undefined);
+        let ledger = await demoBank.load(user.id, holder, user.email ?? undefined);
 
-      // The banking partner is the ONLY source of truth for balances and
-      // transactions. A failed call raises a real error state rather than
-      // quietly showing stale or simulated numbers.
-      const snap = await ledgerProvider.sync({ limit: liveTxWindowRef.current });
-      setHasMoreTransactions(!!snap.transactionsHasMore);
-      if (!snap.provisioned) {
-        setDataError(
-          "No bank account yet. Complete identity verification to have your account opened with our banking partner.",
-        );
+        // The banking partner is the ONLY source of truth for balances and
+        // transactions. A failed call raises a real error state rather than
+        // quietly showing stale or simulated numbers.
+        const snap = await ledgerProvider.sync({ limit: liveTxWindowRef.current });
+        // `sync` refreshes the mirror tables, so suppress the change events it
+        // just generated — otherwise each sync immediately schedules another.
+        selfWriteUntilRef.current = Date.now() + 8000;
+        setHasMoreTransactions(!!snap.transactionsHasMore);
+        if (!snap.provisioned) {
+          setDataError(
+            "No bank account yet. Complete identity verification to have your account opened with our banking partner.",
+          );
+          setDataStatus("error");
+          return;
+        }
+        ledger = mergeProviderIntoLedger(ledger, snap);
+
+
+        await applyLedger(ledger);
+        if (!opts?.silent) toast.success("Account synced");
+
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Something went wrong.";
+        setDataError(msg);
         setDataStatus("error");
-        return;
       }
-      ledger = mergeProviderIntoLedger(ledger, snap);
-
-
-      await applyLedger(ledger);
-      if (!opts?.silent) toast.success("Account synced");
-
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Something went wrong.";
-      setDataError(msg);
-      setDataStatus("error");
+    })();
+    inFlightRef.current = run;
+    try {
+      await run;
+    } finally {
+      inFlightRef.current = null;
+      selfWriteUntilRef.current = Math.max(selfWriteUntilRef.current, Date.now() + 3000);
     }
   }, [applyLedger]);
+
 
   const loadMoreTransactions = useCallback(async () => {
     if (!hasMoreTransactions || loadingMoreTransactions) return;
@@ -457,19 +481,25 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
   // Live mode: webhook-driven updates land in the mirror tables, so subscribe
   // to them and re-hydrate the UI the moment our banking partner tells us
-  // something changed — no manual refresh required.
+  // something changed — no manual refresh required. Events caused by our own
+  // sync are ignored (see selfWriteUntilRef) and the rest are debounced, so a
+  // burst of row updates costs exactly one provider call.
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onChange = () => {
+      if (Date.now() < selfWriteUntilRef.current) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void refreshLedger({ silent: true }); }, 1200);
+    };
     const channel = supabase
       .channel("ledger-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "column_bank_accounts" },
-        () => void refreshLedger({ silent: true }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "column_transfers" },
-        () => void refreshLedger({ silent: true }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "column_entities" },
-        () => void refreshLedger({ silent: true }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "column_bank_accounts" }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "column_transfers" }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "column_entities" }, onChange)
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { if (timer) clearTimeout(timer); void supabase.removeChannel(channel); };
   }, [refreshLedger]);
+
 
   const uid = () => userIdRef.current;
 
