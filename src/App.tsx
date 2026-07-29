@@ -53,19 +53,7 @@ import Rewards from "./pages/Rewards";
 import Credit from "./pages/Credit";
 import RequireAdmin from "./components/RequireAdmin";
 import AdminLayout from "./pages/admin/AdminLayout";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminCustomers from "./pages/admin/AdminCustomers";
-import AdminKyc from "./pages/admin/AdminKyc";
-import AdminCards from "./pages/admin/AdminCards";
-import AdminTransactions from "./pages/admin/AdminTransactions";
-import AdminFees from "./pages/admin/AdminFees";
-import AdminWebhooks from "./pages/admin/AdminWebhooks";
-import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
-import AdminTickets from "./pages/admin/AdminTickets";
-import AdminRoles from "./pages/admin/AdminRoles";
 import AdminProvider from "./pages/admin/AdminProvider";
-
-import { AdminAccounts, AdminCrypto, AdminExchange } from "./pages/admin/AdminSimple";
 
 const queryClient = new QueryClient();
 
@@ -149,22 +137,9 @@ const App = () => (
               <Route path="/rewards" element={<Banking><Rewards /></Banking>} />
               <Route path="/credit" element={<Banking><Credit /></Banking>} />
               <Route path="/scheduled" element={<Banking><ScheduledTransfers /></Banking>} />
-              <Route path="/admin" element={<Guarded><RequireAdmin allow={["admin","support","compliance"]}><AdminLayout /></RequireAdmin></Guarded>}>
-                <Route index element={<AdminDashboard />} />
-                <Route path="customers" element={<AdminCustomers />} />
-                <Route path="kyc" element={<AdminKyc />} />
-                <Route path="accounts" element={<AdminAccounts />} />
-                <Route path="cards" element={<AdminCards />} />
-                <Route path="transactions" element={<AdminTransactions />} />
-                <Route path="crypto" element={<AdminCrypto />} />
-                <Route path="exchange" element={<AdminExchange />} />
-                <Route path="fees" element={<RequireAdmin><AdminFees /></RequireAdmin>} />
-                <Route path="webhooks" element={<RequireAdmin><AdminWebhooks /></RequireAdmin>} />
-                <Route path="audit" element={<RequireAdmin><AdminAuditLogs /></RequireAdmin>} />
-                <Route path="tickets" element={<AdminTickets />} />
-                <Route path="roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
-                <Route path="provider" element={<RequireAdmin><AdminProvider /></RequireAdmin>} />
-
+              <Route path="/admin" element={<Guarded><RequireAdmin><AdminLayout /></RequireAdmin></Guarded>}>
+                <Route index element={<AdminProvider />} />
+                <Route path="provider" element={<AdminProvider />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
