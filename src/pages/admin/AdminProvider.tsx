@@ -25,6 +25,7 @@ const ACH_RETURNS = ["RETURN_NSF", "RETURN_ACCOUNT_CLOSED", "RETURN_STOP_PAYMENT
 const AdminProvider = () => {
   const [listing, setListing] = useState<Listing | null>(null);
   const [status, setStatus] = useState<{ sandbox: boolean; configured: boolean } | null>(null);
+  const [platformId, setPlatformId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [wipeOpen, setWipeOpen] = useState(false);
@@ -79,6 +80,11 @@ const AdminProvider = () => {
       const [s, l] = await Promise.all([ledgerProvider.status(), ledgerProvider.adminList()]);
       setStatus(s);
       setListing(l as Listing);
+      // Reference only — never sent with any provider request.
+      void ledgerProvider
+        .diagnose()
+        .then((d) => setPlatformId(d.platformId ?? null))
+        .catch(() => setPlatformId(null));
     } catch (e) {
       toast.error("Could not reach the provider", { description: (e as Error).message });
     } finally {
@@ -146,6 +152,25 @@ const AdminProvider = () => {
           <AlertTriangle size={14} /> Delete everything
         </button>
       </div>
+
+      <section className="mb-6 p-4 rounded-xl border border-border bg-card">
+        <h2 className="text-sm font-semibold text-foreground mb-1">Platform ID</h2>
+        <p className="text-xs text-muted-foreground mb-2">
+          Reference only for provider support conversations. The API key already scopes
+          every request, so this value is never sent with any call.
+        </p>
+        <div className="flex items-center gap-2">
+          <code className="text-xs text-foreground break-all">{platformId ?? "Not exposed by the provider API"}</code>
+          {platformId && (
+            <button
+              onClick={() => { void navigator.clipboard.writeText(platformId); toast.success("Platform ID copied"); }}
+              className="h-8 px-2 rounded-lg border border-border text-xs shrink-0"
+            >
+              Copy
+            </button>
+          )}
+        </div>
+      </section>
 
       <section className="mb-8 p-4 rounded-xl border border-border bg-card">
         <h2 className="text-sm font-semibold text-foreground mb-1">Sandbox simulators</h2>
