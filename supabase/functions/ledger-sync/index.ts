@@ -9,6 +9,7 @@
 // with anything else so we can never accidentally touch live money.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { rateLimit, tooManyRequests } from "../_shared/rateLimit.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -355,6 +356,13 @@ Deno.serve(async (req) => {
     const action = String(body?.action ?? "");
 
     const isAdminAction = action.startsWith("admin_");
+
+    // Rate limit per caller. Admin/mutating actions get a much tighter budget
+    // than read-only status/sync polling.
+    const isMutating = isAdminAction || action === "provision" || action === "transfer";
+    const rl = rateLimit(`ledger:${user.id}:${isMutating ? "write" : "read"}`, isMutating ? 10 : 60);
+    if (!rl.allowed) return tooManyRequests(rl.retryAfter, corsHeaders);
+
     if (isAdminAction) {
       const { data: isAdmin } = await admin.rpc("has_role", { _user_id: user.id, _role: "admin" });
       if (!isAdmin) return json({ error: "Forbidden" }, 403);

@@ -102,7 +102,8 @@ const SecurityCenter = () => {
     const { data } = await supabase
       .from("trusted_devices")
       .select("id, device_id, label, user_agent, last_seen_at, created_at")
-      .order("last_seen_at", { ascending: false });
+      .order("last_seen_at", { ascending: false })
+      .limit(100);
     setDevices((data as DeviceRow[]) ?? []);
     setListLoading(false);
   };

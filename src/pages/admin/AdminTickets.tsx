@@ -46,7 +46,8 @@ const AdminTickets = () => {
       .from("support_messages")
       .select("id, author, body, created_at")
       .eq("ticket_id", t.id)
-      .order("created_at");
+      .order("created_at")
+      .limit(500);
     setMessages((data ?? []) as Message[]);
   };
 

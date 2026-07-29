@@ -29,7 +29,8 @@ const AdminKyc = () => {
       .from("kyc_profiles")
       .select("id, user_id, legal_first_name, legal_last_name, country, status, submitted_at, rejection_reason")
       .eq("status", tab as "pending" | "verified" | "rejected")
-      .order("submitted_at", { ascending: false });
+      .order("submitted_at", { ascending: false })
+      .limit(500);
     setRows((data ?? []) as Row[]);
     setLoading(false);
   };

@@ -7,6 +7,7 @@
 // request body), and de-duplicates via `dedupe_key`.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { rateLimit, tooManyRequests } from "../_shared/rateLimit.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -54,6 +55,9 @@ Deno.serve(async (req) => {
     const { data: userRes, error: userErr } = await authed.auth.getUser();
     const userId = userRes?.user?.id;
     if (userErr || !userId) return json({ error: "Invalid session" }, 401);
+
+    const rl = rateLimit(`notify:${userId}`, 20);
+    if (!rl.allowed) return tooManyRequests(rl.retryAfter, corsHeaders);
 
     const body = await req.json().catch(() => ({}));
     const type = String(body?.type ?? "");

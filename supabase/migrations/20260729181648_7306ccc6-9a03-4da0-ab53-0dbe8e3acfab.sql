@@ -1,0 +1,14 @@
+CREATE INDEX IF NOT EXISTS idx_column_entities_user ON public.column_entities (user_id);
+CREATE INDEX IF NOT EXISTS idx_support_messages_ticket_created ON public.support_messages (ticket_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_support_messages_user ON public.support_messages (user_id);
+CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user ON public.webauthn_credentials (user_id);
+CREATE INDEX IF NOT EXISTS idx_scheduled_transfer_runs_user ON public.scheduled_transfer_runs (user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON public.notifications (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_beneficiaries_user_created ON public.beneficiaries (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_requests_requester_created ON public.payment_requests (requester_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_requests_payer_created ON public.payment_requests (payer_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scheduled_transfers_user_created ON public.scheduled_transfers (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_login_history_user_created ON public.login_history (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_user_created ON public.support_tickets (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON public.audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_kyc_profiles_status ON public.kyc_profiles (status);
