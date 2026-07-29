@@ -267,7 +267,14 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const userIdRef = useRef<string | null>(null);
   const ledgerRef = useRef<DemoLedger | null>(null);
   const overdraftRef = useRef(true);
+  // Guards against the realtime feedback loop: every `sync` writes to the
+  // mirror tables, which emits postgres_changes, which would trigger another
+  // sync. We de-dupe concurrent refreshes and ignore change events that land
+  // in the short window right after our own write.
+  const inFlightRef = useRef<Promise<void> | null>(null);
+  const selfWriteUntilRef = useRef(0);
   const stateRef = useRef(state);
+
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { overdraftRef.current = overdraftOptIn; }, [overdraftOptIn]);
 
