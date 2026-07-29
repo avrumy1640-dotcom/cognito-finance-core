@@ -82,10 +82,16 @@ async function notify(userId: string | null, args: { type: string; title: string
 
 async function handleEvent(type: string, data: any) {
   // --- entity / identity verification ------------------------------------
-  if (type.startsWith("entity.")) {
+  // `identity.verification.*` carries the same verdict shape as `entity.*`.
+  if (type.startsWith("entity.") || type.startsWith("identity.")) {
     const entityId = data?.id ?? data?.entity_id;
     if (!entityId) return "ignored: no entity id";
-    const status = data?.verification_status ?? (type.endsWith("verified") ? "verified" : "pending");
+    const tail = type.split(".").pop() ?? "";
+    const status = data?.verification_status
+      ?? (tail === "verified" || tail === "approved" ? "verified"
+        : tail === "denied" || tail === "rejected" ? "denied"
+        : tail === "manual_review" ? "manual_review" : "pending");
+
     // Out-of-order safety: a late "pending" must not undo a decided verdict.
     const { data: current } = await admin.from("column_entities")
       .select("verification_status").eq("entity_id", entityId).maybeSingle();
