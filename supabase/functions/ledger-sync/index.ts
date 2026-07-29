@@ -866,7 +866,21 @@ async function simulateAchReturn(userId: string, body: any) {
     idempotencyKey: `sim-return-${userId}-${magic}-${crypto.randomUUID()}`,
   });
   await recordTransfer(userId, "ach", from.bank_account_id, t, "debit", `Simulated ${magic}`);
-  return { transferId: t.id, status: t.status, expectedReturn: magic };
+
+  // Sandbox ACH only returns once the transfer has actually settled through the
+  // simulated Fed. Force settlement so the return (and its webhook) fires now
+  // instead of whenever the sandbox batch window next opens.
+  let settled = false;
+  try {
+    await column<any>("/simulate/transfers/ach/settle", {
+      method: "POST",
+      body: { ach_transfer_id: t.id },
+    });
+    settled = true;
+  } catch (e) {
+    console.warn("could not force ACH settlement", (e as Error).message);
+  }
+  return { transferId: t.id, status: t.status, expectedReturn: magic, settled };
 }
 
 /** Sandbox-only incoming-wire simulator. */
