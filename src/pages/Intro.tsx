@@ -70,7 +70,7 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
           </div>
 
           {/* screen */}
-          <div className="gradient-hero relative h-[404px] w-full overflow-hidden px-3.5 pb-4 pt-9 text-white">
+          <div className="gradient-hero relative h-[386px] w-full overflow-hidden px-3.5 pb-4 pt-9 text-white">
             <div className="pointer-events-none absolute -top-16 left-1/2 h-52 w-52 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,hsl(82_92%_62%/0.22),transparent_70%)]" />
             {/* status bar */}
             <div className="relative mb-2 flex items-center justify-between px-1 text-[9px] font-semibold tracking-tight text-white/85">
@@ -95,7 +95,7 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
 /* ---------------- shared screen primitives ---------------- */
 
 const Row = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <div className={`glass-card rounded-xl px-2.5 py-2 ${className}`}>{children}</div>
+  <div className={`rounded-xl border border-white/10 bg-white/[0.07] px-2.5 py-2 ${className}`}>{children}</div>
 );
 
 const ScreenHeader = ({ title, sub }: { title: string; sub: string }) => (
@@ -126,7 +126,7 @@ const Bar = ({ pct, delay = 0 }: { pct: number; delay?: number }) => (
 const GoalsMock = () => (
   <div className="space-y-2">
     <ScreenHeader sub="Savings" title="Your goals" />
-    <div className="glow-surface rounded-2xl border border-white/10 bg-white/[0.06] p-3">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
       <p className="text-[8px] text-white/55">Total saved</p>
       <p className="text-balance-display mt-0.5 text-[26px] leading-none">$4,330.00</p>
       <p className="mt-1 text-[8px] text-primary">+$182.40 this month</p>
@@ -168,7 +168,7 @@ const GoalsMock = () => (
 const EarlyPayMock = () => (
   <div className="space-y-2">
     <ScreenHeader sub="Direct deposit" title="Get paid early" />
-    <div className="glow-surface rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
       <p className="text-[8px] text-white/55">Paycheck arriving</p>
       <p className="text-balance-display mt-0.5 text-[26px] leading-none">$2,184.30</p>
       <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[8px] text-primary">
@@ -210,7 +210,7 @@ const EarlyPayMock = () => (
 const CreditMock = () => (
   <div className="space-y-2">
     <ScreenHeader sub="Credit builder" title="Your score" />
-    <div className="glow-surface rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
       <svg viewBox="0 0 120 68" className="mx-auto w-[132px]">
         <path d="M10 62 A50 50 0 0 1 110 62" fill="none" stroke="hsl(0 0% 100% / 0.12)" strokeWidth="9" strokeLinecap="round" />
         <motion.path
@@ -253,7 +253,7 @@ const CreditMock = () => (
 const RewardsMock = () => (
   <div className="space-y-2">
     <ScreenHeader sub="Glass Card" title="Cashback" />
-    <div className="glow-surface rounded-2xl border border-white/10 bg-white/[0.06] p-3">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
       <div className="flex items-center gap-1.5">
         <Coins size={11} className="text-primary" />
         <p className="text-[8px] text-white/55">Available to redeem</p>
@@ -302,7 +302,7 @@ const RewardsMock = () => (
 const SecurityMock = () => (
   <div className="space-y-2">
     <ScreenHeader sub="Protection" title="Security center" />
-    <div className="glow-surface rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
       <div className="gradient-lime mx-auto flex h-11 w-11 items-center justify-center rounded-2xl">
         <ShieldCheck size={20} className="text-primary-foreground" />
       </div>
