@@ -69,6 +69,8 @@ const Settings = () => {
   const { user } = useAuth();
 
   const { theme, setTheme } = useTheme();
+  const { pref: motionPref, reducedMotion, setPref: setMotionPref } = useReducedMotionPref();
+
   const [language, setLanguage] = useState<string>(() => localStorage.getItem("gb_lang") || "en");
   const [currency, setCurrency] = useState<string>("USD");
   const [timezone, setTimezone] = useState<string>(() =>
