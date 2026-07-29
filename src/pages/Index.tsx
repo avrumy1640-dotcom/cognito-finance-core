@@ -11,6 +11,7 @@ import { useUnreadCount } from "@/hooks/useNotifications";
 import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
 import { useProfile } from "@/hooks/useProfile";
+import Seo from "@/components/Seo";
 import {
   ArrowUpRight,
   ArrowDownLeft,
