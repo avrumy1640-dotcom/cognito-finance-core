@@ -20,12 +20,59 @@ const RESOURCES: Array<{ key: keyof Listing; resource: string; label: string }> 
   { key: "webhookEndpoints", resource: "webhook-endpoint", label: "Webhook endpoints" },
 ];
 
+const ACH_RETURNS = ["RETURN_NSF", "RETURN_ACCOUNT_CLOSED", "RETURN_STOP_PAYMENT", "RETURN_UNAUTH"] as const;
+
 const AdminProvider = () => {
   const [listing, setListing] = useState<Listing | null>(null);
   const [status, setStatus] = useState<{ sandbox: boolean; configured: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [wipeOpen, setWipeOpen] = useState(false);
   const [source, setSource] = useState<DataSource>(getDataSource());
+
+  const registerWebhook = async () => {
+    setBusy(true);
+    const id = toast.loading("Registering webhook endpoint…");
+    try {
+      const res = await ledgerProvider.adminRegisterWebhook();
+      toast.success(res.created ? "Webhook endpoint registered" : "Endpoint already registered", {
+        id,
+        description: res.url,
+      });
+      void load();
+    } catch (e) {
+      toast.error("Could not register webhook", { id, description: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const simulateReturn = async (code: string) => {
+    setBusy(true);
+    const id = toast.loading(`Sending ACH that will return as ${code}…`);
+    try {
+      const res = await ledgerProvider.adminSimulateAchReturn(code, 15);
+      toast.success("Simulated ACH sent", { id, description: `${res.transferId} · ${res.status}` });
+    } catch (e) {
+      toast.error("Simulation failed", { id, description: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const simulateWire = async () => {
+    setBusy(true);
+    const id = toast.loading("Simulating incoming wire…");
+    try {
+      const res = await ledgerProvider.adminSimulateIncomingWire(500);
+      toast.success("Incoming wire simulated", { id, description: res.transferId ?? res.status });
+    } catch (e) {
+      toast.error("Simulation failed", { id, description: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   const load = useCallback(async () => {
     setLoading(true);
