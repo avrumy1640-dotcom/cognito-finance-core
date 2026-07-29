@@ -127,9 +127,31 @@ async function handleEvent(type: string, data: any) {
     return `entity ${entityId} → ${status}`;
   }
 
+  // --- ACH notification of change (NOC) -----------------------------------
+  // Not a status change: the RDFI is telling us the counterparty's routing or
+  // account number changed. We log it and tell the user, but never silently
+  // rewrite stored bank details.
+  if (type.endsWith(".noc") || type.includes("notification_of_change")) {
+    const t = data ?? {};
+    const transferId = t.id ?? t.transfer_id ?? "unknown";
+    const accId = t.bank_account_id ?? t.sender_bank_account_id;
+    const userId = await userForBankAccount(accId);
+    await notify(userId, {
+      type: "alert",
+      title: "Recipient bank details changed",
+      body: t.change_code
+        ? `The receiving bank returned a notification of change (${t.change_code}). Update the saved recipient before your next transfer.`
+        : "The receiving bank asked us to update the saved account details for this recipient.",
+      dedupe_key: `column-noc-${transferId}`,
+    });
+    console.log("ACH notification of change", JSON.stringify({ transferId, data: t }));
+    return `noc logged for transfer ${transferId}`;
+  }
+
   // --- ACH / book / wire transfer status ---------------------------------
   if (type.startsWith("ach.") || type.startsWith("book.") || type.startsWith("wire.")) {
     const kind = type.split(".")[0];
+
     const t = data ?? {};
     const transferId = t.id ?? t.transfer_id;
     if (!transferId) return "ignored: no transfer id";
