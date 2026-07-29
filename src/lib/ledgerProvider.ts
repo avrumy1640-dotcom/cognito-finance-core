@@ -41,7 +41,14 @@ export interface ProviderSnapshot {
   entity: { entityId: string; verificationStatus: string } | null;
   accounts: ProviderAccount[];
   transactions: Array<Omit<DemoTransaction, "icon">>;
+  /** True when more transactions exist beyond the requested window. */
+  transactionsHasMore?: boolean;
+  transactionsTotal?: number;
+  transactionsOffset?: number;
 }
+
+/** Paging window for the transaction feed (cursor-free offset over our mirror). */
+export interface SyncPage { limit?: number; offset?: number }
 
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("ledger-sync", { body });
@@ -81,8 +88,8 @@ export const ledgerProvider = {
       action: "diagnose",
     }),
   /** Creates the sandbox entity + bank account if they don't exist yet. */
-  provision: () => call<ProviderSnapshot>({ action: "provision" }),
-  sync: () => call<ProviderSnapshot>({ action: "sync" }),
+  provision: (page: SyncPage = {}) => call<ProviderSnapshot>({ action: "provision", ...page }),
+  sync: (page: SyncPage = {}) => call<ProviderSnapshot>({ action: "sync", ...page }),
   transfer: (args: TransferArgs) =>
     call<{ transferId: string; status: string; snapshot: ProviderSnapshot }>({ action: "transfer", ...args }),
   adminList: () => call<Record<string, unknown>>({ action: "admin_list" }),
