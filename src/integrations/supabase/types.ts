@@ -110,6 +110,141 @@ export type Database = {
         }
         Relationships: []
       }
+      column_bank_accounts: {
+        Row: {
+          account_number_id: string | null
+          account_number_masked: string | null
+          account_type: string
+          balances: Json
+          bank_account_id: string
+          created_at: string
+          description: string | null
+          entity_id: string
+          id: string
+          is_overdrawn: boolean
+          routing_number: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_number_id?: string | null
+          account_number_masked?: string | null
+          account_type?: string
+          balances?: Json
+          bank_account_id: string
+          created_at?: string
+          description?: string | null
+          entity_id: string
+          id?: string
+          is_overdrawn?: boolean
+          routing_number?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_number_id?: string | null
+          account_number_masked?: string | null
+          account_type?: string
+          balances?: Json
+          bank_account_id?: string
+          created_at?: string
+          description?: string | null
+          entity_id?: string
+          id?: string
+          is_overdrawn?: boolean
+          routing_number?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      column_entities: {
+        Row: {
+          created_at: string
+          details: Json
+          entity_id: string
+          entity_type: string
+          id: string
+          updated_at: string
+          user_id: string
+          verification_status: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          entity_id: string
+          entity_type?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          verification_status?: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          verification_status?: string
+        }
+        Relationships: []
+      }
+      column_transfers: {
+        Row: {
+          amount_cents: number
+          bank_account_id: string | null
+          created_at: string
+          currency: string
+          description: string | null
+          direction: string
+          id: string
+          occurred_at: string
+          raw: Json
+          status: string
+          transfer_id: string
+          transfer_type: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          amount_cents?: number
+          bank_account_id?: string | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          direction?: string
+          id?: string
+          occurred_at?: string
+          raw?: Json
+          status?: string
+          transfer_id: string
+          transfer_type?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          bank_account_id?: string | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          direction?: string
+          id?: string
+          occurred_at?: string
+          raw?: Json
+          status?: string
+          transfer_id?: string
+          transfer_type?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       fee_config: {
         Row: {
           active: boolean
