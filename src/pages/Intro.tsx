@@ -143,7 +143,9 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
           />
         </div>
       </div>
+    </div>
     </motion.div>
+
   </div>
 );
 
