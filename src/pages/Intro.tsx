@@ -76,20 +76,20 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
 
       {/* ---- left side body slab (gives real thickness on the edge facing us) ---- */}
       <div
-        className="pointer-events-none absolute left-0 top-0 h-full w-[13px]"
+        className="pointer-events-none absolute bottom-[7px] left-0 top-[7px] w-[22px] rounded-[7px]"
         style={{
           transformOrigin: "left center",
           transform: "rotateY(90deg)",
-          borderRadius: SQUIRCLE,
           background:
-            "linear-gradient(90deg, hsl(220 10% 8%) 0%, hsl(220 9% 30%) 18%, hsl(220 8% 66%) 42%, hsl(220 10% 40%) 62%, hsl(220 12% 14%) 100%)",
+            "linear-gradient(90deg, hsl(220 12% 7%) 0%, hsl(220 10% 34%) 16%, hsl(220 8% 74%) 38%, hsl(0 0% 96%) 47%, hsl(220 9% 48%) 66%, hsl(220 12% 18%) 88%, hsl(220 14% 8%) 100%)",
         }}
       >
         {/* volume up / volume down / power live on the visible edge */}
-        <EdgeButton top={88} height={26} />
-        <EdgeButton top={122} height={26} />
-        <EdgeButton top={168} height={38} />
+        <EdgeButton top={82} height={26} />
+        <EdgeButton top={116} height={26} />
+        <EdgeButton top={162} height={38} />
       </div>
+
 
       {/* ---- titanium bezel / body ---- */}
       <div
