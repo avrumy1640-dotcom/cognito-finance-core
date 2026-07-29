@@ -59,7 +59,7 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
       initial={{ opacity: 0, y: 26 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.55, ease: "easeOut" }}
-      className="relative mx-auto w-[212px] sm:w-[238px]"
+      className="relative mx-auto w-[178px] sm:w-[200px]"
       style={{
         transformStyle: "preserve-3d",
         transform: "rotateX(7deg) rotateY(30deg) rotateZ(-2deg) translateX(6px)",
@@ -80,9 +80,9 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
         }}
       >
         {/* volume up / volume down / power live on the visible edge */}
-        <EdgeButton top={104} height={30} />
-        <EdgeButton top={144} height={30} />
-        <EdgeButton top={196} height={44} />
+        <EdgeButton top={88} height={26} />
+        <EdgeButton top={122} height={26} />
+        <EdgeButton top={168} height={38} />
       </div>
 
       {/* ---- titanium bezel / body ---- */}
