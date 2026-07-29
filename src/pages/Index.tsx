@@ -11,6 +11,7 @@ import { useUnreadCount } from "@/hooks/useNotifications";
 import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
 import { useProfile } from "@/hooks/useProfile";
+import Seo from "@/components/Seo";
 import {
   ArrowUpRight,
   ArrowDownLeft,
@@ -131,6 +132,12 @@ const HomePage = () => {
 
   return (
     <AppLayout>
+      <Seo
+        title="Dashboard — Glass Bank"
+        description="Your Glass Bank dashboard: balances, recent activity, cash flow, and quick actions for transfers and cards."
+        path="/"
+        noindex
+      />
       <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 lg:pt-10 space-y-5">
         {/* Header */}
         <motion.div
@@ -144,7 +151,7 @@ const HomePage = () => {
               <Skeleton className="h-7 w-40" />
             ) : (
               <h1 className="text-[26px] font-display font-bold tracking-tight text-foreground leading-tight truncate">
-                {displayName || "there"}
+                Dashboard — {displayName || "there"}
               </h1>
             )}
           </div>

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import Seo from "@/components/Seo";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -100,6 +101,11 @@ const SignIn = () => {
 
   return (
     <div className="min-h-dvh bg-background flex flex-col">
+      <Seo
+        title="Sign in — Glass Bank"
+        description="Sign in to your Glass Bank account to move money, manage cards, and track spending securely."
+        path="/login"
+      />
       <button
         onClick={() => navigate("/welcome")}
         className="absolute top-6 left-6 flex items-center gap-1 text-sm text-muted-foreground"

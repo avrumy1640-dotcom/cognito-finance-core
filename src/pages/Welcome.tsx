@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import Seo from "@/components/Seo";
 
 const Welcome = () => {
   const navigate = useNavigate();
@@ -14,6 +15,11 @@ const Welcome = () => {
 
   return (
     <div className="min-h-dvh bg-background flex flex-col px-8 py-10">
+      <Seo
+        title="Glass Bank — Banking, beautifully clear"
+        description="Open a Glass Bank account: instant transfers, smart cards, savings goals, and spending insights in one beautifully clear app."
+        path="/welcome"
+      />
       <div className="flex-1 flex flex-col items-center justify-center text-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
@@ -29,7 +35,7 @@ const Welcome = () => {
           transition={{ delay: 0.2 }}
           className="text-4xl font-display font-bold text-foreground"
         >
-          Glass Bank
+          Glass Bank — Banking, beautifully clear
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 12 }}

@@ -345,6 +345,7 @@ const CardsPage = () => {
         <AnimatePresence mode="wait">
           {activeTab === "actions" && (
             <motion.div key="actions" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid gap-2 sm:grid-cols-2">
+              <h2 className="sr-only">Card actions</h2>
               <ActionRow
                 icon={card.isLocked ? Unlock : Lock}
                 label={card.isLocked ? "Unlock card" : "Lock card"}
@@ -403,6 +404,7 @@ const CardsPage = () => {
 
           {activeTab === "controls" && (
             <motion.div key="controls" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2">
+              <h2 className="sr-only">Card controls</h2>
               <GlassCard className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <Shield size={18} className="text-primary" />
@@ -433,6 +435,7 @@ const CardsPage = () => {
 
           {activeTab === "transactions" && (
             <motion.div key="tx" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <h2 className="sr-only">Card transactions</h2>
               <div className="relative mb-3">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
