@@ -41,17 +41,18 @@ const SQUIRCLE_INNER = "12.8% / 6.1%";
 /* recessed metal side button rendered on the visible left edge slab */
 const EdgeButton = ({ top, height }: { top: number; height: number }) => (
   <div
-    className="absolute left-[2px] right-[2px] rounded-[2px]"
+    className="absolute left-[3px] right-[3px] rounded-[2.5px]"
     style={{
       top,
       height,
       background:
-        "linear-gradient(90deg, hsl(220 8% 26%) 0%, hsl(220 10% 62%) 35%, hsl(220 12% 78%) 55%, hsl(220 8% 34%) 100%)",
+        "linear-gradient(90deg, hsl(220 8% 22%) 0%, hsl(220 10% 70%) 30%, hsl(0 0% 92%) 52%, hsl(220 10% 46%) 74%, hsl(220 8% 20%) 100%)",
       boxShadow:
-        "0 -1px 1px hsl(0 0% 0% / 0.55), 0 1px 1px hsl(0 0% 0% / 0.55), inset 0 0 0 0.5px hsl(0 0% 100% / 0.25)",
+        "0 -1.5px 1.5px hsl(0 0% 0% / 0.7), 0 1.5px 1.5px hsl(0 0% 0% / 0.7), inset 0 0 0 0.5px hsl(0 0% 100% / 0.4)",
     }}
   />
 );
+
 
 const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
   <div className="relative w-full" style={{ perspective: "1000px", perspectiveOrigin: "62% 38%" }}>
