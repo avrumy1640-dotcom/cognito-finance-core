@@ -132,7 +132,7 @@
     --gradient-card: linear-gradient(145deg, hsl(224 36% 11% / 0.92), hsl(224 36% 8% / 0.65));
     --gradient-savings: linear-gradient(135deg, hsl(224 42% 6%) 0%, hsl(224 34% 14%) 60%, hsl(82 82% 48%) 140%);
     --gradient-navy: linear-gradient(135deg, hsl(224 48% 4%), hsl(224 34% 16%));
-    --gradient-card-face: linear-gradient(135deg, hsl(224 50% 4%) 0%, hsl(224 40% 10%) 45%, hsl(224 32% 16%) 100%);
+    --gradient-card-face: linear-gradient(135deg, hsl(224 50% 4%) 0%, hsl(224 40% 10%) 42%, hsl(150 38% 16%) 78%, hsl(82 68% 34%) 130%);
 
     --sidebar-background: 224 36% 8%;
     --sidebar-foreground: 36 30% 94%;
