@@ -48,7 +48,8 @@ const PaymentRequests = () => {
     const { data } = await supabase
       .from("payment_requests")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(200);
     setRows((data ?? []) as Request[]);
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [user]);

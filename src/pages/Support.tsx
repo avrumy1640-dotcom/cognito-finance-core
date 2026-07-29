@@ -68,7 +68,8 @@ const Support = () => {
     const { data, error } = await supabase
       .from("support_tickets")
       .select("id, subject, status, priority, category, updated_at")
-      .order("updated_at", { ascending: false });
+      .order("updated_at", { ascending: false })
+      .limit(200);
     if (error) { toast.error(error.message); return; }
     setTickets(data as Ticket[]);
   };

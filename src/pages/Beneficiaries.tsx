@@ -71,7 +71,8 @@ const Beneficiaries = () => {
       .from("beneficiaries")
       .select("*")
       .order("favorite", { ascending: false })
-      .order("updated_at", { ascending: false });
+      .order("updated_at", { ascending: false })
+      .limit(500);
     if (error) { toast.error(error.message); return; }
     setRows((data ?? []) as Beneficiary[]);
   };
