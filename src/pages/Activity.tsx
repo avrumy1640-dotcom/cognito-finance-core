@@ -223,7 +223,7 @@ const ActivityPage = () => {
               ]}
             />
           )}
-          {Object.entries(groups).map(([group, txs]) => (
+          {(Object.entries(groups) as Array<[string, typeof transactions]>).map(([group, txs]) => (
             <div key={group}>
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
                 {group}
