@@ -657,8 +657,10 @@ async function doTransfer(userId: string, body: any) {
       },
       idempotencyKey: await transferKey(userId, "book", amount, to.bank_account_id, requestId),
     });
-    await recordTransfer(userId, "book", from.bank_account_id, t, "debit", description);
-    await recordTransfer(userId, "book", to.bank_account_id, { ...t, id: `${t.id}-in` }, "credit", description);
+    // Same leg IDs the sync uses, so the mirrored rows update in place
+    // instead of appearing twice once Column reports the transfer back.
+    await recordTransfer(userId, "book", from.bank_account_id, { ...t, id: `${t.id}:out` }, "debit", description);
+    await recordTransfer(userId, "book", to.bank_account_id, { ...t, id: `${t.id}:in` }, "credit", description);
     return { transferId: t.id, status: t.status };
   }
 
