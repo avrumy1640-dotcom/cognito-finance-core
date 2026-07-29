@@ -65,7 +65,7 @@ type TxFilter = "all" | "in" | "out";
 
 const CardsPage = () => {
   const navigate = useNavigate();
-  const { card, transactions, toggleCardLock, toggleCardControl, columnLive, dataStatus, dataError, retry, cashback } = useBank();
+  const { card, transactions, toggleCardLock, toggleCardControl, liveLedger, dataStatus, dataError, retry, cashback } = useBank();
   const { status: kycStatus } = useKyc();
   const { prefs, update: updatePrefs } = useCardPrefs();
   const [showDetails, setShowDetails] = useState(false);

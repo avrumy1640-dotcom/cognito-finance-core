@@ -1,4 +1,4 @@
-// Alert thresholds & preferences for real-time Column-backed alerts.
+// Alert thresholds & preferences for real-time account alerts.
 // Persisted in localStorage; read+written by the notifications settings page and the bank store.
 
 export interface AlertPrefs {
