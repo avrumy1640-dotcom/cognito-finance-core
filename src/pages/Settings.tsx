@@ -16,7 +16,9 @@ import {
   Shield,
   ChevronRight,
   LifeBuoy,
+  Sparkles,
 } from "lucide-react";
+
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import SharedToggleRow from "@/components/glass/ToggleRow";
@@ -25,7 +27,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBank } from "@/store/bankStore";
 import { useTheme } from "@/hooks/useTheme";
 import type { Theme } from "@/lib/theme";
+import { useReducedMotionPref } from "@/hooks/useReducedMotionPref";
 import {
+
   biometricLabel,
   getBiometricKind,
   isAppLockEnabled,
@@ -65,6 +69,8 @@ const Settings = () => {
   const { user } = useAuth();
 
   const { theme, setTheme } = useTheme();
+  const { pref: motionPref, reducedMotion, setPref: setMotionPref } = useReducedMotionPref();
+
   const [language, setLanguage] = useState<string>(() => localStorage.getItem("gb_lang") || "en");
   const [currency, setCurrency] = useState<string>("USD");
   const [timezone, setTimezone] = useState<string>(() =>
@@ -166,7 +172,36 @@ const Settings = () => {
                 </button>
               ))}
             </div>
+
+            <div className="border-t border-border pt-3">
+              <SharedToggleRow
+                icon={Sparkles}
+                label="Reduce motion"
+                desc={
+                  motionPref === "system"
+                    ? `Following your device setting (currently ${reducedMotion ? "reduced" : "full"} motion)`
+                    : reducedMotion
+                      ? "Animations and the intro phone tilt are minimized"
+                      : "Full animations, even if your device asks for less"
+                }
+                checked={reducedMotion}
+                onChange={() => {
+                  const next = reducedMotion ? "full" : "reduced";
+                  setMotionPref(next);
+                  toast.success(next === "reduced" ? "Reduced motion on" : "Full motion on");
+                }}
+              />
+              {motionPref !== "system" && (
+                <button
+                  onClick={() => { setMotionPref("system"); toast.success("Motion follows your device"); }}
+                  className="mt-2 text-xs font-medium text-primary"
+                >
+                  Use device setting
+                </button>
+              )}
+            </div>
           </GlassCard>
+
         </Section>
 
         {/* Localization */}

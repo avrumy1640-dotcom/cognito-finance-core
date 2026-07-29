@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { useReducedMotionPref } from "@/hooks/useReducedMotionPref";
+
 import {
   ArrowRight,
   ArrowUpRight,
@@ -83,7 +85,7 @@ const useStage = (): Stage => {
 };
 
 const PhoneFrame = ({ children }: { children: React.ReactNode }) => {
-  const reduceMotion = useReducedMotion();
+  const { reducedMotion: reduceMotion } = useReducedMotionPref();
   const stage = useStage();
 
   /* normalized pointer position, -0.5 .. 0.5 */
@@ -270,16 +272,20 @@ const ScreenHeader = ({ title, sub }: { title: string; sub: string }) => (
   </div>
 );
 
-const Bar = ({ pct, delay = 0 }: { pct: number; delay?: number }) => (
-  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-    <motion.div
-      initial={{ width: 0 }}
-      animate={{ width: `${pct}%` }}
-      transition={{ duration: 0.9, delay, ease: "easeOut" }}
-      className="gradient-lime h-full rounded-full"
-    />
-  </div>
-);
+const Bar = ({ pct, delay = 0 }: { pct: number; delay?: number }) => {
+  const { reducedMotion } = useReducedMotionPref();
+  return (
+    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+      <motion.div
+        initial={reducedMotion ? false : { width: 0 }}
+        animate={{ width: `${pct}%` }}
+        transition={reducedMotion ? { duration: 0 } : { duration: 0.9, delay, ease: "easeOut" }}
+        className="gradient-lime h-full rounded-full"
+      />
+    </div>
+  );
+};
+
 
 /* ---------------- slide screens ---------------- */
 
@@ -367,7 +373,9 @@ const EarlyPayMock = () => (
   </div>
 );
 
-const CreditMock = () => (
+const CreditMock = () => {
+  const { reducedMotion } = useReducedMotionPref();
+  return (
   <div className="space-y-2">
     <ScreenHeader sub="Credit builder" title="Your score" />
     <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
@@ -380,9 +388,9 @@ const CreditMock = () => (
           strokeWidth="9"
           strokeLinecap="round"
           strokeDasharray="157"
-          initial={{ strokeDashoffset: 157 }}
+          initial={reducedMotion ? false : { strokeDashoffset: 157 }}
           animate={{ strokeDashoffset: 46 }}
-          transition={{ duration: 1.1, ease: "easeOut" }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 1.1, ease: "easeOut" }}
         />
       </svg>
       <p className="text-balance-display -mt-4 text-[26px] leading-none">728</p>
@@ -408,7 +416,9 @@ const CreditMock = () => (
       </Row>
     ))}
   </div>
-);
+  );
+};
+
 
 const RewardsMock = () => (
   <div className="space-y-2">
@@ -557,6 +567,8 @@ const Intro = () => {
   const [index, setIndex] = useState(0);
   const [dir, setDir] = useState(1);
   const touchX = useRef<number | null>(null);
+  const { reducedMotion } = useReducedMotionPref();
+
 
   useEffect(() => {
     try { localStorage.setItem(INTRO_SEEN_KEY, "1"); } catch { /* ignore */ }
@@ -623,10 +635,11 @@ const Intro = () => {
               <motion.div
                 key={slide.id}
                 custom={dir}
-                initial={{ opacity: 0, x: dir * 40 }}
+                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, x: dir * 40 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: dir * -40 }}
-                transition={{ duration: 0.28, ease: "easeOut" }}
+                exit={reducedMotion ? { opacity: 0 } : { opacity: 0, x: dir * -40 }}
+                transition={reducedMotion ? { duration: 0.12, ease: "linear" } : { duration: 0.28, ease: "easeOut" }}
+
                 drag="x"
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.18}
