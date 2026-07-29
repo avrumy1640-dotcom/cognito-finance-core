@@ -161,6 +161,8 @@ const App = () => (
                 <Route path="audit" element={<RequireAdmin><AdminAuditLogs /></RequireAdmin>} />
                 <Route path="tickets" element={<AdminTickets />} />
                 <Route path="roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
+                <Route path="column" element={<RequireAdmin><AdminColumn /></RequireAdmin>} />
+
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
