@@ -145,7 +145,7 @@ async function createAccount(userId: string, entityId: string, kind: "checking" 
   const description = kind === "checking" ? "Everyday Checking" : "Savings";
   const acct = await column<any>("/bank-accounts", {
     method: "POST",
-    body: { entity_id: entityId, description, type: kind.toUpperCase() },
+    body: { entity_id: entityId, description },
   });
 
   // The default account number is created with the account; fall back to
