@@ -14,38 +14,53 @@ import { formatTxDate, txGroupLabel } from "@/lib/dates";
 
 const filterChips = ["All", "Card", "Transfers", "Deposits", "Bills", "P2P", "Pending", "Income", "Fees"];
 
+const PAGE_SIZE = 50;
+
 const ActivityPage = () => {
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
+  const [visible, setVisible] = useState(PAGE_SIZE);
   const navigate = useNavigate();
   const { transactions, dataStatus, dataError, retry } = useBank();
 
-  const filtered = transactions.filter((tx) => {
-    const matchesSearch =
-      !searchQuery ||
-      tx.merchant.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tx.category.toLowerCase().includes(searchQuery.toLowerCase());
+  // Filtering is memoised so a 10k-row ledger doesn't re-scan on every render.
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return transactions.filter((tx) => {
+      const matchesSearch =
+        !q ||
+        tx.merchant.toLowerCase().includes(q) ||
+        tx.category.toLowerCase().includes(q);
 
-    if (activeFilter === "All") return matchesSearch;
-    if (activeFilter === "Pending") return matchesSearch && tx.status === "pending";
-    if (activeFilter === "Income") return matchesSearch && tx.type === "credit";
-    if (activeFilter === "Card") return matchesSearch && tx.paymentMethod === "Debit Card";
-    if (activeFilter === "Transfers") return matchesSearch && tx.category === "Transfer";
-    if (activeFilter === "Deposits") return matchesSearch && tx.category === "Income";
-    if (activeFilter === "Bills") return matchesSearch && tx.category === "Bills";
-    if (activeFilter === "P2P") return matchesSearch && tx.category === "P2P";
-    return matchesSearch;
-  });
+      if (activeFilter === "All") return matchesSearch;
+      if (activeFilter === "Pending") return matchesSearch && tx.status === "pending";
+      if (activeFilter === "Income") return matchesSearch && tx.type === "credit";
+      if (activeFilter === "Card") return matchesSearch && tx.paymentMethod === "Debit Card";
+      if (activeFilter === "Transfers") return matchesSearch && tx.category === "Transfer";
+      if (activeFilter === "Deposits") return matchesSearch && tx.category === "Income";
+      if (activeFilter === "Bills") return matchesSearch && tx.category === "Bills";
+      if (activeFilter === "P2P") return matchesSearch && tx.category === "P2P";
+      return matchesSearch;
+    });
+  }, [transactions, searchQuery, activeFilter]);
 
-  // Group transactions
-  const groups: Record<string, typeof transactions> = {};
-  filtered.forEach((tx) => {
-    const key = txGroupLabel(tx.date);
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(tx);
-  });
+  // Reset the window whenever the result set changes.
+  useEffect(() => { setVisible(PAGE_SIZE); }, [searchQuery, activeFilter]);
+
+  const page = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
+
+  // Group only the rows we actually render.
+  const groups = useMemo(() => {
+    const g: Record<string, typeof transactions> = {};
+    page.forEach((tx) => {
+      const key = txGroupLabel(tx.date);
+      if (!g[key]) g[key] = [];
+      g[key].push(tx);
+    });
+    return g;
+  }, [page]);
 
   const rowsFor = () =>
     filtered.map((tx) => ({
