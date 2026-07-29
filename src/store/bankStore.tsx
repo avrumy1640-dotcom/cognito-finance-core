@@ -463,9 +463,12 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const runLiveTransfer = useCallback(
     async (label: string, args: import("@/lib/ledgerProvider").TransferArgs, successBody?: string) => {
       const id = `live-${label}-${Date.now()}`;
+      // Minted here, before the first attempt, so any retry replays the same
+      // provider Idempotency-Key instead of creating a second transfer.
+      const withRequestId = { ...args, requestId: args.requestId ?? crypto.randomUUID() };
       toast.loading(`${label}…`, { id });
       try {
-        const res = await ledgerProvider.transfer(args);
+        const res = await ledgerProvider.transfer(withRequestId);
         toast.success(`${label} submitted`, {
           id,
           description: successBody ? `${successBody} · ${res.status}` : `Status: ${res.status}`,
@@ -473,13 +476,13 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         await refreshLedger({ silent: true });
         return true;
       } catch (err) {
-        const reason = err instanceof Error ? err.message : "Please try again.";
-        toast.error(`${label} failed`, { id, description: reason });
+        toast.error(`${label} failed`, { id, description: friendlyProviderMessage(err) });
         return false;
       }
     },
     [refreshLedger],
   );
+
 
 
 
