@@ -8,6 +8,8 @@ export type Transaction = {
   amount: number;
   date: string;
   status: "posted" | "pending";
+  /** Raw lifecycle state from the banking partner, when known. */
+  providerStatus?: string;
   type: "debit" | "credit";
   paymentMethod: string;
   icon: string;

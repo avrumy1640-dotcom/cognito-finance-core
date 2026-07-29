@@ -495,6 +495,9 @@ async function snapshot(
       amount: (t.direction === "credit" ? 1 : -1) * (Number(t.amount_cents) / 100),
       date: t.occurred_at,
       status: ["completed", "settled", "posted"].includes(t.status) ? "posted" : "pending",
+      // The partner's real lifecycle state, surfaced verbatim so the UI can
+      // show "In review" / "Returned" instead of a flat "pending".
+      providerStatus: t.status,
       type: t.direction === "credit" ? "credit" : "debit",
       paymentMethod: t.transfer_type.toUpperCase(),
       account: t.bank_account_id,

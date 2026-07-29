@@ -18,6 +18,8 @@ export interface DemoTransaction {
   amount: number; // negative = debit, positive = credit
   date: string; // ISO
   status: DemoTxStatus;
+  /** Raw lifecycle state from the banking partner (e.g. "manual_review"). */
+  providerStatus?: string;
   type: "debit" | "credit";
   paymentMethod: string;
   icon: string;
