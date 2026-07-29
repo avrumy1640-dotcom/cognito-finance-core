@@ -373,7 +373,9 @@ const EarlyPayMock = () => (
   </div>
 );
 
-const CreditMock = () => (
+const CreditMock = () => {
+  const { reducedMotion } = useReducedMotionPref();
+  return (
   <div className="space-y-2">
     <ScreenHeader sub="Credit builder" title="Your score" />
     <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-center">
@@ -386,10 +388,12 @@ const CreditMock = () => (
           strokeWidth="9"
           strokeLinecap="round"
           strokeDasharray="157"
-          initial={{ strokeDashoffset: 157 }}
+          initial={reducedMotion ? false : { strokeDashoffset: 157 }}
           animate={{ strokeDashoffset: 46 }}
-          transition={{ duration: 1.1, ease: "easeOut" }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 1.1, ease: "easeOut" }}
         />
+      </svg>
+
       </svg>
       <p className="text-balance-display -mt-4 text-[26px] leading-none">728</p>
       <p className="mt-0.5 text-[8px] text-white/55">Very good · updated today</p>
