@@ -208,12 +208,15 @@ async function ensureEntity(userId: string) {
 
   // Sandbox entity. We deliberately do NOT forward a real SSN; the sandbox
   // accepts the documented test SSN and returns a verified person.
+  // `pep_status` is required by Column's person payload; we do not ask the
+  // customer a politically-exposed-person question yet, so "not_checked".
   const payload: Record<string, unknown> = {
     first_name: first,
     last_name: last,
     email,
     ssn: "123456789",
     date_of_birth: (kyc?.date_of_birth as string | undefined) ?? "1990-01-01",
+    pep_status: "not_checked",
     address: {
       line_1: kyc?.street || profile?.address_line1 || "1 Market St",
       city: kyc?.city || profile?.city || "San Francisco",
@@ -223,7 +226,11 @@ async function ensureEntity(userId: string) {
     },
   };
 
-  const created = await column<any>("/entities/person", { method: "POST", body: payload });
+  // One entity per user, forever — the key is the user id.
+  const created = await column<any>("/entities/person", {
+    method: "POST", body: payload, idempotencyKey: `entity-person-${userId}`,
+  });
+
   const { data: row, error } = await admin.from("column_entities").insert({
     user_id: userId,
     entity_id: created.id,
