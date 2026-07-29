@@ -206,7 +206,7 @@ const GoalsMock = () => (
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between text-[9.5px]">
                 <span className="truncate font-semibold">{name as string}</span>
-                <span className="text-white/60">
+                <span className="shrink-0 whitespace-nowrap text-white/60">
                   {cur as string} / {tgt as string}
                 </span>
               </div>
