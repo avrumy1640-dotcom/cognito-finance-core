@@ -105,12 +105,47 @@ const AdminProvider = () => {
           <RefreshCw size={14} /> Refresh
         </button>
         <button
+          onClick={() => void registerWebhook()}
+          disabled={busy}
+          className="h-9 px-3 rounded-lg border border-border text-xs flex items-center gap-1.5 disabled:opacity-50"
+        >
+          <Webhook size={14} /> Register webhook endpoint
+        </button>
+        <button
           onClick={() => setWipeOpen(true)}
           className="h-9 px-3 rounded-lg bg-destructive/10 text-destructive text-xs flex items-center gap-1.5"
         >
           <AlertTriangle size={14} /> Delete everything
         </button>
       </div>
+
+      <section className="mb-8 p-4 rounded-xl border border-border bg-card">
+        <h2 className="text-sm font-semibold text-foreground mb-1">Sandbox simulators</h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Fires real provider events against your own accounts so the unhappy paths
+          (return → webhook → notification) can be tested end to end.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {ACH_RETURNS.map((code) => (
+            <button
+              key={code}
+              disabled={busy}
+              onClick={() => void simulateReturn(code)}
+              className="h-9 px-3 rounded-lg border border-border text-xs flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Undo2 size={14} /> {code}
+            </button>
+          ))}
+          <button
+            disabled={busy}
+            onClick={() => void simulateWire()}
+            className="h-9 px-3 rounded-lg border border-border text-xs flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <ArrowDownToLine size={14} /> Simulate incoming wire ($500)
+          </button>
+        </div>
+      </section>
+
 
       {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
