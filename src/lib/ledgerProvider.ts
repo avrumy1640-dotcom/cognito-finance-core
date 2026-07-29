@@ -8,20 +8,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { DemoAccount, DemoLedger, DemoTransaction } from "@/lib/demoBank";
 
-const FLAG_KEY = "glassbank.dataSource";
-export type DataSource = "demo" | "live";
+// There is no mock/demo data source any more. Every session, for every user,
+// reads and writes through the banking partner. Promoting the app from the
+// sandbox to production is purely a matter of swapping the server-side
+// COLUMN_API_KEY from a `test_` key to a `live_` key — no code change here.
 
-/** Which ledger the app reads from. Defaults to the local demo ledger. */
-export function getDataSource(): DataSource {
-  if (typeof localStorage === "undefined") return "demo";
-  return localStorage.getItem(FLAG_KEY) === "live" ? "live" : "demo";
-}
-
-export function setDataSource(source: DataSource) {
-  localStorage.setItem(FLAG_KEY, source);
-}
-
-export const isLiveMode = () => getDataSource() === "live";
 
 export interface ProviderAccount {
   id: string;
@@ -139,6 +130,11 @@ export const ledgerProvider = {
   /** Uploads a KYC document and links it to the entity as verification evidence. */
   submitEvidence: (args: { dataUrl: string; documentType: string; purpose?: string }) =>
     call<{ documentId: string | null; entityId: string; status: string }>({ action: "submit_evidence", ...args }),
+  /** What the banking partner still needs from the signed-in user, if anything. */
+  myCompliance: () =>
+    call<{ entityId: string | null; verificationStatus: string | null; requirements: unknown[] }>({
+      action: "my_compliance",
+    }),
   adminList: () => call<Record<string, unknown>>({ action: "admin_list" }),
   adminLocal: () => call<Record<string, unknown>>({ action: "admin_local" }),
   adminCompliance: (entityId: string) => call<Record<string, unknown>>({ action: "admin_compliance", entityId }),

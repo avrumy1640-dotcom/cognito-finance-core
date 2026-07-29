@@ -44,11 +44,14 @@ const cents = (n: unknown) => (typeof n === "number" ? n : 0);
  * except another terminal state that arrived later.
  */
 const STATUS_RANK: Record<string, number> = {
-  initiated: 0, scheduled: 0, pending: 1, submitted: 2, manual_review: 2,
+  initiated: 0, scheduled: 0, pending: 1, pending_submission: 1,
+  manual_review: 2, submitted: 2,
   completed: 3, settled: 3, posted: 3,
-  returned: 4, canceled: 4, cancelled: 4, rejected: 4, failed: 4,
+  returned: 4, dishonored: 4, contested: 4, canceled: 4, cancelled: 4,
+  rejected: 4, failed: 4,
 };
 const rankOf = (s: string) => STATUS_RANK[s] ?? 1;
+
 
 /** True when the incoming event should be allowed to overwrite what we hold. */
 function shouldApply(prev: { status?: string; occurred_at?: string } | null, nextStatus: string, occurredAt?: string) {
@@ -79,10 +82,16 @@ async function notify(userId: string | null, args: { type: string; title: string
 
 async function handleEvent(type: string, data: any) {
   // --- entity / identity verification ------------------------------------
-  if (type.startsWith("entity.")) {
+  // `identity.verification.*` carries the same verdict shape as `entity.*`.
+  if (type.startsWith("entity.") || type.startsWith("identity.")) {
     const entityId = data?.id ?? data?.entity_id;
     if (!entityId) return "ignored: no entity id";
-    const status = data?.verification_status ?? (type.endsWith("verified") ? "verified" : "pending");
+    const tail = type.split(".").pop() ?? "";
+    const status = data?.verification_status
+      ?? (tail === "verified" || tail === "approved" ? "verified"
+        : tail === "denied" || tail === "rejected" ? "denied"
+        : tail === "manual_review" ? "manual_review" : "pending");
+
     // Out-of-order safety: a late "pending" must not undo a decided verdict.
     const { data: current } = await admin.from("column_entities")
       .select("verification_status").eq("entity_id", entityId).maybeSingle();
@@ -118,9 +127,31 @@ async function handleEvent(type: string, data: any) {
     return `entity ${entityId} → ${status}`;
   }
 
+  // --- ACH notification of change (NOC) -----------------------------------
+  // Not a status change: the RDFI is telling us the counterparty's routing or
+  // account number changed. We log it and tell the user, but never silently
+  // rewrite stored bank details.
+  if (type.endsWith(".noc") || type.includes("notification_of_change")) {
+    const t = data ?? {};
+    const transferId = t.id ?? t.transfer_id ?? "unknown";
+    const accId = t.bank_account_id ?? t.sender_bank_account_id;
+    const userId = await userForBankAccount(accId);
+    await notify(userId, {
+      type: "alert",
+      title: "Recipient bank details changed",
+      body: t.change_code
+        ? `The receiving bank returned a notification of change (${t.change_code}). Update the saved recipient before your next transfer.`
+        : "The receiving bank asked us to update the saved account details for this recipient.",
+      dedupe_key: `column-noc-${transferId}`,
+    });
+    console.log("ACH notification of change", JSON.stringify({ transferId, data: t }));
+    return `noc logged for transfer ${transferId}`;
+  }
+
   // --- ACH / book / wire transfer status ---------------------------------
   if (type.startsWith("ach.") || type.startsWith("book.") || type.startsWith("wire.")) {
     const kind = type.split(".")[0];
+
     const t = data ?? {};
     const transferId = t.id ?? t.transfer_id;
     if (!transferId) return "ignored: no transfer id";
@@ -178,15 +209,17 @@ async function handleEvent(type: string, data: any) {
     return `${kind} transfer ${transferId} → ${status}`;
   }
 
-  // --- account events, incl. overdraft ------------------------------------
+  // --- account events, incl. overdraft and freeze -------------------------
   if (type.startsWith("bank_account.") || type.startsWith("account.")) {
     const accId = data?.id ?? data?.bank_account_id;
     if (!accId) return "ignored: no account id";
     const overdrawn = type.includes("overdraft") || data?.is_overdrawn === true;
+    const frozen = type.includes("frozen") || data?.is_frozen === true;
+    const status = data?.is_closed ? "closed" : frozen ? "frozen" : "open";
     const { data: row } = await admin.from("column_bank_accounts").update({
       balances: data?.balances ?? {},
       is_overdrawn: overdrawn,
-      status: data?.is_closed ? "closed" : "open",
+      status,
     }).eq("bank_account_id", accId).select("user_id").maybeSingle();
     if (overdrawn && row?.user_id) {
       await notify(row.user_id, {
@@ -196,8 +229,17 @@ async function handleEvent(type: string, data: any) {
         dedupe_key: `column-overdraft-${accId}-${new Date().toISOString().slice(0, 10)}`,
       });
     }
-    return `account ${accId} updated${overdrawn ? " (overdrawn)" : ""}`;
+    if (frozen && row?.user_id) {
+      await notify(row.user_id, {
+        type: "alert",
+        title: "Your account has been frozen",
+        body: "Money movement is paused while our banking partner reviews the account. Contact support for help.",
+        dedupe_key: `column-frozen-${accId}`,
+      });
+    }
+    return `account ${accId} → ${status}${overdrawn ? " (overdrawn)" : ""}`;
   }
+
 
   return `unhandled event type ${type}`;
 }

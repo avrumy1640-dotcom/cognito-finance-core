@@ -11,6 +11,7 @@ import { Search, Download, ChevronRight, SlidersHorizontal, FileText } from "luc
 import { buildCsv, buildPdf, type ExportResult } from "@/lib/exports";
 import ExportPreviewModal from "@/components/exports/ExportPreviewModal";
 import { formatTxDate, txGroupLabel } from "@/lib/dates";
+import { transferStatusInfo, toneClass } from "@/lib/transferStatus";
 
 const filterChips = ["All", "Card", "Transfers", "Deposits", "Bills", "P2P", "Pending", "Income", "Fees"];
 
@@ -69,7 +70,7 @@ const ActivityPage = () => {
       Category: tx.category,
       Account: tx.account,
       Amount: tx.amount.toFixed(2),
-      Status: tx.status,
+      Status: transferStatusInfo(tx.providerStatus, tx.status).label,
       Type: tx.type,
     }));
 
@@ -249,9 +250,17 @@ const ActivityPage = () => {
                         <p className={`text-sm font-semibold ${tx.amount > 0 ? "text-success" : "text-foreground"}`}>
                           {tx.amount > 0 ? "+" : ""}${Math.abs(tx.amount).toFixed(2)}
                         </p>
-                        {tx.status === "pending" && (
-                          <span className="text-[10px] text-warning font-medium">Pending</span>
-                        )}
+                        {(() => {
+                          // Show the partner's real state, not a flat "pending".
+                          if (tx.status === "posted" && !tx.providerStatus) return null;
+                          const info = transferStatusInfo(tx.providerStatus, tx.status);
+                          if (info.tone === "success" && tx.status === "posted") return null;
+                          return (
+                            <span className={`text-[10px] font-medium ${toneClass[info.tone]}`}>
+                              {info.label}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <ChevronRight size={14} className="text-muted-foreground" />
                     </div>

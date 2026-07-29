@@ -18,6 +18,8 @@ export interface DemoTransaction {
   amount: number; // negative = debit, positive = credit
   date: string; // ISO
   status: DemoTxStatus;
+  /** Raw lifecycle state from the banking partner (e.g. "manual_review"). */
+  providerStatus?: string;
   type: "debit" | "credit";
   paymentMethod: string;
   icon: string;
@@ -296,117 +298,10 @@ export function generateLedger(userId: string, holderName: string, email?: strin
     },
   };
 
+  // The local store no longer fabricates money. Accounts open at zero and the
+  // transaction feed stays empty until the banking partner's ledger is synced
+  // in — there is no mock/demo data path any more.
   const transactions: DemoTransaction[] = [];
-  let txSeq = 0;
-  const nextId = () => `tx_${seed.toString(36)}_${(txSeq++).toString().padStart(4, "0")}`;
-
-  // Biweekly payroll credits into checking
-  for (let d = 88; d >= 0; d -= 14) {
-    transactions.push({
-      id: nextId(),
-      merchant: "Norven Health Payroll",
-      category: "Income",
-      amount: round2(4180 + rng() * 260),
-      date: isoDaysAgo(d, 9, 12),
-      status: "posted",
-      type: "credit",
-      paymentMethod: "Direct deposit",
-      icon: "💰",
-      account: checking.id,
-    });
-  }
-
-  // Monthly rent
-  for (let m = 2; m >= 0; m--) {
-    transactions.push({
-      id: nextId(),
-      merchant: "Hudson Yards Residences",
-      category: "Housing",
-      amount: -2450,
-      date: isoDaysAgo(m * 30 + 2, 8, 5),
-      status: "posted",
-      type: "debit",
-      paymentMethod: "Bill pay",
-      icon: "🏠",
-      account: checking.id,
-    });
-  }
-
-  // Everyday card spend
-  for (let d = 89; d >= 0; d--) {
-    const count = rng() < 0.55 ? 1 : rng() < 0.8 ? 2 : 0;
-    for (let i = 0; i < count; i++) {
-      const m = MERCHANTS[Math.floor(rng() * MERCHANTS.length)];
-      const amt = round2(m.min + rng() * (m.max - m.min));
-      transactions.push({
-        id: nextId(),
-        merchant: m.name,
-        category: m.category,
-        amount: -amt,
-        date: isoDaysAgo(d, 8 + Math.floor(rng() * 12), Math.floor(rng() * 59)),
-        status: d <= 1 && rng() < 0.5 ? "pending" : "posted",
-        type: "debit",
-        paymentMethod: "Glass Card",
-        icon: m.icon,
-        account: checking.id,
-      });
-    }
-  }
-
-  // Monthly savings sweeps
-  for (let m = 2; m >= 0; m--) {
-    const amt = round2(600 + rng() * 400);
-    transactions.push({
-      id: nextId(),
-      merchant: "Transfer to High-Yield Savings",
-      category: "Transfers",
-      amount: -amt,
-      date: isoDaysAgo(m * 30 + 5, 10, 30),
-      status: "posted",
-      type: "debit",
-      paymentMethod: "Internal transfer",
-      icon: "🔁",
-      account: checking.id,
-    });
-    transactions.push({
-      id: nextId(),
-      merchant: "Transfer from Everyday Checking",
-      category: "Transfers",
-      amount: amt,
-      date: isoDaysAgo(m * 30 + 5, 10, 30),
-      status: "posted",
-      type: "credit",
-      paymentMethod: "Internal transfer",
-      icon: "🔁",
-      account: savings.id,
-    });
-    transactions.push({
-      id: nextId(),
-      merchant: "Interest earned",
-      category: "Income",
-      amount: round2(48 + rng() * 26),
-      date: isoDaysAgo(m * 30 + 1, 6, 0),
-      status: "posted",
-      type: "credit",
-      paymentMethod: "Interest",
-      icon: "✨",
-      account: savings.id,
-    });
-  }
-
-  transactions.sort((a, b) => +new Date(b.date) - +new Date(a.date));
-
-  // Balances: start from an opening balance and apply the ledger.
-  const sum = (id: string) => transactions.filter((t) => t.account === id).reduce((s, t) => s + t.amount, 0);
-  const chkOpening = 4200;
-  const savOpening = 18500;
-  checking.currentBalance = round2(chkOpening + sum(checking.id));
-  checking.pendingAmount = round2(
-    Math.abs(transactions.filter((t) => t.account === checking.id && t.status === "pending").reduce((s, t) => s + t.amount, 0)),
-  );
-  checking.availableBalance = round2(checking.currentBalance - checking.pendingAmount);
-  savings.currentBalance = round2(savOpening + sum(savings.id));
-  savings.availableBalance = savings.currentBalance;
 
   const expMonth = String(((seed % 12) + 1)).padStart(2, "0");
   const expYear = String(29 + (seed % 2));

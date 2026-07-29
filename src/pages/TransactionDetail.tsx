@@ -3,6 +3,7 @@ import { formatTxDate } from "@/lib/dates";
 import { useParams, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import GlassCard from "@/components/glass/GlassCard";
+import { transferStatusInfo } from "@/lib/transferStatus";
 import { useBank } from "@/store/bankStore";
 import { disputeReasonLabel, type DisputeReason } from "@/lib/demoBank";
 import { toast } from "sonner";
@@ -93,7 +94,9 @@ const TransactionDetail = () => {
           </p>
           <div className="flex items-center justify-center gap-2 mt-2">
             <div className={`w-2 h-2 rounded-full ${tx.status === "pending" ? "bg-warning" : "bg-success"}`} />
-            <span className="text-sm text-muted-foreground capitalize">{tx.status}</span>
+            <span className="text-sm text-muted-foreground">
+              {transferStatusInfo(tx.providerStatus, tx.status).label}
+            </span>
           </div>
         </motion.div>
 
@@ -104,7 +107,8 @@ const TransactionDetail = () => {
             { label: "Category", value: tx.category },
             { label: "Payment Method", value: tx.paymentMethod },
             { label: "Account", value: tx.account },
-            { label: "Status", value: tx.status.charAt(0).toUpperCase() + tx.status.slice(1) },
+            { label: "Status", value: transferStatusInfo(tx.providerStatus, tx.status).label },
+            { label: "What this means", value: transferStatusInfo(tx.providerStatus, tx.status).hint },
             { label: "Transaction ID", value: tx.id.toUpperCase() },
           ].map((row) => (
             <div key={row.label} className="flex items-center justify-between">
