@@ -44,11 +44,14 @@ const cents = (n: unknown) => (typeof n === "number" ? n : 0);
  * except another terminal state that arrived later.
  */
 const STATUS_RANK: Record<string, number> = {
-  initiated: 0, scheduled: 0, pending: 1, submitted: 2, manual_review: 2,
+  initiated: 0, scheduled: 0, pending: 1, pending_submission: 1,
+  manual_review: 2, submitted: 2,
   completed: 3, settled: 3, posted: 3,
-  returned: 4, canceled: 4, cancelled: 4, rejected: 4, failed: 4,
+  returned: 4, dishonored: 4, contested: 4, canceled: 4, cancelled: 4,
+  rejected: 4, failed: 4,
 };
 const rankOf = (s: string) => STATUS_RANK[s] ?? 1;
+
 
 /** True when the incoming event should be allowed to overwrite what we hold. */
 function shouldApply(prev: { status?: string; occurred_at?: string } | null, nextStatus: string, occurredAt?: string) {
