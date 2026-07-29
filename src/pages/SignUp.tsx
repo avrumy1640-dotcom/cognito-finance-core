@@ -134,6 +134,11 @@ const SignUp = () => {
 
   return (
     <div className="min-h-dvh bg-background flex flex-col">
+      <Seo
+        title="Create your Glass Bank account"
+        description="Open a Glass Bank account in minutes — instant transfers, smart cards, savings goals, and spending insights."
+        path="/signup"
+      />
       <button
         onClick={() => navigate("/welcome")}
         className="absolute top-6 left-6 flex items-center gap-1 text-sm text-muted-foreground"
