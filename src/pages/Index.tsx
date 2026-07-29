@@ -261,7 +261,7 @@ const HomePage = () => {
         {/* Account Cards */}
         {dataStatus !== "error" && (
         <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
-          <GlassCard onClick={() => navigate("/account/checking")} className="flex items-center justify-between">
+          <GlassCard onClick={() => navigate("/account/checking")} className="glow-surface flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
                 <Wallet size={18} className="text-primary-foreground" />
