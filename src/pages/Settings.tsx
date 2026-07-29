@@ -381,9 +381,8 @@ const Settings = () => {
           </GlassCard>
         </Section>
 
-        <p className="text-center text-xs text-muted-foreground pt-2">
-          Glass Bank v2.1.0 · Build 2026.03
-        </p>
+        <DevDataSourceMenu />
+
       </div>
     </AppLayout>
   );
