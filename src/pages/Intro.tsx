@@ -633,10 +633,11 @@ const Intro = () => {
               <motion.div
                 key={slide.id}
                 custom={dir}
-                initial={{ opacity: 0, x: dir * 40 }}
+                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, x: dir * 40 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: dir * -40 }}
-                transition={{ duration: 0.28, ease: "easeOut" }}
+                exit={reducedMotion ? { opacity: 0 } : { opacity: 0, x: dir * -40 }}
+                transition={reducedMotion ? { duration: 0.12, ease: "linear" } : { duration: 0.28, ease: "easeOut" }}
+
                 drag="x"
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.18}
