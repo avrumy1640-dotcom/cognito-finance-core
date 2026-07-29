@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { RefreshCw, Trash2, AlertTriangle } from "lucide-react";
+import { RefreshCw, Trash2, AlertTriangle, Webhook, Undo2, ArrowDownToLine } from "lucide-react";
 import { ledgerProvider, getDataSource, setDataSource, type DataSource } from "@/lib/ledgerProvider";
 import { AdminHeader, AdminPage } from "./AdminShell";
 import ConfirmDialog from "@/components/glass/ConfirmDialog";
@@ -20,12 +20,59 @@ const RESOURCES: Array<{ key: keyof Listing; resource: string; label: string }> 
   { key: "webhookEndpoints", resource: "webhook-endpoint", label: "Webhook endpoints" },
 ];
 
+const ACH_RETURNS = ["RETURN_NSF", "RETURN_ACCOUNT_CLOSED", "RETURN_STOP_PAYMENT", "RETURN_UNAUTH"] as const;
+
 const AdminProvider = () => {
   const [listing, setListing] = useState<Listing | null>(null);
   const [status, setStatus] = useState<{ sandbox: boolean; configured: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [wipeOpen, setWipeOpen] = useState(false);
   const [source, setSource] = useState<DataSource>(getDataSource());
+
+  const registerWebhook = async () => {
+    setBusy(true);
+    const id = toast.loading("Registering webhook endpoint…");
+    try {
+      const res = await ledgerProvider.adminRegisterWebhook();
+      toast.success(res.created ? "Webhook endpoint registered" : "Endpoint already registered", {
+        id,
+        description: res.url,
+      });
+      void load();
+    } catch (e) {
+      toast.error("Could not register webhook", { id, description: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const simulateReturn = async (code: string) => {
+    setBusy(true);
+    const id = toast.loading(`Sending ACH that will return as ${code}…`);
+    try {
+      const res = await ledgerProvider.adminSimulateAchReturn(code, 15);
+      toast.success("Simulated ACH sent", { id, description: `${res.transferId} · ${res.status}` });
+    } catch (e) {
+      toast.error("Simulation failed", { id, description: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const simulateWire = async () => {
+    setBusy(true);
+    const id = toast.loading("Simulating incoming wire…");
+    try {
+      const res = await ledgerProvider.adminSimulateIncomingWire(500);
+      toast.success("Incoming wire simulated", { id, description: res.transferId ?? res.status });
+    } catch (e) {
+      toast.error("Simulation failed", { id, description: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,12 +152,47 @@ const AdminProvider = () => {
           <RefreshCw size={14} /> Refresh
         </button>
         <button
+          onClick={() => void registerWebhook()}
+          disabled={busy}
+          className="h-9 px-3 rounded-lg border border-border text-xs flex items-center gap-1.5 disabled:opacity-50"
+        >
+          <Webhook size={14} /> Register webhook endpoint
+        </button>
+        <button
           onClick={() => setWipeOpen(true)}
           className="h-9 px-3 rounded-lg bg-destructive/10 text-destructive text-xs flex items-center gap-1.5"
         >
           <AlertTriangle size={14} /> Delete everything
         </button>
       </div>
+
+      <section className="mb-8 p-4 rounded-xl border border-border bg-card">
+        <h2 className="text-sm font-semibold text-foreground mb-1">Sandbox simulators</h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Fires real provider events against your own accounts so the unhappy paths
+          (return → webhook → notification) can be tested end to end.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {ACH_RETURNS.map((code) => (
+            <button
+              key={code}
+              disabled={busy}
+              onClick={() => void simulateReturn(code)}
+              className="h-9 px-3 rounded-lg border border-border text-xs flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Undo2 size={14} /> {code}
+            </button>
+          ))}
+          <button
+            disabled={busy}
+            onClick={() => void simulateWire()}
+            className="h-9 px-3 rounded-lg border border-border text-xs flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <ArrowDownToLine size={14} /> Simulate incoming wire ($500)
+          </button>
+        </div>
+      </section>
+
 
       {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 

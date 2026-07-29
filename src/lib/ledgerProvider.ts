@@ -143,6 +143,20 @@ export const ledgerProvider = {
   adminLocal: () => call<Record<string, unknown>>({ action: "admin_local" }),
   adminCompliance: (entityId: string) => call<Record<string, unknown>>({ action: "admin_compliance", entityId }),
   adminDelete: (resource: string, id: string) => call<unknown>({ action: "admin_delete", resource, id }),
+  /** Registers this deployment's webhook receiver with the provider (idempotent). */
+  adminRegisterWebhook: () =>
+    call<{ created: boolean; url: string; endpoint: Record<string, unknown> }>({ action: "admin_register_webhook" }),
+  /** Sandbox unhappy path: forces an ACH return of the given kind. */
+  adminSimulateAchReturn: (receiverName: string, amount?: number) =>
+    call<{ transferId: string; status: string; expectedReturn: string }>({
+      action: "admin_simulate_ach_return", receiverName, amount,
+    }),
+  /** Sandbox: pushes an incoming wire into the caller's checking account. */
+  adminSimulateIncomingWire: (amount?: number) =>
+    call<{ transferId: string | null; status: string; amount: number }>({
+      action: "admin_simulate_incoming_wire", amount,
+    }),
+
   adminWipe: (includeWebhooks = false) =>
     call<{ wiped: number; results: Array<{ resource: string; id: string; ok: boolean; error?: string }> }>({
       action: "admin_wipe",
