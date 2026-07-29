@@ -63,7 +63,7 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
         <div className="absolute -left-[3px] top-[156px] h-9 w-[3px] rounded-l-sm bg-gradient-to-b from-zinc-300 to-zinc-500" />
         <div className="absolute -right-[3px] top-[132px] h-14 w-[3px] rounded-r-sm bg-gradient-to-b from-zinc-300 to-zinc-500" />
 
-        <div className="relative overflow-hidden rounded-[2.35rem] bg-[hsl(224_48%_5%)]">
+        <div className="relative overflow-hidden rounded-[2.35rem] bg-[hsl(224_48%_5%)] [clip-path:inset(0_round_2.35rem)] [isolation:isolate]">
           {/* dynamic island */}
           <div className="absolute left-1/2 top-2.5 z-20 h-[18px] w-[74px] -translate-x-1/2 rounded-full bg-black shadow-[inset_0_0_0_1px_hsl(0_0%_100%/0.06)]">
             <span className="absolute right-2.5 top-1/2 h-[7px] w-[7px] -translate-y-1/2 rounded-full bg-[hsl(224_30%_18%)] ring-1 ring-white/10" />
