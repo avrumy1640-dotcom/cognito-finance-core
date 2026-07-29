@@ -28,7 +28,7 @@ import { COUNTRIES, US_STATES } from "@/lib/countries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useKyc } from "@/hooks/useKyc";
-import { isLiveMode, ledgerProvider } from "@/lib/ledgerProvider";
+import { ledgerProvider } from "@/lib/ledgerProvider";
 import { SANDBOX_KYC, SANDBOX_OUTCOMES } from "@/lib/sandboxKyc";
 
 const ID_TYPE_MAP = { passport: 1, national_id: 2, drivers_license: 3 } as const;
@@ -137,7 +137,8 @@ const VerifyIdentity = () => {
   const dobMax = useMemo(maxDobString, []);
   // Sandbox mode: never solicit real identity details — the upstream sandbox
   // only accepts its documented test values.
-  const sandbox = useMemo(() => isLiveMode(), []);
+  // Always on the banking partner — there is no mock path.
+  const sandbox = true;
 
   const applySandbox = (lastName = SANDBOX_KYC.legal_last_name) => {
     setFieldErrors({});

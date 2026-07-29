@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RefreshCw, Trash2, AlertTriangle, Webhook, Undo2, ArrowDownToLine } from "lucide-react";
-import { ledgerProvider, getDataSource, setDataSource, type DataSource } from "@/lib/ledgerProvider";
+import { ledgerProvider } from "@/lib/ledgerProvider";
 import { AdminHeader, AdminPage } from "./AdminShell";
 import ConfirmDialog from "@/components/glass/ConfirmDialog";
 
@@ -28,7 +28,6 @@ const AdminProvider = () => {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [wipeOpen, setWipeOpen] = useState(false);
-  const [source, setSource] = useState<DataSource>(getDataSource());
 
   const registerWebhook = async () => {
     setBusy(true);
@@ -130,24 +129,6 @@ const AdminProvider = () => {
         >
           {status?.configured ? (status.sandbox ? "Sandbox key (test_)" : "NON-SANDBOX KEY") : "No API key set"}
         </span>
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          Data source
-          <select
-            value={source}
-            onChange={(e) => {
-              const next = e.target.value as DataSource;
-              setSource(next);
-              setDataSource(next);
-              toast.success(`Switched to ${next === "live" ? "provider sandbox" : "local demo ledger"}`, {
-                description: "Reload the app to re-hydrate balances.",
-              });
-            }}
-            className="h-9 rounded-lg bg-card border border-border px-2 text-foreground"
-          >
-            <option value="demo">Local demo ledger</option>
-            <option value="live">Provider sandbox</option>
-          </select>
-        </label>
         <button onClick={() => void load()} className="h-9 px-3 rounded-lg border border-border text-xs flex items-center gap-1.5">
           <RefreshCw size={14} /> Refresh
         </button>

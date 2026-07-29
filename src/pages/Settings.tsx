@@ -22,7 +22,6 @@ import {
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import SharedToggleRow from "@/components/glass/ToggleRow";
-import DevDataSourceMenu from "@/components/dev/DevDataSourceMenu";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -383,7 +382,7 @@ const Settings = () => {
           </GlassCard>
         </Section>
 
-        <DevDataSourceMenu />
+        <p className="pt-2 text-center text-xs text-muted-foreground select-none">Glass Bank v2.1.0 · Build 2026.03</p>
 
       </div>
     </AppLayout>
