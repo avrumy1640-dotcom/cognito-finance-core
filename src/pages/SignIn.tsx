@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -7,6 +7,30 @@ import { supabase } from "@/integrations/supabase/client";
 import Seo from "@/components/Seo";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Client-side brute-force damper. The server enforces its own rate limits;
+// this stops a local attacker from firing hundreds of guesses per minute and
+// gives honest users clear feedback instead of an opaque 429.
+const THROTTLE_KEY = "glassbank.signin.throttle";
+const MAX_ATTEMPTS = 5;
+const LOCK_MS = 60_000;
+
+type Throttle = { fails: number; until: number };
+
+function readThrottle(): Throttle {
+  try {
+    const raw = localStorage.getItem(THROTTLE_KEY);
+    if (!raw) return { fails: 0, until: 0 };
+    const t = JSON.parse(raw) as Throttle;
+    return { fails: Number(t.fails) || 0, until: Number(t.until) || 0 };
+  } catch {
+    return { fails: 0, until: 0 };
+  }
+}
+
+function writeThrottle(t: Throttle) {
+  try { localStorage.setItem(THROTTLE_KEY, JSON.stringify(t)); } catch { /* storage disabled */ }
+}
 
 function humanizeSignInError(msg: string): { text: string; unconfirmed?: boolean; rateLimited?: boolean } {
   const m = msg.toLowerCase();
