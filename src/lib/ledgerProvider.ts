@@ -119,7 +119,7 @@ export interface TransferArgs {
 export const ledgerProvider = {
   status: () => call<{ sandbox: boolean; configured: boolean; entity: unknown }>({ action: "status" }),
   diagnose: () =>
-    call<{ configured: boolean; sandbox: boolean; webhookSecret: boolean; reachable: boolean; entityCount?: number; error?: string }>({
+    call<{ configured: boolean; sandbox: boolean; webhookSecret: boolean; reachable: boolean; entityCount?: number; platformId?: string | null; error?: string }>({
       action: "diagnose",
     }),
   /** Creates the sandbox entity + bank account if they don't exist yet. */
