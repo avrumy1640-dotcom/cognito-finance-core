@@ -27,7 +27,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBank } from "@/store/bankStore";
 import { useTheme } from "@/hooks/useTheme";
 import type { Theme } from "@/lib/theme";
+import { useReducedMotionPref } from "@/hooks/useReducedMotionPref";
 import {
+
   biometricLabel,
   getBiometricKind,
   isAppLockEnabled,
