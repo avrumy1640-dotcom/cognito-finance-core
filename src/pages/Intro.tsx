@@ -273,8 +273,8 @@ const Intro = () => {
 
       <header className="flex items-center justify-between px-6 pt-6">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl gradient-hero border border-border/60">
-            <span className="font-display text-sm font-bold text-foreground">G</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary">
+            <span className="font-display text-sm font-bold text-primary-foreground">G</span>
           </div>
           <span className="font-display text-sm font-semibold text-foreground">Glass Bank</span>
         </div>
