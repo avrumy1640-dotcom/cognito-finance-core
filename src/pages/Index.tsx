@@ -290,7 +290,7 @@ const HomePage = () => {
           </GlassCard>
 
           {savings && (
-            <GlassCard onClick={() => navigate("/account/savings")} className="flex items-center justify-between">
+            <GlassCard onClick={() => navigate("/account/savings")} className="glow-surface flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl gradient-savings flex items-center justify-center">
                   <TrendingUp size={18} className="text-primary-foreground" />
