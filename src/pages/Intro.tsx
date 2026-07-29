@@ -272,16 +272,20 @@ const ScreenHeader = ({ title, sub }: { title: string; sub: string }) => (
   </div>
 );
 
-const Bar = ({ pct, delay = 0 }: { pct: number; delay?: number }) => (
-  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-    <motion.div
-      initial={{ width: 0 }}
-      animate={{ width: `${pct}%` }}
-      transition={{ duration: 0.9, delay, ease: "easeOut" }}
-      className="gradient-lime h-full rounded-full"
-    />
-  </div>
-);
+const Bar = ({ pct, delay = 0 }: { pct: number; delay?: number }) => {
+  const { reducedMotion } = useReducedMotionPref();
+  return (
+    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+      <motion.div
+        initial={reducedMotion ? false : { width: 0 }}
+        animate={{ width: `${pct}%` }}
+        transition={reducedMotion ? { duration: 0 } : { duration: 0.9, delay, ease: "easeOut" }}
+        className="gradient-lime h-full rounded-full"
+      />
+    </div>
+  );
+};
+
 
 /* ---------------- slide screens ---------------- */
 
