@@ -1,6 +1,8 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import type { Transaction } from "@/types/transaction";
+import { columnClient, isColumnMode, mergeColumnIntoLedger } from "@/lib/columnClient";
+
 import {
   demoBank,
   detectPayroll,
