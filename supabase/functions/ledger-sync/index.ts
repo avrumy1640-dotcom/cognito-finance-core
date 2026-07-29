@@ -456,6 +456,41 @@ async function doTransfer(userId: string, body: any) {
   throw new Error(`Unsupported transfer kind "${kind}"`);
 }
 
+/**
+ * Sandbox-only webhook self-test. Signs a synthetic event with the same secret
+ * our receiver verifies against and posts it to the receiver, so we can prove
+ * the end-to-end webhook path works. Scoped to the caller's own entity, and
+ * refuses to run against anything but a sandbox key.
+ */
+async function testWebhook(userId: string) {
+  assertSandboxKey();
+  const secret = Deno.env.get("COLUMN_WEBHOOK_SECRET") ?? "";
+  if (!secret) throw new Error("COLUMN_WEBHOOK_SECRET is not configured");
+  const { data: entity } = await admin.from("column_entities")
+    .select("entity_id").eq("user_id", userId).maybeSingle();
+  if (!entity) throw new Error("No entity to test against");
+
+  const body = JSON.stringify({
+    id: `evt_selftest_${crypto.randomUUID()}`,
+    type: "entity.verified",
+    data: { id: entity.entity_id, verification_status: "verified", self_test: true },
+  });
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  const signature = Array.from(new Uint8Array(sigBuf))
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/column-webhook`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Column-Signature": signature },
+    body,
+  });
+  return { status: res.status, response: await res.json().catch(() => null) };
+}
+
 /** Connectivity probe — proves the credentials work without mutating anything. */
 async function diagnose() {
   const out: Record<string, unknown> = {
@@ -591,6 +626,8 @@ Deno.serve(async (req) => {
       }
       case "diagnose":
         return json(await diagnose());
+      case "test_webhook":
+        return json(await testWebhook(user.id));
       case "provision":
         return json(await snapshot(user.id, { provision: true }));
       case "sync":
