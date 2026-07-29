@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import type { Transaction } from "@/types/transaction";
-import { ledgerProvider, isLiveMode, mergeProviderIntoLedger, friendlyProviderMessage } from "@/lib/ledgerProvider";
+import { ledgerProvider, mergeProviderIntoLedger, friendlyProviderMessage } from "@/lib/ledgerProvider";
 
 import {
   demoBank,
@@ -408,21 +408,19 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
       let ledger = await demoBank.load(user.id, holder, user.email ?? undefined);
 
-      // Feature-flagged data-layer swap. In live mode the provider is the ONLY
-      // source of truth: a failed call raises a real error state rather than
+      // The banking partner is the ONLY source of truth for balances and
+      // transactions. A failed call raises a real error state rather than
       // quietly showing stale or simulated numbers.
-      if (isLiveMode()) {
-        const snap = await ledgerProvider.sync({ limit: liveTxWindowRef.current });
-        setHasMoreTransactions(!!snap.transactionsHasMore);
-        if (!snap.provisioned) {
-          setDataError(
-            "No live account yet. Complete identity verification to have your bank account opened with our banking partner.",
-          );
-          setDataStatus("error");
-          return;
-        }
-        ledger = mergeProviderIntoLedger(ledger, snap);
+      const snap = await ledgerProvider.sync({ limit: liveTxWindowRef.current });
+      setHasMoreTransactions(!!snap.transactionsHasMore);
+      if (!snap.provisioned) {
+        setDataError(
+          "No bank account yet. Complete identity verification to have your account opened with our banking partner.",
+        );
+        setDataStatus("error");
+        return;
       }
+      ledger = mergeProviderIntoLedger(ledger, snap);
 
 
       await applyLedger(ledger);
@@ -436,7 +434,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   }, [applyLedger]);
 
   const loadMoreTransactions = useCallback(async () => {
-    if (!isLiveMode() || !hasMoreTransactions || loadingMoreTransactions) return;
+    if (!hasMoreTransactions || loadingMoreTransactions) return;
     setLoadingMoreTransactions(true);
     liveTxWindowRef.current += LIVE_TX_PAGE;
     try {
@@ -461,7 +459,6 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   // to them and re-hydrate the UI the moment our banking partner tells us
   // something changed — no manual refresh required.
   useEffect(() => {
-    if (!isLiveMode()) return;
     const channel = supabase
       .channel("ledger-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "column_bank_accounts" },
