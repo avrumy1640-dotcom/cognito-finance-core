@@ -32,6 +32,7 @@ import SignUp from "./pages/SignUp";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyIdentity from "./pages/VerifyIdentity";
 import Welcome from "./pages/Welcome";
+import Intro from "./pages/Intro";
 import VerifyEmail from "./pages/VerifyEmail";
 import MfaChallenge from "./pages/MfaChallenge";
 import OAuthConsent from "./pages/OAuthConsent";
@@ -94,6 +95,7 @@ const App = () => (
           <AppLock />
           <BrowserRouter>
             <Routes>
+              <Route path="/intro" element={<Intro />} />
               <Route path="/welcome" element={<Welcome />} />
               <Route path="/login" element={<SignIn />} />
               <Route path="/signup" element={<SignUp />} />
