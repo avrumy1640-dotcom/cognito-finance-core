@@ -20,7 +20,7 @@ const AdminFees = () => {
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
-    const { data } = await supabase.from("fee_config").select("*").order("key");
+    const { data } = await supabase.from("fee_config").select("*").order("key").limit(200);
     setRows((data ?? []) as Fee[]);
     setLoading(false);
   };

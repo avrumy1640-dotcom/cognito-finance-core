@@ -25,7 +25,10 @@ const AdminCustomers = () => {
         .select("user_id, email, preferred_name, phone, citizenship, created_at")
         .order("created_at", { ascending: false })
         .limit(500);
-      const { data: kyc } = await supabase.from("kyc_profiles").select("user_id, status");
+      const { data: kyc } = await supabase
+        .from("kyc_profiles")
+        .select("user_id, status")
+        .limit(1000);
       const kycMap = new Map((kyc ?? []).map((k) => [k.user_id, k.status]));
       setRows(
         (profiles ?? []).map((p) => ({ ...p, kyc_status: kycMap.get(p.user_id) ?? "unverified" }))

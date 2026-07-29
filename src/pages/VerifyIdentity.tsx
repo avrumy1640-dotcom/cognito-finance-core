@@ -28,6 +28,8 @@ import { COUNTRIES, US_STATES } from "@/lib/countries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useKyc } from "@/hooks/useKyc";
+import { isLiveMode } from "@/lib/ledgerProvider";
+import { SANDBOX_KYC, SANDBOX_OUTCOMES } from "@/lib/sandboxKyc";
 
 const ID_TYPE_MAP = { passport: 1, national_id: 2, drivers_license: 3 } as const;
 
@@ -133,6 +135,15 @@ const VerifyIdentity = () => {
   const footerRef = useRef<HTMLDivElement>(null);
   const [footerH, setFooterH] = useState(120);
   const dobMax = useMemo(maxDobString, []);
+  // Sandbox mode: never solicit real identity details — the upstream sandbox
+  // only accepts its documented test values.
+  const sandbox = useMemo(() => isLiveMode(), []);
+
+  const applySandbox = (lastName = SANDBOX_KYC.legal_last_name) => {
+    setFieldErrors({});
+    setForm((f) => ({ ...f, ...SANDBOX_KYC, legal_last_name: lastName, password: f.password }));
+    toast.success(`Sandbox test data loaded (${lastName})`);
+  };
 
   // Track the sticky footer's live height so content padding always clears it.
   useEffect(() => {
@@ -698,6 +709,27 @@ const VerifyIdentity = () => {
             <h1 className="text-[26px] font-display font-bold text-foreground leading-tight tracking-tight mb-6">
               {current.title}
             </h1>
+            {sandbox && (
+              <div className="mb-5 rounded-xl border border-primary/30 bg-primary/5 p-3">
+                <p className="text-xs font-semibold text-primary">Sandbox test mode</p>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Do not enter real personal details. Only the test values below are accepted
+                  while the app is connected to the sandbox ledger.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {SANDBOX_OUTCOMES.map((o) => (
+                    <button
+                      key={o.label}
+                      type="button"
+                      onClick={() => applySandbox(o.lastName)}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-primary/15 text-primary active:scale-95 transition-transform"
+                    >
+                      Fill: {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {current.render(fieldErrors)}
           </motion.div>
         </AnimatePresence>
