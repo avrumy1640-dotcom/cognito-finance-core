@@ -144,7 +144,7 @@ const HomePage = () => {
               <Skeleton className="h-7 w-40" />
             ) : (
               <h1 className="text-[26px] font-display font-bold tracking-tight text-foreground leading-tight truncate">
-                {displayName || "there"}
+                Dashboard — {displayName || "there"}
               </h1>
             )}
           </div>
