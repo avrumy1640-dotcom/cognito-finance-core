@@ -361,7 +361,7 @@ async function syncTransfers(
 
   // Select-back is paged (load-more), not a hard cap, so the Activity feed can
   // walk the full history the same way the rest of the app paginates.
-  const limit = Math.min(Math.max(Number(page.limit) || TX_PAGE_SIZE, 1), 200);
+  const limit = Math.min(Math.max(Number(page.limit) || TX_PAGE_SIZE, 1), 500);
   const offset = Math.max(Number(page.offset) || 0, 0);
   const { data, count } = await admin
     .from("column_transfers").select("*", { count: "exact" }).eq("user_id", userId)
