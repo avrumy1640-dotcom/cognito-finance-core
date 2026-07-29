@@ -285,7 +285,8 @@ const CardsPage = () => {
 
         {/* Spend & trust chips */}
         <div className="grid grid-cols-2 gap-2">
-          <GlassCard className="py-3">
+          <GlassCard className="glow-surface py-3">
+
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Month-to-date</p>
             <p className="text-lg font-display font-bold text-foreground mt-1">{formatCurrency(monthSpend)}</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">Debit card spend</p>
