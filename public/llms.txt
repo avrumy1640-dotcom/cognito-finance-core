@@ -1,0 +1,9 @@
+# Glass Bank
+
+> Glass Bank is a premium personal banking app — instant transfers, smart cards, savings goals, spending insights, and early paycheck access.
+
+Most of the product lives behind authentication. The pages below are the public entry points.
+
+## Pages
+
+- [Welcome](/welcome): What Glass Bank is and how to get started.
