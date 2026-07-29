@@ -68,7 +68,7 @@
     --gradient-accent: linear-gradient(135deg, hsl(82 92% 62%), hsl(72 82% 56%));
     --gradient-lime: linear-gradient(135deg, hsl(82 92% 62%), hsl(96 78% 58%));
     --gradient-navy: linear-gradient(135deg, hsl(224 48% 6%), hsl(224 38% 18%));
-    --gradient-card-face: linear-gradient(135deg, hsl(224 48% 6%) 0%, hsl(224 40% 14%) 45%, hsl(224 34% 20%) 100%);
+    --gradient-card-face: linear-gradient(135deg, hsl(224 48% 6%) 0%, hsl(224 40% 14%) 42%, hsl(150 40% 20%) 78%, hsl(82 70% 40%) 130%);
 
     --font-display: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-serif: 'Instrument Serif', 'Cormorant Garamond', Georgia, serif;
@@ -132,7 +132,7 @@
     --gradient-card: linear-gradient(145deg, hsl(224 36% 11% / 0.92), hsl(224 36% 8% / 0.65));
     --gradient-savings: linear-gradient(135deg, hsl(224 42% 6%) 0%, hsl(224 34% 14%) 60%, hsl(82 82% 48%) 140%);
     --gradient-navy: linear-gradient(135deg, hsl(224 48% 4%), hsl(224 34% 16%));
-    --gradient-card-face: linear-gradient(135deg, hsl(224 50% 4%) 0%, hsl(224 40% 10%) 45%, hsl(224 32% 16%) 100%);
+    --gradient-card-face: linear-gradient(135deg, hsl(224 50% 4%) 0%, hsl(224 40% 10%) 42%, hsl(150 38% 16%) 78%, hsl(82 68% 34%) 130%);
 
     --sidebar-background: 224 36% 8%;
     --sidebar-foreground: 36 30% 94%;
@@ -280,7 +280,7 @@
     inset: 0;
     border-radius: inherit;
     background:
-      radial-gradient(120% 80% at 85% 15%, hsl(82 92% 62% / 0.22), transparent 55%),
+      radial-gradient(120% 85% at 88% 12%, hsl(82 92% 62% / 0.34), transparent 58%),
       radial-gradient(90% 60% at 15% 90%, hsl(224 60% 40% / 0.25), transparent 55%);
     mix-blend-mode: screen;
     pointer-events: none;
@@ -336,6 +336,33 @@
     pointer-events: none;
     z-index: -1;
   }
+
+  /* Contained version of the hero wash — same signature lime tint, but
+     clipped to the surface so it can be reused on any card/tile. */
+  .glow-surface {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .glow-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      radial-gradient(75% 110% at 12% 8%, hsl(82 92% 62% / 0.16), transparent 68%),
+      radial-gradient(70% 90% at 95% 20%, hsl(224 60% 30% / 0.07), transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow-surface > * { position: relative; z-index: 1; }
+
+  .dark .glow-surface::before {
+    background:
+      radial-gradient(75% 110% at 12% 8%, hsl(82 92% 62% / 0.10), transparent 68%),
+      radial-gradient(70% 90% at 95% 20%, hsl(224 60% 40% / 0.12), transparent 70%);
+  }
+
 
   /* Button press micro-interaction */
   .press {

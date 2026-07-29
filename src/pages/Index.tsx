@@ -261,7 +261,7 @@ const HomePage = () => {
         {/* Account Cards */}
         {dataStatus !== "error" && (
         <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
-          <GlassCard onClick={() => navigate("/account/checking")} className="flex items-center justify-between">
+          <GlassCard onClick={() => navigate("/account/checking")} className="glow-surface flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
                 <Wallet size={18} className="text-primary-foreground" />
@@ -290,7 +290,7 @@ const HomePage = () => {
           </GlassCard>
 
           {savings && (
-            <GlassCard onClick={() => navigate("/account/savings")} className="flex items-center justify-between">
+            <GlassCard onClick={() => navigate("/account/savings")} className="glow-surface flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl gradient-savings flex items-center justify-center">
                   <TrendingUp size={18} className="text-primary-foreground" />
@@ -440,7 +440,8 @@ const HomePage = () => {
               </button>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <GlassCard onClick={() => navigate("/insights")}>
+              <GlassCard onClick={() => navigate("/insights")} className="glow-surface">
+
                 <div className="flex items-center gap-2 mb-2">
                   <ArrowDownLeft size={16} className="text-success" />
                   <span className="text-xs text-muted-foreground font-medium">Money In</span>
@@ -449,7 +450,7 @@ const HomePage = () => {
                   {formatCurrency(cashFlow.moneyIn)}
                 </p>
               </GlassCard>
-              <GlassCard onClick={() => navigate("/insights")}>
+              <GlassCard onClick={() => navigate("/insights")} className="glow-surface">
                 <div className="flex items-center gap-2 mb-2">
                   <ArrowUpRight size={16} className="text-destructive" />
                   <span className="text-xs text-muted-foreground font-medium">Money Out</span>
@@ -465,8 +466,8 @@ const HomePage = () => {
         {/* Direct Deposit — uses the account deposit details when hydrated. */}
         {!hydrating && (
           <motion.div custom={5} variants={fadeUp} initial="hidden" animate="visible" className="pb-4">
-            <GlassCard className="relative overflow-hidden">
-              <div className="absolute inset-0 gradient-hero opacity-[0.05] rounded-2xl" />
+            <GlassCard className="glow-surface relative overflow-hidden">
+
               <div className="relative">
                 <div className="flex items-center gap-2 mb-3">
                   <Shield size={18} className="text-primary" />
