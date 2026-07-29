@@ -116,6 +116,7 @@ interface Ctx {
   /** Retained for existing screens: true once the ledger is available. */
   liveLedger: boolean;
   ledgerError: string | null;
+
   ledgerStatus: DataStatus;
   refreshLedger: (opts?: { silent?: boolean }) => Promise<void>;
   /** Live mode only: pull the next page of provider transactions into the feed. */
