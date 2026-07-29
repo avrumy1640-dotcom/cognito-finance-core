@@ -83,7 +83,7 @@ const useStage = (): Stage => {
 };
 
 const PhoneFrame = ({ children }: { children: React.ReactNode }) => {
-  const reduceMotion = useReducedMotion();
+  const { reducedMotion: reduceMotion } = useReducedMotionPref();
   const stage = useStage();
 
   /* normalized pointer position, -0.5 .. 0.5 */
