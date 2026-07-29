@@ -33,23 +33,50 @@ function assertSandboxKey() {
   }
 }
 
+/**
+ * Column error shape: { type, code, message, documentation_url, details }.
+ * We keep `code` alongside the message so the UI can map known codes
+ * (transfer_non_sufficient_fund, entity_not_verified, …) to real copy.
+ */
+export interface ColumnError extends Error {
+  status?: number;
+  code?: string;
+  type?: string;
+  documentationUrl?: string;
+  details?: unknown;
+}
+
 async function column<T = any>(
   path: string,
-  init: { method?: string; body?: unknown; query?: Record<string, string | number | undefined> } = {},
+  init: {
+    method?: string;
+    body?: unknown;
+    query?: Record<string, string | number | undefined>;
+    /**
+     * Sent as `Idempotency-Key`. Required on every creation call so a
+     * double-tap or a retry after a timeout can never create a second
+     * entity / account / transfer. ASCII, ≤255 chars.
+     */
+    idempotencyKey?: string;
+    /** Raw multipart body (evidence upload) — skips JSON encoding. */
+    form?: FormData;
+  } = {},
 ): Promise<T> {
   assertSandboxKey();
   const url = new URL(COLUMN_BASE + path);
   for (const [k, v] of Object.entries(init.query ?? {})) {
     if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
   }
+  const headers: Record<string, string> = {
+    Authorization: "Basic " + btoa(":" + COLUMN_API_KEY),
+  };
+  if (!init.form) headers["Content-Type"] = "application/json";
+  if (init.idempotencyKey) headers["Idempotency-Key"] = idempotencyKey(init.idempotencyKey);
+
   const res = await fetch(url.toString(), {
     method: init.method ?? "GET",
-    headers: {
-      Authorization: "Basic " + btoa(":" + COLUMN_API_KEY),
-      "Content-Type": "application/json",
-      "Idempotency-Key": crypto.randomUUID(),
-    },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    headers,
+    body: init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
   });
   const text = await res.text();
   let parsed: any = null;
@@ -57,10 +84,23 @@ async function column<T = any>(
   if (!res.ok) {
     const msg = parsed?.message || parsed?.code || `Column ${res.status}`;
     console.error("provider call failed", init.method ?? "GET", path, res.status, JSON.stringify(parsed));
-    throw Object.assign(new Error(`${msg}`), { status: res.status, detail: parsed });
+    throw Object.assign(new Error(`${msg}`), {
+      status: res.status,
+      code: parsed?.code,
+      type: parsed?.type,
+      documentationUrl: parsed?.documentation_url,
+      details: parsed?.details,
+      detail: parsed,
+    }) as ColumnError;
   }
   return parsed as T;
 }
+
+/** Idempotency keys must be ASCII printable and ≤255 chars. */
+function idempotencyKey(raw: string) {
+  return raw.replace(/[^\x20-\x7E]/g, "-").slice(0, 255);
+}
+
 
 // ---------------------------------------------------------------------------
 // Cursor pagination.
