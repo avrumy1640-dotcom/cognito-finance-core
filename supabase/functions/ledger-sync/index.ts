@@ -513,13 +513,41 @@ function pickAccount(rows: any[], which?: string) {
   return rows.find((r) => r.account_type === which) ?? rows.find((r) => r.bank_account_id === which) ?? rows[0];
 }
 
+export interface WireAddress {
+  line1?: string; city?: string; state?: string; postalCode?: string; countryCode?: string;
+}
+
 async function ensureCounterparty(userId: string, args: {
-  name: string; routingNumber: string; accountNumber: string; wire?: boolean;
+  name: string; routingNumber: string; accountNumber: string;
+  wire?: boolean; address?: WireAddress;
 }) {
   const routing = String(args.routingNumber ?? "").replace(/\D/g, "");
   const account = String(args.accountNumber ?? "").replace(/\s/g, "");
   if (routing.length !== 9) throw new Error("Routing number must be 9 digits");
   if (!account) throw new Error("Account number is required");
+
+  const name = args.name?.slice(0, 64) || "Counterparty";
+
+  // Wires are OFAC-screened on the beneficiary, so Column requires a full
+  // beneficiary address. ACH counterparties do not.
+  let wireBlock: Record<string, unknown> | undefined;
+  if (args.wire) {
+    const a = args.address ?? {};
+    const missing = ["line1", "city", "state", "postalCode"].filter((k) => !String((a as any)[k] ?? "").trim());
+    if (missing.length) {
+      throw new Error("Wire recipients need a full beneficiary address (street, city, state, ZIP)");
+    }
+    wireBlock = {
+      beneficiary_name: name,
+      beneficiary_address: {
+        line_1: String(a.line1).slice(0, 100),
+        city: String(a.city).slice(0, 60),
+        state: String(a.state).toUpperCase().slice(0, 3),
+        postal_code: String(a.postalCode).slice(0, 12),
+        country_code: (a.countryCode || "US").toUpperCase().slice(0, 2),
+      },
+    };
+  }
 
   let cachedId: string | null = null;
   try {
@@ -529,17 +557,18 @@ async function ensureCounterparty(userId: string, args: {
       .maybeSingle();
     cachedId = cached?.counterparty_id ?? null;
   } catch { /* mirror table optional */ }
-  if (cachedId) return cachedId;
-
+  // A cached ACH-only counterparty has no wire block, so re-create for wires.
+  if (cachedId && !args.wire) return cachedId;
 
   const cp = await column<any>("/counterparties", {
     method: "POST",
     body: {
       routing_number: routing,
       account_number: account,
-      name: args.name?.slice(0, 64) || "Counterparty",
-      ...(args.wire ? { wire: { beneficiary_name: args.name?.slice(0, 64) || "Counterparty" } } : {}),
+      name,
+      ...(wireBlock ? { wire: wireBlock } : {}),
     },
+    idempotencyKey: `counterparty-${userId}-${routing}-${account.slice(-4)}-${args.wire ? "wire" : "ach"}`,
   });
   try {
     await admin.from("column_counterparties").insert({
@@ -566,11 +595,27 @@ async function recordTransfer(userId: string, kind: string, bankAccountId: strin
   }, { onConflict: "transfer_id" });
 }
 
+/**
+ * Idempotency key for a money movement.
+ *
+ * The client mints a `requestId` once, before the first attempt, and reuses it
+ * on retries — so a retried request replays instead of double-sending, while
+ * two genuinely separate transfers (different requestId) never collide. The
+ * real inputs are folded in so a mutated payload can't ride an old key.
+ */
+async function transferKey(userId: string, kind: string, amount: number, dest: string, requestId?: string) {
+  const seed = [userId, kind, amount, dest, requestId ?? crypto.randomUUID()].join("|");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(seed));
+  return "tx-" + Array.from(new Uint8Array(digest)).slice(0, 16)
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function doTransfer(userId: string, body: any) {
   const rows = await accountsFor(userId);
   const kind = String(body.kind ?? "book");
   const amount = toCents(body.amount);
   const description = String(body.description ?? "Transfer").slice(0, 120);
+  const requestId = typeof body.requestId === "string" ? body.requestId.slice(0, 64) : undefined;
 
   if (kind === "book") {
     const from = pickAccount(rows, body.from);
@@ -585,6 +630,7 @@ async function doTransfer(userId: string, body: any) {
         receiver_bank_account_id: to.bank_account_id,
         amount, currency_code: "USD", description,
       },
+      idempotencyKey: await transferKey(userId, "book", amount, to.bank_account_id, requestId),
     });
     await recordTransfer(userId, "book", from.bank_account_id, t, "debit", description);
     await recordTransfer(userId, "book", to.bank_account_id, { ...t, id: `${t.id}-in` }, "credit", description);
@@ -610,6 +656,7 @@ async function doTransfer(userId: string, body: any) {
         entry_class_code: "PPD",
         description: description.slice(0, 10) || "GLASSBNK",
       },
+      idempotencyKey: await transferKey(userId, kind, amount, counterpartyId, requestId),
     });
     await recordTransfer(userId, "ach", from.bank_account_id, t, type === "DEBIT" ? "credit" : "debit", description);
     return { transferId: t.id, status: t.status };
@@ -623,6 +670,11 @@ async function doTransfer(userId: string, body: any) {
         routingNumber: body.routingNumber,
         accountNumber: body.accountNumber,
         wire: true,
+        address: {
+          line1: body.beneficiaryLine1, city: body.beneficiaryCity,
+          state: body.beneficiaryState, postalCode: body.beneficiaryPostalCode,
+          countryCode: body.beneficiaryCountry,
+        },
       });
     const t = await column<any>("/transfers/wire", {
       method: "POST",
@@ -631,6 +683,7 @@ async function doTransfer(userId: string, body: any) {
         counterparty_id: counterpartyId,
         amount, currency_code: "USD", description,
       },
+      idempotencyKey: await transferKey(userId, "wire", amount, counterpartyId, requestId),
     });
     await recordTransfer(userId, "wire", from.bank_account_id, t, "debit", description);
     return { transferId: t.id, status: t.status };
@@ -638,6 +691,46 @@ async function doTransfer(userId: string, body: any) {
 
   throw new Error(`Unsupported transfer kind "${kind}"`);
 }
+
+/**
+ * Uploads a KYC document to Column and links it to the caller's entity as
+ * verification evidence in a single multipart call.
+ */
+async function submitEvidence(userId: string, body: any) {
+  const { data: entity } = await admin.from("column_entities")
+    .select("entity_id").eq("user_id", userId).maybeSingle();
+  if (!entity) throw new Error("Finish verification first — no entity to attach evidence to");
+
+  const dataUrl = String(body.dataUrl ?? "");
+  const match = /^data:([^;,]+);base64,(.+)$/s.exec(dataUrl);
+  if (!match) throw new Error("Unsupported file — re-take the photo and try again");
+  const [, mime, b64] = match;
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  if (bytes.byteLength > 8 * 1024 * 1024) throw new Error("File is too large (max 8 MB)");
+
+  const documentType = String(body.documentType ?? "drivers_license").slice(0, 64);
+  const ext = mime.includes("png") ? "png" : mime.includes("pdf") ? "pdf" : "jpg";
+
+  const form = new FormData();
+  form.append("file", new Blob([bytes], { type: mime }), `${documentType}.${ext}`);
+  form.append("evidence_type", "file");
+  form.append("purposes", String(body.purpose ?? "identity_verification"));
+  form.append("document_type", documentType);
+
+  const res = await column<any>(`/entities/${entity.entity_id}/documents`, {
+    method: "POST",
+    form,
+    idempotencyKey: `evidence-${userId}-${documentType}-${bytes.byteLength}`,
+  });
+  return { documentId: res?.id ?? null, entityId: entity.entity_id, status: res?.status ?? "submitted" };
+}
+
+/** Compliance view: exactly which required fields Column is still waiting on. */
+async function entityCompliance(entityId: string) {
+  if (!/^[A-Za-z0-9_\-]+$/.test(entityId)) throw new Error("Invalid entity id");
+  return await column<any>(`/entities/${entityId}/compliance`);
+}
+
 
 /**
  * Sandbox-only webhook self-test. Signs a synthetic event with the same secret
