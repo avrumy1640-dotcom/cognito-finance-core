@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RefreshCw, Trash2, AlertTriangle } from "lucide-react";
-import { columnClient, getDataSource, setDataSource, type DataSource } from "@/lib/columnClient";
+import { ledgerProvider, getDataSource, setDataSource, type DataSource } from "@/lib/ledgerProvider";
 import { AdminHeader, AdminPage } from "./AdminShell";
 import ConfirmDialog from "@/components/glass/ConfirmDialog";
 
@@ -20,7 +20,7 @@ const RESOURCES: Array<{ key: keyof Listing; resource: string; label: string }> 
   { key: "webhookEndpoints", resource: "webhook-endpoint", label: "Webhook endpoints" },
 ];
 
-const AdminColumn = () => {
+const AdminProvider = () => {
   const [listing, setListing] = useState<Listing | null>(null);
   const [status, setStatus] = useState<{ sandbox: boolean; configured: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,11 +30,11 @@ const AdminColumn = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, l] = await Promise.all([columnClient.status(), columnClient.adminList()]);
+      const [s, l] = await Promise.all([ledgerProvider.status(), ledgerProvider.adminList()]);
       setStatus(s);
       setListing(l as Listing);
     } catch (e) {
-      toast.error("Could not reach Column", { description: (e as Error).message });
+      toast.error("Could not reach the provider", { description: (e as Error).message });
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ const AdminColumn = () => {
 
   const remove = async (resource: string, id: string) => {
     try {
-      await columnClient.adminDelete(resource, id);
+      await ledgerProvider.adminDelete(resource, id);
       toast.success("Deleted", { description: id });
       void load();
     } catch (e) {
@@ -54,9 +54,9 @@ const AdminColumn = () => {
 
   const wipe = async () => {
     setWipeOpen(false);
-    const id = toast.loading("Wiping Column sandbox…");
+    const id = toast.loading("Wiping provider sandbox…");
     try {
-      const res = await columnClient.adminWipe(false);
+      const res = await ledgerProvider.adminWipe(false);
       const failed = res.results.filter((r) => !r.ok).length;
       toast.success(`Wiped ${res.wiped - failed} object(s)`, {
         id,
@@ -71,7 +71,7 @@ const AdminColumn = () => {
   return (
     <AdminPage>
       <AdminHeader
-        title="Column sandbox"
+        title="Banking provider sandbox"
         subtitle="Test-environment entities, accounts and webhooks created by this app."
       />
 
@@ -91,14 +91,14 @@ const AdminColumn = () => {
               const next = e.target.value as DataSource;
               setSource(next);
               setDataSource(next);
-              toast.success(`Switched to ${next === "column" ? "Column sandbox" : "local demo ledger"}`, {
+              toast.success(`Switched to ${next === "live" ? "provider sandbox" : "local demo ledger"}`, {
                 description: "Reload the app to re-hydrate balances.",
               });
             }}
             className="h-9 rounded-lg bg-card border border-border px-2 text-foreground"
           >
             <option value="demo">Local demo ledger</option>
-            <option value="column">Column sandbox</option>
+            <option value="live">Provider sandbox</option>
           </select>
         </label>
         <button onClick={() => void load()} className="h-9 px-3 rounded-lg border border-border text-xs flex items-center gap-1.5">
@@ -163,8 +163,8 @@ const AdminColumn = () => {
       <ConfirmDialog
         open={wipeOpen}
         onOpenChange={setWipeOpen}
-        title="Delete all Column sandbox objects?"
-        description="This deletes every counterparty, bank account and entity in the Column sandbox and clears the local mirror tables. Webhook endpoints are kept."
+        title="Delete all provider sandbox objects?"
+        description="This deletes every counterparty, bank account and entity in the provider sandbox and clears the local mirror tables. Webhook endpoints are kept."
         confirmLabel="Delete everything"
         destructive
         onConfirm={() => void wipe()}
@@ -173,4 +173,4 @@ const AdminColumn = () => {
   );
 };
 
-export default AdminColumn;
+export default AdminProvider;

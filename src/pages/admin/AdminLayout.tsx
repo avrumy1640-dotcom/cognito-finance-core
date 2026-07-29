@@ -20,7 +20,7 @@ const nav = [
   { to: "/admin/audit", label: "Audit logs", icon: ScrollText },
   { to: "/admin/tickets", label: "Support tickets", icon: LifeBuoy },
   { to: "/admin/roles", label: "User permissions", icon: KeyRound },
-  { to: "/admin/column", label: "Column sandbox", icon: Boxes },
+  { to: "/admin/provider", label: "Provider sandbox", icon: Boxes },
 
 ];
 
