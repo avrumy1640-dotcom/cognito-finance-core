@@ -371,14 +371,22 @@ async function syncTransfers(
   return { rows, hasMore: offset + rows.length < (count ?? rows.length), total: count ?? rows.length };
 }
 
-async function snapshot(userId: string, opts: { provision: boolean }) {
+async function snapshot(
+  userId: string,
+  opts: { provision: boolean; limit?: number; offset?: number },
+) {
   let entity = null as any;
   const { data: existingEntity } = await admin
     .from("column_entities").select("*").eq("user_id", userId).maybeSingle();
   entity = existingEntity;
 
   if (!entity && opts.provision) entity = await ensureEntity(userId);
-  if (!entity) return { provisioned: false, entity: null, accounts: [], transactions: [] };
+  if (!entity) {
+    return {
+      provisioned: false, entity: null, accounts: [], transactions: [],
+      transactionsHasMore: false, transactionsTotal: 0, transactionsOffset: 0,
+    };
+  }
 
   let accounts = await refreshAccounts(userId);
   if (!accounts.length && opts.provision) {
@@ -387,10 +395,15 @@ async function snapshot(userId: string, opts: { provision: boolean }) {
   }
 
   const ids = accounts.map((a) => a.bank_account_id);
-  const transfers = await syncTransfers(userId, ids);
+  const { rows: transfers, hasMore, total } = await syncTransfers(userId, ids, {
+    limit: opts.limit, offset: opts.offset,
+  });
 
   return {
     provisioned: true,
+    transactionsHasMore: hasMore,
+    transactionsTotal: total,
+    transactionsOffset: Math.max(Number(opts.offset) || 0, 0),
     entity: {
       entityId: entity.entity_id,
       verificationStatus: entity.verification_status,
