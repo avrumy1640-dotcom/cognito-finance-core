@@ -733,6 +733,10 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "");
+    // Activity feed load-more window for the mirrored transfer table.
+    const page = { limit: Number(body?.limit) || undefined, offset: Number(body?.offset) || undefined };
+
+
 
     const isAdminAction = action.startsWith("admin_");
 
