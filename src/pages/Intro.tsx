@@ -54,19 +54,24 @@ const EdgeButton = ({ top, height }: { top: number; height: number }) => (
 );
 
 const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
-  <div className="relative w-full" style={{ perspective: "1150px", perspectiveOrigin: "60% 40%" }}>
+  <div className="relative w-full" style={{ perspective: "1000px", perspectiveOrigin: "62% 38%" }}>
     <motion.div
       initial={{ opacity: 0, y: 26 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.55, ease: "easeOut" }}
-      className="relative mx-auto w-[178px] sm:w-[200px]"
+      className="relative mx-auto w-[196px] sm:w-[220px]"
+      style={{ transformStyle: "preserve-3d" }}
+    >
+    <div
+      className="relative"
       style={{
         transformStyle: "preserve-3d",
-        transform: "rotateX(7deg) rotateY(30deg) rotateZ(-2deg) translateX(6px)",
+        transform: "rotateX(7deg) rotateY(29deg) rotateZ(-2deg) translateX(8px)",
       }}
     >
       {/* ambient contact shadow, offset along the tilt direction */}
       <div className="pointer-events-none absolute -bottom-8 -left-2 right-8 h-20 rounded-[50%] bg-black/70 blur-2xl" />
+
 
       {/* ---- left side body slab (gives real thickness on the edge facing us) ---- */}
       <div
