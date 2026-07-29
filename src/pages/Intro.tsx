@@ -416,7 +416,9 @@ const CreditMock = () => {
       </Row>
     ))}
   </div>
-);
+  );
+};
+
 
 const RewardsMock = () => (
   <div className="space-y-2">
