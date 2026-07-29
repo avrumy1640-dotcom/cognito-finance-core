@@ -59,9 +59,9 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
         }}
       >
         {/* side buttons */}
-        <div className="absolute -left-[3px] top-[110px] h-9 w-[3px] rounded-l-sm bg-gradient-to-b from-zinc-300 to-zinc-500" />
-        <div className="absolute -left-[3px] top-[156px] h-9 w-[3px] rounded-l-sm bg-gradient-to-b from-zinc-300 to-zinc-500" />
-        <div className="absolute -right-[3px] top-[132px] h-14 w-[3px] rounded-r-sm bg-gradient-to-b from-zinc-300 to-zinc-500" />
+        <div className="absolute -left-[1.5px] top-[112px] h-8 w-[3px] rounded-l-full bg-gradient-to-b from-zinc-400/80 to-zinc-600/80" />
+        <div className="absolute -left-[1.5px] top-[152px] h-8 w-[3px] rounded-l-full bg-gradient-to-b from-zinc-400/80 to-zinc-600/80" />
+        <div className="absolute -right-[1.5px] top-[136px] h-12 w-[3px] rounded-r-full bg-gradient-to-b from-zinc-400/80 to-zinc-600/80" />
 
         <div className="relative overflow-hidden rounded-[2.35rem] bg-[hsl(224_48%_5%)] [clip-path:inset(0_round_2.35rem)] [isolation:isolate]">
           {/* dynamic island */}
@@ -129,7 +129,7 @@ const GoalsMock = () => (
     <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
       <p className="text-[8px] text-white/55">Total saved</p>
       <p className="text-balance-display mt-0.5 text-[26px] leading-none">$4,330.00</p>
-      <p className="mt-1 text-[8px] text-primary">+$182.40 this month</p>
+      <p className="mt-1.5 text-[8px] text-primary">+$182.40 this month</p>
       <Bar pct={54} />
     </div>
     {[
