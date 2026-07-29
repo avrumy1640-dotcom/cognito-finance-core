@@ -247,7 +247,7 @@ const SignIn = () => {
             className="w-full py-3.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Signing in…" : lockedFor > 0 ? `Locked · ${lockedSeconds}s` : "Sign in"}
           </button>
 
           <p className="text-xs text-center text-muted-foreground">
