@@ -281,9 +281,25 @@ const VerifyIdentity = () => {
         setSubmitError({ kind: "provider", message, retryable: true });
         return;
       }
+      // Attach the selfie to the entity as verification evidence. The account
+      // already exists at this point, so a failure here is reported but must
+      // not roll the customer back through the whole form.
+      try {
+        await ledgerProvider.submitEvidence({
+          dataUrl: selfie,
+          documentType: "selfie",
+          purpose: "identity_verification",
+        });
+      } catch (e) {
+        console.warn("evidence upload failed", e);
+        toast.warning("We couldn't attach your selfie", {
+          description: "Your account is open — we may ask for the photo again during review.",
+        });
+      }
     } else {
       toast.success("Identity verified — your account is now active.", { id: "kyc" });
     }
+
 
     setSubmitting(false);
     clearDraft();

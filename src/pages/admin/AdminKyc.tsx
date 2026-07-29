@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { ledgerProvider } from "@/lib/ledgerProvider";
 import { AdminHeader, AdminPage, DataTable, StatusPill } from "./AdminShell";
 
 type Row = {
@@ -22,6 +23,33 @@ const AdminKyc = () => {
   const [tab, setTab] = useState<Row["status"]>("pending");
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  // Provider compliance detail, keyed by kyc row id, so a reviewer can see
+  // exactly which requirements are outstanding instead of a bare "pending".
+  const [compliance, setCompliance] = useState<Record<string, string>>({});
+  const [checking, setChecking] = useState<string | null>(null);
+
+  const checkCompliance = async (row: Row) => {
+    setChecking(row.id);
+    try {
+      const { data: entity } = await supabase
+        .from("column_entities").select("entity_id").eq("user_id", row.user_id).maybeSingle();
+      if (!entity?.entity_id) {
+        setCompliance((c) => ({ ...c, [row.id]: "No banking-partner entity for this customer yet." }));
+        return;
+      }
+      const res = await ledgerProvider.adminCompliance(entity.entity_id);
+      const missing = (res as { missing_fields?: string[]; requirements?: unknown })?.missing_fields;
+      setCompliance((c) => ({
+        ...c,
+        [row.id]: missing?.length ? `Missing: ${missing.join(", ")}` : JSON.stringify(res).slice(0, 400),
+      }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Compliance lookup failed");
+    } finally {
+      setChecking(null);
+    }
+  };
+
 
   const load = async () => {
     setLoading(true);
@@ -92,6 +120,24 @@ const AdminKyc = () => {
           { key: "submitted", header: "Submitted", render: (r) => new Date(r.submitted_at).toLocaleString() },
           { key: "status", header: "Status", render: (r) => <StatusPill status={r.status} /> },
           {
+            key: "compliance",
+            header: "Compliance",
+            render: (r) => (
+              <div className="max-w-[260px]">
+                <button
+                  onClick={() => checkCompliance(r)}
+                  disabled={checking === r.id}
+                  className="text-xs px-2.5 py-1 rounded-md bg-secondary text-foreground disabled:opacity-50"
+                >
+                  {checking === r.id ? "Checking…" : "Check requirements"}
+                </button>
+                {compliance[r.id] && (
+                  <p className="mt-1 text-[11px] text-muted-foreground break-words">{compliance[r.id]}</p>
+                )}
+              </div>
+            ),
+          },
+          {
             key: "actions",
             header: "",
             render: (r) =>
@@ -115,6 +161,7 @@ const AdminKyc = () => {
               ),
             className: "text-right",
           },
+
         ]}
       />
     </AdminPage>

@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import type { Transaction } from "@/types/transaction";
-import { ledgerProvider, isLiveMode, mergeProviderIntoLedger } from "@/lib/ledgerProvider";
+import { ledgerProvider, isLiveMode, mergeProviderIntoLedger, friendlyProviderMessage } from "@/lib/ledgerProvider";
 
 import {
   demoBank,
@@ -106,6 +106,25 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+/**
+ * Wire recipients need a full beneficiary address: Column OFAC-screens the
+ * beneficiary and rejects wire counterparties without one.
+ */
+export interface WireTransferArgs {
+  from: "checking" | "savings";
+  amount: number;
+  beneficiaryName: string;
+  routingNumber: string;
+  accountNumber: string;
+  memo?: string;
+  fee?: number;
+  beneficiaryLine1?: string;
+  beneficiaryCity?: string;
+  beneficiaryState?: string;
+  beneficiaryPostalCode?: string;
+  beneficiaryCountry?: string;
+}
+
 interface Ctx {
   accounts: { checking: Account | null; savings: Account | null };
   transactions: Transaction[];
@@ -116,6 +135,7 @@ interface Ctx {
   /** Retained for existing screens: true once the ledger is available. */
   liveLedger: boolean;
   ledgerError: string | null;
+
   ledgerStatus: DataStatus;
   refreshLedger: (opts?: { silent?: boolean }) => Promise<void>;
   /** Live mode only: pull the next page of provider transactions into the feed. */
@@ -129,7 +149,7 @@ interface Ctx {
   depositCheck: (args: { to: "checking" | "savings"; amount: number }) => boolean;
   payBill: (args: { from: "checking" | "savings"; amount: number; biller: string; routingNumber?: string; accountNumber?: string }) => boolean;
   externalTransfer: (args: { from: "checking" | "savings"; amount: number; bank: string; routingNumber: string; accountNumber: string; memo?: string }) => boolean;
-  wireTransfer: (args: { from: "checking" | "savings"; amount: number; beneficiaryName: string; routingNumber: string; accountNumber: string; memo?: string; fee?: number }) => boolean;
+  wireTransfer: (args: WireTransferArgs) => boolean;
   /** Credit an account — used by the Add Money flows. */
   addFunds: (args: { to?: "checking" | "savings"; amount: number; source: string }) => Promise<boolean>;
   toggleCardLock: () => Promise<void> | void;
@@ -463,9 +483,12 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const runLiveTransfer = useCallback(
     async (label: string, args: import("@/lib/ledgerProvider").TransferArgs, successBody?: string) => {
       const id = `live-${label}-${Date.now()}`;
+      // Minted here, before the first attempt, so any retry replays the same
+      // provider Idempotency-Key instead of creating a second transfer.
+      const withRequestId = { ...args, requestId: args.requestId ?? crypto.randomUUID() };
       toast.loading(`${label}…`, { id });
       try {
-        const res = await ledgerProvider.transfer(args);
+        const res = await ledgerProvider.transfer(withRequestId);
         toast.success(`${label} submitted`, {
           id,
           description: successBody ? `${successBody} · ${res.status}` : `Status: ${res.status}`,
@@ -473,13 +496,13 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         await refreshLedger({ silent: true });
         return true;
       } catch (err) {
-        const reason = err instanceof Error ? err.message : "Please try again.";
-        toast.error(`${label} failed`, { id, description: reason });
+        toast.error(`${label} failed`, { id, description: friendlyProviderMessage(err) });
         return false;
       }
     },
     [refreshLedger],
   );
+
 
 
 
@@ -610,7 +633,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     return true;
   }, [runMutation, runLiveTransfer]);
 
-  const wireTransfer = useCallback((args: { from: "checking" | "savings"; amount: number; beneficiaryName: string; routingNumber: string; accountNumber: string; memo?: string; fee?: number }) => {
+  const wireTransfer = useCallback((args: WireTransferArgs) => {
     const fee = args.fee ?? 25;
     if (args.amount <= 0) return false;
     const from = accountFor(args.from);
@@ -621,9 +644,16 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         kind: "wire", amount: args.amount, from: args.from, name: args.beneficiaryName,
         routingNumber: args.routingNumber, accountNumber: args.accountNumber,
         description: args.memo || "Wire transfer",
+        // Required for the provider's OFAC screening of the beneficiary.
+        beneficiaryLine1: args.beneficiaryLine1,
+        beneficiaryCity: args.beneficiaryCity,
+        beneficiaryState: args.beneficiaryState,
+        beneficiaryPostalCode: args.beneficiaryPostalCode,
+        beneficiaryCountry: args.beneficiaryCountry || "US",
       }, `$${args.amount.toFixed(2)} to ${args.beneficiaryName}`);
       return true;
     }
+
     if (spendableBalance(from, overdraftRef.current) < args.amount + fee) return false;
     void runMutation(`Wire to ${args.beneficiaryName}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.beneficiaryName,

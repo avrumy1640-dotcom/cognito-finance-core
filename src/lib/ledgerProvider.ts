@@ -50,6 +50,36 @@ export interface ProviderSnapshot {
 /** Paging window for the transaction feed (cursor-free offset over our mirror). */
 export interface SyncPage { limit?: number; offset?: number }
 
+/** Error carrying the provider's structured `code` so callers can branch on it. */
+export class ProviderError extends Error {
+  code: string | null;
+  constructor(message: string, code: string | null = null) {
+    super(message);
+    this.name = "ProviderError";
+    this.code = code;
+  }
+}
+
+/**
+ * Plain-English copy for the provider error codes a customer can actually
+ * trigger. Anything unmapped falls back to the provider's own message.
+ */
+const FRIENDLY_CODES: Record<string, string> = {
+  transfer_non_sufficient_fund: "Not enough money in this account to cover the transfer.",
+  entity_not_verified: "Your identity check isn't complete yet, so money can't move.",
+  routing_number_not_found: "That routing number doesn't match a US bank. Double-check the 9 digits.",
+  bank_account_not_found: "We couldn't find that account. Check the account number and try again.",
+  counterparty_not_found: "That recipient no longer exists. Re-enter their bank details.",
+  transfer_amount_limit_exceeded: "This amount is over your transfer limit.",
+  invalid_request_error: "Some of the details entered aren't valid. Review the form and try again.",
+};
+
+/** User-facing copy for a provider failure. */
+export function friendlyProviderMessage(e: unknown): string {
+  if (e instanceof ProviderError && e.code && FRIENDLY_CODES[e.code]) return FRIENDLY_CODES[e.code];
+  return e instanceof Error ? e.message : "Something went wrong. Try again.";
+}
+
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("ledger-sync", { body });
   if (error) {
@@ -57,15 +87,17 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
     const ctx = (error as { context?: Response }).context;
     if (ctx && typeof ctx.text === "function") {
       try {
-        const detail = JSON.parse(await ctx.text()) as { error?: string };
-        if (detail?.error) throw new Error(detail.error);
+        const detail = JSON.parse(await ctx.text()) as { error?: string; code?: string };
+        if (detail?.error) throw new ProviderError(detail.error, detail.code ?? null);
       } catch (e) {
+        if (e instanceof ProviderError) throw e;
         if (e instanceof Error && e.message && !/JSON/.test(e.message)) throw e;
       }
     }
-    throw new Error(error.message);
+    throw new ProviderError(error.message);
   }
-  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+  const payload = data as { error?: string; code?: string } | null;
+  if (payload?.error) throw new ProviderError(payload.error, payload.code ?? null);
   return data as T;
 }
 
@@ -79,6 +111,18 @@ export interface TransferArgs {
   name?: string;
   routingNumber?: string;
   accountNumber?: string;
+  /**
+   * Minted once per user intent (before the first attempt) and reused on
+   * retries — the server folds it into the provider Idempotency-Key so a
+   * double-tap can never send twice.
+   */
+  requestId?: string;
+  /** Wire only — required for OFAC screening of the beneficiary. */
+  beneficiaryLine1?: string;
+  beneficiaryCity?: string;
+  beneficiaryState?: string;
+  beneficiaryPostalCode?: string;
+  beneficiaryCountry?: string;
 }
 
 export const ledgerProvider = {
@@ -92,8 +136,12 @@ export const ledgerProvider = {
   sync: (page: SyncPage = {}) => call<ProviderSnapshot>({ action: "sync", ...page }),
   transfer: (args: TransferArgs) =>
     call<{ transferId: string; status: string; snapshot: ProviderSnapshot }>({ action: "transfer", ...args }),
+  /** Uploads a KYC document and links it to the entity as verification evidence. */
+  submitEvidence: (args: { dataUrl: string; documentType: string; purpose?: string }) =>
+    call<{ documentId: string | null; entityId: string; status: string }>({ action: "submit_evidence", ...args }),
   adminList: () => call<Record<string, unknown>>({ action: "admin_list" }),
   adminLocal: () => call<Record<string, unknown>>({ action: "admin_local" }),
+  adminCompliance: (entityId: string) => call<Record<string, unknown>>({ action: "admin_compliance", entityId }),
   adminDelete: (resource: string, id: string) => call<unknown>({ action: "admin_delete", resource, id }),
   adminWipe: (includeWebhooks = false) =>
     call<{ wiped: number; results: Array<{ resource: string; id: string; ok: boolean; error?: string }> }>({
@@ -101,6 +149,7 @@ export const ledgerProvider = {
       includeWebhooks,
     }),
 };
+
 
 
 /**

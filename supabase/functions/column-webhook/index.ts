@@ -36,6 +36,32 @@ function timingSafeEqual(a: string, b: string) {
 
 const cents = (n: unknown) => (typeof n === "number" ? n : 0);
 
+/**
+ * Column does NOT guarantee event ordering: `submitted` can land after
+ * `completed`. Rank the lifecycle so a late-arriving earlier stage can never
+ * walk a transfer backwards. Unknown statuses rank 1 (in-flight) so genuinely
+ * new states still apply; terminal states are never overwritten by anything
+ * except another terminal state that arrived later.
+ */
+const STATUS_RANK: Record<string, number> = {
+  initiated: 0, scheduled: 0, pending: 1, submitted: 2, manual_review: 2,
+  completed: 3, settled: 3, posted: 3,
+  returned: 4, canceled: 4, cancelled: 4, rejected: 4, failed: 4,
+};
+const rankOf = (s: string) => STATUS_RANK[s] ?? 1;
+
+/** True when the incoming event should be allowed to overwrite what we hold. */
+function shouldApply(prev: { status?: string; occurred_at?: string } | null, nextStatus: string, occurredAt?: string) {
+  if (!prev?.status) return true;
+  const prevRank = rankOf(String(prev.status).toLowerCase());
+  const nextRank = rankOf(nextStatus);
+  if (nextRank > prevRank) return true;
+  if (nextRank < prevRank) return false;
+  // Same stage — prefer the newer event timestamp when we have one.
+  if (!occurredAt || !prev.occurred_at) return true;
+  return Date.parse(occurredAt) >= Date.parse(prev.occurred_at);
+}
+
 async function userForBankAccount(bankAccountId?: string) {
   if (!bankAccountId) return null;
   const { data } = await admin.from("column_bank_accounts")
@@ -50,15 +76,25 @@ async function notify(userId: string | null, args: { type: string; title: string
   } catch { /* notification delivery must never fail a webhook */ }
 }
 
+
 async function handleEvent(type: string, data: any) {
   // --- entity / identity verification ------------------------------------
   if (type.startsWith("entity.")) {
     const entityId = data?.id ?? data?.entity_id;
     if (!entityId) return "ignored: no entity id";
     const status = data?.verification_status ?? (type.endsWith("verified") ? "verified" : "pending");
+    // Out-of-order safety: a late "pending" must not undo a decided verdict.
+    const { data: current } = await admin.from("column_entities")
+      .select("verification_status").eq("entity_id", entityId).maybeSingle();
+    const decided = ["verified", "denied", "rejected"];
+    if (current && decided.includes(String(current.verification_status ?? "").toLowerCase())
+        && !decided.includes(String(status).toLowerCase())) {
+      return `entity ${entityId}: ignored out-of-order "${status}" (have "${current.verification_status}")`;
+    }
     const { data: row } = await admin.from("column_entities")
       .update({ verification_status: status, details: data })
       .eq("entity_id", entityId).select("user_id").maybeSingle();
+
     if (row?.user_id) {
       // Mirror the partner's verdict onto our own KYC gate so access changes
       // in real time, without the user re-submitting anything.
@@ -99,6 +135,16 @@ async function handleEvent(type: string, data: any) {
       : !!(t.receiver_bank_account_id && (await userForBankAccount(t.receiver_bank_account_id)));
 
     const status = String(t.status ?? type.split(".").pop() ?? "pending").toLowerCase();
+    const occurredAt = t.created_at ?? new Date().toISOString();
+
+    // Out-of-order safety: never regress a transfer we already know is further
+    // along. Re-delivery of the same event is a no-op, not a state change.
+    const { data: prev } = await admin.from("column_transfers")
+      .select("status, occurred_at").eq("transfer_id", transferId).maybeSingle();
+    if (!shouldApply(prev as any, status, occurredAt)) {
+      return `${kind} transfer ${transferId}: ignored out-of-order "${status}" (have "${prev?.status}")`;
+    }
+
     await admin.from("column_transfers").upsert({
       user_id: userId,
       transfer_id: transferId,
@@ -110,10 +156,17 @@ async function handleEvent(type: string, data: any) {
       direction: isCredit ? "credit" : "debit",
       description: t.description ?? `${kind.toUpperCase()} transfer`,
       raw: t,
-      occurred_at: t.created_at ?? new Date().toISOString(),
+      occurred_at: occurredAt,
     }, { onConflict: "transfer_id" });
 
-    if (["completed", "settled", "posted"].includes(status)) {
+    if (["returned", "rejected", "failed", "canceled", "cancelled"].includes(status)) {
+      await notify(userId, {
+        type: "alert",
+        title: `Transfer ${status}: $${(cents(t.amount) / 100).toFixed(2)}`,
+        body: t.return_reason ?? t.reason ?? `${kind.toUpperCase()} transfer was ${status}.`,
+        dedupe_key: `column-transfer-${transferId}-${status}`,
+      });
+    } else if (["completed", "settled", "posted"].includes(status)) {
       await notify(userId, {
         type: "transfer",
         title: `${isCredit ? "Money in" : "Money out"}: $${(cents(t.amount) / 100).toFixed(2)}`,
@@ -121,6 +174,7 @@ async function handleEvent(type: string, data: any) {
         dedupe_key: `column-transfer-${transferId}-${status}`,
       });
     }
+
     return `${kind} transfer ${transferId} → ${status}`;
   }
 
@@ -176,17 +230,23 @@ Deno.serve(async (req) => {
   const eventType: string = event?.type ?? event?.event_type ?? "unknown";
   const data = event?.data ?? event?.object ?? event;
 
-  // Idempotency — same event id is acknowledged but never re-processed.
-  if (eventId) {
-    const { data: seen } = await admin.from("webhook_events")
-      .select("id").eq("provider", "column").eq("event_id", eventId).maybeSingle();
-    if (seen) return json({ ok: true, deduped: true });
-  }
-
-  const { data: logRow } = await admin.from("webhook_events").insert({
+  // Idempotency. Column can deliver the same event id more than once, possibly
+  // concurrently, so the claim is the INSERT itself: a unique index on
+  // (provider, event_id) means exactly one delivery wins and the losers exit
+  // with a 200 before touching any ledger state.
+  const { data: logRow, error: claimError } = await admin.from("webhook_events").insert({
     provider: "column", event_id: eventId, event_type: eventType,
     status: "received", payload: event, signature: provided.slice(0, 16),
   }).select("id").maybeSingle();
+
+  if (claimError) {
+    // 23505 = unique violation → this event was already claimed/processed.
+    if ((claimError as { code?: string }).code === "23505") {
+      return json({ ok: true, deduped: true });
+    }
+    console.error("webhook_events insert failed", claimError.message);
+  }
+
 
   try {
     const result = await handleEvent(eventType, data);

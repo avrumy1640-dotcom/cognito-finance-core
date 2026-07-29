@@ -33,23 +33,50 @@ function assertSandboxKey() {
   }
 }
 
+/**
+ * Column error shape: { type, code, message, documentation_url, details }.
+ * We keep `code` alongside the message so the UI can map known codes
+ * (transfer_non_sufficient_fund, entity_not_verified, …) to real copy.
+ */
+export interface ColumnError extends Error {
+  status?: number;
+  code?: string;
+  type?: string;
+  documentationUrl?: string;
+  details?: unknown;
+}
+
 async function column<T = any>(
   path: string,
-  init: { method?: string; body?: unknown; query?: Record<string, string | number | undefined> } = {},
+  init: {
+    method?: string;
+    body?: unknown;
+    query?: Record<string, string | number | undefined>;
+    /**
+     * Sent as `Idempotency-Key`. Required on every creation call so a
+     * double-tap or a retry after a timeout can never create a second
+     * entity / account / transfer. ASCII, ≤255 chars.
+     */
+    idempotencyKey?: string;
+    /** Raw multipart body (evidence upload) — skips JSON encoding. */
+    form?: FormData;
+  } = {},
 ): Promise<T> {
   assertSandboxKey();
   const url = new URL(COLUMN_BASE + path);
   for (const [k, v] of Object.entries(init.query ?? {})) {
     if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
   }
+  const headers: Record<string, string> = {
+    Authorization: "Basic " + btoa(":" + COLUMN_API_KEY),
+  };
+  if (!init.form) headers["Content-Type"] = "application/json";
+  if (init.idempotencyKey) headers["Idempotency-Key"] = idempotencyKey(init.idempotencyKey);
+
   const res = await fetch(url.toString(), {
     method: init.method ?? "GET",
-    headers: {
-      Authorization: "Basic " + btoa(":" + COLUMN_API_KEY),
-      "Content-Type": "application/json",
-      "Idempotency-Key": crypto.randomUUID(),
-    },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    headers,
+    body: init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
   });
   const text = await res.text();
   let parsed: any = null;
@@ -57,10 +84,23 @@ async function column<T = any>(
   if (!res.ok) {
     const msg = parsed?.message || parsed?.code || `Column ${res.status}`;
     console.error("provider call failed", init.method ?? "GET", path, res.status, JSON.stringify(parsed));
-    throw Object.assign(new Error(`${msg}`), { status: res.status, detail: parsed });
+    throw Object.assign(new Error(`${msg}`), {
+      status: res.status,
+      code: parsed?.code,
+      type: parsed?.type,
+      documentationUrl: parsed?.documentation_url,
+      details: parsed?.details,
+      detail: parsed,
+    }) as ColumnError;
   }
   return parsed as T;
 }
+
+/** Idempotency keys must be ASCII printable and ≤255 chars. */
+function idempotencyKey(raw: string) {
+  return raw.replace(/[^\x20-\x7E]/g, "-").slice(0, 255);
+}
+
 
 // ---------------------------------------------------------------------------
 // Cursor pagination.
@@ -130,16 +170,24 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: 
 // ---------------------------------------------------------------------------
 const cents = (n: unknown) => (typeof n === "number" ? n : 0);
 
+/**
+ * Column bank-account balances. The real field names are
+ * `available_balance`, `pending_balance` and `locked_balance` — there is no
+ * `holding_balance`. `current` = available + pending (money already committed
+ * but not yet settled), which is the balance a customer expects to see.
+ */
 function mapBalances(acct: any) {
   const b = acct?.balances ?? {};
+  const available = cents(b.available_balance) / 100;
+  const pending = cents(b.pending_balance) / 100;
   return {
-    available: cents(b.available_amount) / 100,
-    current: cents(b.available_amount ?? 0) / 100 + cents(b.pending_amount) / 100,
-    pending: cents(b.pending_amount) / 100,
-    holding: cents(b.holding_amount) / 100,
-    locked: cents(b.locked_amount) / 100,
+    available,
+    current: available + pending,
+    pending,
+    locked: cents(b.locked_balance) / 100,
   };
 }
+
 
 // ---------------------------------------------------------------------------
 // Core flows
@@ -160,12 +208,15 @@ async function ensureEntity(userId: string) {
 
   // Sandbox entity. We deliberately do NOT forward a real SSN; the sandbox
   // accepts the documented test SSN and returns a verified person.
+  // `pep_status` is required by Column's person payload; we do not ask the
+  // customer a politically-exposed-person question yet, so "not_checked".
   const payload: Record<string, unknown> = {
     first_name: first,
     last_name: last,
     email,
     ssn: "123456789",
     date_of_birth: (kyc?.date_of_birth as string | undefined) ?? "1990-01-01",
+    pep_status: "not_checked",
     address: {
       line_1: kyc?.street || profile?.address_line1 || "1 Market St",
       city: kyc?.city || profile?.city || "San Francisco",
@@ -175,7 +226,11 @@ async function ensureEntity(userId: string) {
     },
   };
 
-  const created = await column<any>("/entities/person", { method: "POST", body: payload });
+  // One entity per user, forever — the key is the user id.
+  const created = await column<any>("/entities/person", {
+    method: "POST", body: payload, idempotencyKey: `entity-person-${userId}`,
+  });
+
   const { data: row, error } = await admin.from("column_entities").insert({
     user_id: userId,
     entity_id: created.id,
@@ -204,9 +259,11 @@ async function syncKycStatus(userId: string, verification?: string) {
 
 async function createAccount(userId: string, entityId: string, kind: "checking" | "savings") {
   const description = kind === "checking" ? "Everyday Checking" : "Savings";
+  // Keyed on user + kind: a retry can never open a second checking account.
   const acct = await column<any>("/bank-accounts", {
     method: "POST",
     body: { entity_id: entityId, description },
+    idempotencyKey: `bank-account-${userId}-${kind}`,
   });
 
   // The default account number is created with the account; fall back to
@@ -219,10 +276,13 @@ async function createAccount(userId: string, entityId: string, kind: "checking" 
   if (!numbers) {
     try {
       numbers = await column<any>(`/bank-accounts/${acct.id}/account-numbers`, {
-        method: "POST", body: { description: "Primary" },
+        method: "POST",
+        body: { description: "Primary" },
+        idempotencyKey: `account-number-${acct.id}-primary`,
       });
     } catch { /* account numbers are optional for read-only sync */ }
   }
+
 
   const acctNum: string | undefined = numbers?.account_number;
   const { data: row, error } = await admin.from("column_bank_accounts").insert({
@@ -453,13 +513,41 @@ function pickAccount(rows: any[], which?: string) {
   return rows.find((r) => r.account_type === which) ?? rows.find((r) => r.bank_account_id === which) ?? rows[0];
 }
 
+export interface WireAddress {
+  line1?: string; city?: string; state?: string; postalCode?: string; countryCode?: string;
+}
+
 async function ensureCounterparty(userId: string, args: {
-  name: string; routingNumber: string; accountNumber: string; wire?: boolean;
+  name: string; routingNumber: string; accountNumber: string;
+  wire?: boolean; address?: WireAddress;
 }) {
   const routing = String(args.routingNumber ?? "").replace(/\D/g, "");
   const account = String(args.accountNumber ?? "").replace(/\s/g, "");
   if (routing.length !== 9) throw new Error("Routing number must be 9 digits");
   if (!account) throw new Error("Account number is required");
+
+  const name = args.name?.slice(0, 64) || "Counterparty";
+
+  // Wires are OFAC-screened on the beneficiary, so Column requires a full
+  // beneficiary address. ACH counterparties do not.
+  let wireBlock: Record<string, unknown> | undefined;
+  if (args.wire) {
+    const a = args.address ?? {};
+    const missing = ["line1", "city", "state", "postalCode"].filter((k) => !String((a as any)[k] ?? "").trim());
+    if (missing.length) {
+      throw new Error("Wire recipients need a full beneficiary address (street, city, state, ZIP)");
+    }
+    wireBlock = {
+      beneficiary_name: name,
+      beneficiary_address: {
+        line_1: String(a.line1).slice(0, 100),
+        city: String(a.city).slice(0, 60),
+        state: String(a.state).toUpperCase().slice(0, 3),
+        postal_code: String(a.postalCode).slice(0, 12),
+        country_code: (a.countryCode || "US").toUpperCase().slice(0, 2),
+      },
+    };
+  }
 
   let cachedId: string | null = null;
   try {
@@ -469,17 +557,18 @@ async function ensureCounterparty(userId: string, args: {
       .maybeSingle();
     cachedId = cached?.counterparty_id ?? null;
   } catch { /* mirror table optional */ }
-  if (cachedId) return cachedId;
-
+  // A cached ACH-only counterparty has no wire block, so re-create for wires.
+  if (cachedId && !args.wire) return cachedId;
 
   const cp = await column<any>("/counterparties", {
     method: "POST",
     body: {
       routing_number: routing,
       account_number: account,
-      name: args.name?.slice(0, 64) || "Counterparty",
-      ...(args.wire ? { wire: { beneficiary_name: args.name?.slice(0, 64) || "Counterparty" } } : {}),
+      name,
+      ...(wireBlock ? { wire: wireBlock } : {}),
     },
+    idempotencyKey: `counterparty-${userId}-${routing}-${account.slice(-4)}-${args.wire ? "wire" : "ach"}`,
   });
   try {
     await admin.from("column_counterparties").insert({
@@ -506,11 +595,27 @@ async function recordTransfer(userId: string, kind: string, bankAccountId: strin
   }, { onConflict: "transfer_id" });
 }
 
+/**
+ * Idempotency key for a money movement.
+ *
+ * The client mints a `requestId` once, before the first attempt, and reuses it
+ * on retries — so a retried request replays instead of double-sending, while
+ * two genuinely separate transfers (different requestId) never collide. The
+ * real inputs are folded in so a mutated payload can't ride an old key.
+ */
+async function transferKey(userId: string, kind: string, amount: number, dest: string, requestId?: string) {
+  const seed = [userId, kind, amount, dest, requestId ?? crypto.randomUUID()].join("|");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(seed));
+  return "tx-" + Array.from(new Uint8Array(digest)).slice(0, 16)
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function doTransfer(userId: string, body: any) {
   const rows = await accountsFor(userId);
   const kind = String(body.kind ?? "book");
   const amount = toCents(body.amount);
   const description = String(body.description ?? "Transfer").slice(0, 120);
+  const requestId = typeof body.requestId === "string" ? body.requestId.slice(0, 64) : undefined;
 
   if (kind === "book") {
     const from = pickAccount(rows, body.from);
@@ -525,6 +630,7 @@ async function doTransfer(userId: string, body: any) {
         receiver_bank_account_id: to.bank_account_id,
         amount, currency_code: "USD", description,
       },
+      idempotencyKey: await transferKey(userId, "book", amount, to.bank_account_id, requestId),
     });
     await recordTransfer(userId, "book", from.bank_account_id, t, "debit", description);
     await recordTransfer(userId, "book", to.bank_account_id, { ...t, id: `${t.id}-in` }, "credit", description);
@@ -550,6 +656,7 @@ async function doTransfer(userId: string, body: any) {
         entry_class_code: "PPD",
         description: description.slice(0, 10) || "GLASSBNK",
       },
+      idempotencyKey: await transferKey(userId, kind, amount, counterpartyId, requestId),
     });
     await recordTransfer(userId, "ach", from.bank_account_id, t, type === "DEBIT" ? "credit" : "debit", description);
     return { transferId: t.id, status: t.status };
@@ -563,6 +670,11 @@ async function doTransfer(userId: string, body: any) {
         routingNumber: body.routingNumber,
         accountNumber: body.accountNumber,
         wire: true,
+        address: {
+          line1: body.beneficiaryLine1, city: body.beneficiaryCity,
+          state: body.beneficiaryState, postalCode: body.beneficiaryPostalCode,
+          countryCode: body.beneficiaryCountry,
+        },
       });
     const t = await column<any>("/transfers/wire", {
       method: "POST",
@@ -571,6 +683,7 @@ async function doTransfer(userId: string, body: any) {
         counterparty_id: counterpartyId,
         amount, currency_code: "USD", description,
       },
+      idempotencyKey: await transferKey(userId, "wire", amount, counterpartyId, requestId),
     });
     await recordTransfer(userId, "wire", from.bank_account_id, t, "debit", description);
     return { transferId: t.id, status: t.status };
@@ -578,6 +691,46 @@ async function doTransfer(userId: string, body: any) {
 
   throw new Error(`Unsupported transfer kind "${kind}"`);
 }
+
+/**
+ * Uploads a KYC document to Column and links it to the caller's entity as
+ * verification evidence in a single multipart call.
+ */
+async function submitEvidence(userId: string, body: any) {
+  const { data: entity } = await admin.from("column_entities")
+    .select("entity_id").eq("user_id", userId).maybeSingle();
+  if (!entity) throw new Error("Finish verification first — no entity to attach evidence to");
+
+  const dataUrl = String(body.dataUrl ?? "");
+  const match = /^data:([^;,]+);base64,(.+)$/s.exec(dataUrl);
+  if (!match) throw new Error("Unsupported file — re-take the photo and try again");
+  const [, mime, b64] = match;
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  if (bytes.byteLength > 8 * 1024 * 1024) throw new Error("File is too large (max 8 MB)");
+
+  const documentType = String(body.documentType ?? "drivers_license").slice(0, 64);
+  const ext = mime.includes("png") ? "png" : mime.includes("pdf") ? "pdf" : "jpg";
+
+  const form = new FormData();
+  form.append("file", new Blob([bytes], { type: mime }), `${documentType}.${ext}`);
+  form.append("evidence_type", "file");
+  form.append("purposes", String(body.purpose ?? "identity_verification"));
+  form.append("document_type", documentType);
+
+  const res = await column<any>(`/entities/${entity.entity_id}/documents`, {
+    method: "POST",
+    form,
+    idempotencyKey: `evidence-${userId}-${documentType}-${bytes.byteLength}`,
+  });
+  return { documentId: res?.id ?? null, entityId: entity.entity_id, status: res?.status ?? "submitted" };
+}
+
+/** Compliance view: exactly which required fields Column is still waiting on. */
+async function entityCompliance(entityId: string) {
+  if (!/^[A-Za-z0-9_\-]+$/.test(entityId)) throw new Error("Invalid entity id");
+  return await column<any>(`/entities/${entityId}/compliance`);
+}
+
 
 /**
  * Sandbox-only webhook self-test. Signs a synthetic event with the same secret
@@ -742,7 +895,7 @@ Deno.serve(async (req) => {
 
     // Rate limit per caller. Admin/mutating actions get a much tighter budget
     // than read-only status/sync polling.
-    const isMutating = isAdminAction || action === "provision" || action === "transfer";
+    const isMutating = isAdminAction || ["provision", "transfer", "submit_evidence"].includes(action);
     const rl = rateLimit(`ledger:${user.id}:${isMutating ? "write" : "read"}`, isMutating ? 10 : 60);
     if (!rl.allowed) return tooManyRequests(rl.retryAfter, corsHeaders);
 
@@ -774,9 +927,13 @@ Deno.serve(async (req) => {
         const result = await doTransfer(user.id, body);
         return json({ ...result, snapshot: await snapshot(user.id, { provision: false }) });
       }
+      case "submit_evidence":
+        return json(await submitEvidence(user.id, body));
 
       case "admin_list":
         return json(await adminList());
+      case "admin_compliance":
+        return json(await entityCompliance(String(body.entityId ?? "")));
       case "admin_delete":
         return json(await adminDelete(String(body.resource ?? ""), String(body.id ?? "")));
       case "admin_wipe":
@@ -793,8 +950,15 @@ Deno.serve(async (req) => {
         return json({ error: `Unknown action "${action}"` }, 400);
     }
   } catch (e) {
-    const err = e as Error & { status?: number };
-    console.error("ledger-sync error", err.message);
-    return json({ error: err.message }, err.status && err.status < 500 ? 400 : 500);
+    const err = e as ColumnError;
+    console.error("ledger-sync error", err.message, err.code ?? "");
+    // Pass Column's structured error through so the UI can map known codes.
+    return json({
+      error: err.message,
+      code: err.code ?? null,
+      type: err.type ?? null,
+      documentationUrl: err.documentationUrl ?? null,
+    }, err.status && err.status < 500 ? 400 : 500);
   }
 });
+
