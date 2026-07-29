@@ -36,6 +36,32 @@ function timingSafeEqual(a: string, b: string) {
 
 const cents = (n: unknown) => (typeof n === "number" ? n : 0);
 
+/**
+ * Column does NOT guarantee event ordering: `submitted` can land after
+ * `completed`. Rank the lifecycle so a late-arriving earlier stage can never
+ * walk a transfer backwards. Unknown statuses rank 1 (in-flight) so genuinely
+ * new states still apply; terminal states are never overwritten by anything
+ * except another terminal state that arrived later.
+ */
+const STATUS_RANK: Record<string, number> = {
+  initiated: 0, scheduled: 0, pending: 1, submitted: 2, manual_review: 2,
+  completed: 3, settled: 3, posted: 3,
+  returned: 4, canceled: 4, cancelled: 4, rejected: 4, failed: 4,
+};
+const rankOf = (s: string) => STATUS_RANK[s] ?? 1;
+
+/** True when the incoming event should be allowed to overwrite what we hold. */
+function shouldApply(prev: { status?: string; occurred_at?: string } | null, nextStatus: string, occurredAt?: string) {
+  if (!prev?.status) return true;
+  const prevRank = rankOf(String(prev.status).toLowerCase());
+  const nextRank = rankOf(nextStatus);
+  if (nextRank > prevRank) return true;
+  if (nextRank < prevRank) return false;
+  // Same stage — prefer the newer event timestamp when we have one.
+  if (!occurredAt || !prev.occurred_at) return true;
+  return Date.parse(occurredAt) >= Date.parse(prev.occurred_at);
+}
+
 async function userForBankAccount(bankAccountId?: string) {
   if (!bankAccountId) return null;
   const { data } = await admin.from("column_bank_accounts")
@@ -49,6 +75,7 @@ async function notify(userId: string | null, args: { type: string; title: string
     await admin.from("notifications").insert({ user_id: userId, ...args });
   } catch { /* notification delivery must never fail a webhook */ }
 }
+
 
 async function handleEvent(type: string, data: any) {
   // --- entity / identity verification ------------------------------------
