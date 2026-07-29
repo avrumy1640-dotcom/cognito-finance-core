@@ -118,6 +118,10 @@ interface Ctx {
   ledgerError: string | null;
   ledgerStatus: DataStatus;
   refreshLedger: (opts?: { silent?: boolean }) => Promise<void>;
+  /** Live mode only: pull the next page of provider transactions into the feed. */
+  loadMoreTransactions: () => Promise<void>;
+  hasMoreTransactions: boolean;
+  loadingMoreTransactions: boolean;
   retry: () => void;
   setTransactionCategory: (id: string, category: string) => Promise<void>;
   transfer: (args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => boolean;
@@ -219,6 +223,12 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [dataStatus, setDataStatus] = useState<DataStatus>("loading");
   const [dataError, setDataError] = useState<string | null>(null);
+  // Live-mode Activity window. The provider mirror is paged, so the feed grows
+  // in 50-row steps instead of being hard-capped.
+  const LIVE_TX_PAGE = 50;
+  const liveTxWindowRef = useRef(LIVE_TX_PAGE);
+  const [hasMoreTransactions, setHasMoreTransactions] = useState(false);
+  const [loadingMoreTransactions, setLoadingMoreTransactions] = useState(false);
   const [goals, setGoals] = useState<DemoGoal[]>([]);
   const [roundUpGoalId, setRoundUpGoalId] = useState<string | null>(null);
   const [payroll, setPayroll] = useState<PayrollPattern | null>(null);
@@ -382,7 +392,8 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       // source of truth: a failed call raises a real error state rather than
       // quietly showing stale or simulated numbers.
       if (isLiveMode()) {
-        const snap = await ledgerProvider.sync();
+        const snap = await ledgerProvider.sync({ limit: liveTxWindowRef.current });
+        setHasMoreTransactions(!!snap.transactionsHasMore);
         if (!snap.provisioned) {
           setDataError(
             "No live account yet. Complete identity verification to have your bank account opened with our banking partner.",
@@ -403,6 +414,19 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       setDataStatus("error");
     }
   }, [applyLedger]);
+
+  const loadMoreTransactions = useCallback(async () => {
+    if (!isLiveMode() || !hasMoreTransactions || loadingMoreTransactions) return;
+    setLoadingMoreTransactions(true);
+    liveTxWindowRef.current += LIVE_TX_PAGE;
+    try {
+      await refreshLedger({ silent: true });
+    } finally {
+      setLoadingMoreTransactions(false);
+    }
+  }, [hasMoreTransactions, loadingMoreTransactions, refreshLedger]);
+
+
 
   useEffect(() => {
     void refreshLedger({ silent: true });
@@ -833,6 +857,9 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     ledgerError: dataError,
     ledgerStatus: dataStatus,
     refreshLedger,
+    loadMoreTransactions,
+    hasMoreTransactions,
+    loadingMoreTransactions,
     retry: () => void refreshLedger(),
     setTransactionCategory,
     transfer,

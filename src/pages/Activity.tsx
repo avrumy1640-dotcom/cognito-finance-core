@@ -23,7 +23,7 @@ const ActivityPage = () => {
   const [activeFilter, setActiveFilter] = useState("All");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const navigate = useNavigate();
-  const { transactions, dataStatus, dataError, retry } = useBank();
+  const { transactions, dataStatus, dataError, retry, hasMoreTransactions, loadingMoreTransactions, loadMoreTransactions } = useBank();
 
   // Filtering is memoised so a 10k-row ledger doesn't re-scan on every render.
   const filtered = useMemo(() => {
@@ -268,6 +268,18 @@ const ActivityPage = () => {
             >
               Load {Math.min(PAGE_SIZE, filtered.length - page.length)} more
               <span className="text-muted-foreground font-normal"> · {page.length} of {filtered.length}</span>
+            </button>
+          )}
+
+          {/* Everything loaded locally, but the banking partner mirror still has
+              older records — fetch the next server page. */}
+          {filtered.length <= page.length && hasMoreTransactions && (
+            <button
+              onClick={() => void loadMoreTransactions()}
+              disabled={loadingMoreTransactions}
+              className="w-full h-11 rounded-xl border border-border text-sm font-medium text-foreground active:bg-secondary/50 transition-colors disabled:opacity-60"
+            >
+              {loadingMoreTransactions ? "Loading older activity…" : "Load older activity"}
             </button>
           )}
         </div>

@@ -62,6 +62,67 @@ async function column<T = any>(
   return parsed as T;
 }
 
+// ---------------------------------------------------------------------------
+// Cursor pagination.
+//
+// Column list endpoints are cursor-based (NOT offset-based): a response carries
+// `has_more`, the items are in reverse-chronological order, and the next page is
+// requested with `starting_after: <id of the last item on this page>`. Fetching a
+// single page silently truncates once an account passes `limit` records, so every
+// list call in this file must go through this helper.
+// ---------------------------------------------------------------------------
+interface PaginateOpts {
+  /** Response key holding the array (e.g. "entities"). Falls back to `data`. */
+  key?: string;
+  /** Records per request. Column caps this at 100. */
+  pageSize?: number;
+  /** Hard safety cap so a misbehaving `has_more` can never loop forever. */
+  max?: number;
+  query?: Record<string, string | number | undefined>;
+  /**
+   * Called after each page. Return `true` to stop early — used by the transfer
+   * sync to stop as soon as it reaches records it already has locally.
+   */
+  stopAfterPage?: (page: any[]) => boolean;
+}
+
+function pickList(res: any, key?: string): any[] {
+  if (Array.isArray(res)) return res;
+  if (key && Array.isArray(res?.[key])) return res[key];
+  if (Array.isArray(res?.data)) return res.data;
+  // Last resort: first array-valued property on the response.
+  for (const v of Object.values(res ?? {})) if (Array.isArray(v)) return v as any[];
+  return [];
+}
+
+async function columnPaginated<T = any>(path: string, opts: PaginateOpts = {}): Promise<T[]> {
+  const pageSize = Math.min(opts.pageSize ?? 100, 100);
+  const max = opts.max ?? 1000;
+  const out: T[] = [];
+  let startingAfter: string | undefined;
+
+  // The `has_more === false` guard is the normal exit; `max` and an empty/
+  // non-advancing page are the defensive ones.
+  for (let guard = 0; guard < Math.ceil(max / pageSize) + 1; guard++) {
+    const res = await column<any>(path, {
+      query: { ...opts.query, limit: pageSize, starting_after: startingAfter },
+    });
+    const page = pickList(res, opts.key);
+    out.push(...page);
+    if (opts.stopAfterPage?.(page)) break;
+    const last = page[page.length - 1] as any;
+    const nextCursor = last?.id;
+    if (!page.length || !nextCursor || nextCursor === startingAfter) break;
+    if (res?.has_more !== true) break;
+    if (out.length >= max) {
+      console.warn(`columnPaginated: hit safety cap of ${max} records for ${path}`);
+      break;
+    }
+    startingAfter = String(nextCursor);
+  }
+  return out;
+}
+
 const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
 // ---------------------------------------------------------------------------
@@ -218,13 +279,48 @@ async function refreshAccounts(userId: string) {
   return out;
 }
 
-async function syncTransfers(userId: string, bankAccountIds: string[]) {
-  if (!bankAccountIds.length) return [];
+const TX_PAGE_SIZE = 50;
+
+/**
+ * Pulls every transfer of every kind for the user's accounts.
+ *
+ * Efficiency: transfers come back newest-first, so on a normal sync we stop
+ * paginating as soon as a page is entirely older than the newest record we
+ * already mirrored locally. A full walk (up to the safety cap) only happens on
+ * the first sync, or when we still hold transfers in a non-terminal status that
+ * are older than that watermark and therefore need their status re-read.
+ */
+async function syncTransfers(
+  userId: string,
+  bankAccountIds: string[],
+  page: { limit?: number; offset?: number } = {},
+) {
+  if (!bankAccountIds.length) return { rows: [], hasMore: false, total: 0 };
+
+  const [{ data: newest }, { count: stalePending }] = await Promise.all([
+    admin.from("column_transfers").select("occurred_at").eq("user_id", userId)
+      .order("occurred_at", { ascending: false }).limit(1).maybeSingle(),
+    admin.from("column_transfers").select("transfer_id", { count: "exact", head: true })
+      .eq("user_id", userId).not("status", "in", '("completed","settled","posted","returned","canceled")'),
+  ]);
+  const watermark = newest?.occurred_at ? Date.parse(newest.occurred_at as string) : null;
+  const fullWalk = watermark === null || (stalePending ?? 0) > 0;
+
   const collected: any[] = [];
   for (const kind of ["ach", "book", "wire"] as const) {
     try {
-      const list = await column<any>(`/transfers/${kind}`, { query: { limit: 100 } });
-      const items: any[] = list?.transfers ?? list?.[`${kind}_transfers`] ?? list?.data ?? [];
+      const items = await columnPaginated<any>(`/transfers/${kind}`, {
+        key: `${kind}_transfers`,
+        pageSize: 100,
+        max: 1000,
+        // Incremental stop: once the oldest row on this page predates everything
+        // we already have, later pages hold nothing new.
+        stopAfterPage: (pageItems) => {
+          if (fullWalk || !pageItems.length) return false;
+          const oldest = pageItems[pageItems.length - 1]?.created_at;
+          return !!oldest && Date.parse(oldest) <= (watermark as number);
+        },
+      });
       for (const t of items) {
         const accId = t.bank_account_id ?? t.sender_bank_account_id ?? t.receiver_bank_account_id;
         const involved =
@@ -254,25 +350,43 @@ async function syncTransfers(userId: string, bankAccountIds: string[]) {
           occurred_at: t.created_at ?? new Date().toISOString(),
         });
       }
-    } catch { /* a transfer type may be unavailable in sandbox */ }
+    } catch (e) {
+      // A transfer type may be unavailable in sandbox — log rather than swallow.
+      console.warn(`transfer sync failed for ${kind}:`, (e as Error).message);
+    }
   }
   if (collected.length) {
     await admin.from("column_transfers").upsert(collected, { onConflict: "transfer_id" });
   }
-  const { data } = await admin
-    .from("column_transfers").select("*").eq("user_id", userId)
-    .order("occurred_at", { ascending: false }).limit(200);
-  return data ?? [];
+
+  // Select-back is paged (load-more), not a hard cap, so the Activity feed can
+  // walk the full history the same way the rest of the app paginates.
+  const limit = Math.min(Math.max(Number(page.limit) || TX_PAGE_SIZE, 1), 500);
+  const offset = Math.max(Number(page.offset) || 0, 0);
+  const { data, count } = await admin
+    .from("column_transfers").select("*", { count: "exact" }).eq("user_id", userId)
+    .order("occurred_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  const rows = data ?? [];
+  return { rows, hasMore: offset + rows.length < (count ?? rows.length), total: count ?? rows.length };
 }
 
-async function snapshot(userId: string, opts: { provision: boolean }) {
+async function snapshot(
+  userId: string,
+  opts: { provision: boolean; limit?: number; offset?: number },
+) {
   let entity = null as any;
   const { data: existingEntity } = await admin
     .from("column_entities").select("*").eq("user_id", userId).maybeSingle();
   entity = existingEntity;
 
   if (!entity && opts.provision) entity = await ensureEntity(userId);
-  if (!entity) return { provisioned: false, entity: null, accounts: [], transactions: [] };
+  if (!entity) {
+    return {
+      provisioned: false, entity: null, accounts: [], transactions: [],
+      transactionsHasMore: false, transactionsTotal: 0, transactionsOffset: 0,
+    };
+  }
 
   let accounts = await refreshAccounts(userId);
   if (!accounts.length && opts.provision) {
@@ -281,10 +395,15 @@ async function snapshot(userId: string, opts: { provision: boolean }) {
   }
 
   const ids = accounts.map((a) => a.bank_account_id);
-  const transfers = await syncTransfers(userId, ids);
+  const { rows: transfers, hasMore, total } = await syncTransfers(userId, ids, {
+    limit: opts.limit, offset: opts.offset,
+  });
 
   return {
     provisioned: true,
+    transactionsHasMore: hasMore,
+    transactionsTotal: total,
+    transactionsOffset: Math.max(Number(opts.offset) || 0, 0),
     entity: {
       entityId: entity.entity_id,
       verificationStatus: entity.verification_status,
@@ -503,12 +622,15 @@ async function diagnose() {
     webhookSecret: !!Deno.env.get("COLUMN_WEBHOOK_SECRET"),
   };
   try {
+    // Probe only — a single record is enough to prove credentials work.
     const res = await column<any>("/entities", { query: { limit: 1 } });
     out.reachable = true;
-    out.entityCount = (res?.entities ?? res?.data ?? []).length;
-    const hooks = await column<any>("/webhook-endpoints", { query: { limit: 50 } })
-      .catch(() => null);
-    const list: any[] = hooks?.webhook_endpoints ?? hooks?.data ?? [];
+    out.entityCount = pickList(res, "entities").length;
+    // Endpoint lists can exceed one page, and `webhookRegistered` must consider
+    // all of them, so this one is fully paginated.
+    const list = await columnPaginated<any>("/webhook-endpoints", {
+      key: "webhook_endpoints", max: 500,
+    }).catch(() => [] as any[]);
     out.webhookEndpoints = list.map((h) => ({ id: h.id, url: h.url, enabled: h.enabled ?? true }));
     out.webhookRegistered = list.some((h) => String(h.url ?? "").includes("column-webhook"));
   } catch (e) {
@@ -522,22 +644,30 @@ async function diagnose() {
 // ---------------------------------------------------------------------------
 // Admin / cleanup utilities
 // ---------------------------------------------------------------------------
+/**
+ * Every resource is fully paginated: the wipe/delete tooling is only correct if
+ * it can see the entire sandbox, not just the first 100 of each kind.
+ */
 async function adminList() {
+  const fetchAll = (path: string, key: string) =>
+    columnPaginated<any>(path, { key, max: 2000 })
+      .then((items) => ({ items }))
+      .catch((e: Error) => ({ items: [] as any[], error: String(e.message) }));
+
   const [entities, accounts, counterparties, webhooks] = await Promise.all([
-    column<any>("/entities", { query: { limit: 100 } }).catch((e) => ({ error: String(e.message) })),
-    column<any>("/bank-accounts", { query: { limit: 100 } }).catch((e) => ({ error: String(e.message) })),
-    column<any>("/counterparties", { query: { limit: 100 } }).catch((e) => ({ error: String(e.message) })),
-    column<any>("/webhook-endpoints", { query: { limit: 100 } }).catch((e) => ({ error: String(e.message) })),
+    fetchAll("/entities", "entities"),
+    fetchAll("/bank-accounts", "bank_accounts"),
+    fetchAll("/counterparties", "counterparties"),
+    fetchAll("/webhook-endpoints", "webhook_endpoints"),
   ]);
-  const pick = (r: any, k: string) => (Array.isArray(r) ? r : r?.[k] ?? r?.data ?? []);
   return {
-    entities: pick(entities, "entities"),
-    bankAccounts: pick(accounts, "bank_accounts"),
-    counterparties: pick(counterparties, "counterparties"),
-    webhookEndpoints: pick(webhooks, "webhook_endpoints"),
+    entities: entities.items,
+    bankAccounts: accounts.items,
+    counterparties: counterparties.items,
+    webhookEndpoints: webhooks.items,
     errors: {
-      entities: entities?.error, bankAccounts: accounts?.error,
-      counterparties: counterparties?.error, webhookEndpoints: webhooks?.error,
+      entities: (entities as any).error, bankAccounts: (accounts as any).error,
+      counterparties: (counterparties as any).error, webhookEndpoints: (webhooks as any).error,
     },
   };
 }
@@ -603,6 +733,10 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "");
+    // Activity feed load-more window for the mirrored transfer table.
+    const page = { limit: Number(body?.limit) || undefined, offset: Number(body?.offset) || undefined };
+
+
 
     const isAdminAction = action.startsWith("admin_");
 
@@ -633,9 +767,9 @@ Deno.serve(async (req) => {
       case "test_webhook":
         return json(await testWebhook(user.id));
       case "provision":
-        return json(await snapshot(user.id, { provision: true }));
+        return json(await snapshot(user.id, { provision: true, limit: page.limit, offset: page.offset }));
       case "sync":
-        return json(await snapshot(user.id, { provision: false }));
+        return json(await snapshot(user.id, { provision: false, limit: page.limit, offset: page.offset }));
       case "transfer": {
         const result = await doTransfer(user.id, body);
         return json({ ...result, snapshot: await snapshot(user.id, { provision: false }) });
