@@ -466,8 +466,8 @@ const HomePage = () => {
         {/* Direct Deposit — uses the account deposit details when hydrated. */}
         {!hydrating && (
           <motion.div custom={5} variants={fadeUp} initial="hidden" animate="visible" className="pb-4">
-            <GlassCard className="relative overflow-hidden">
-              <div className="absolute inset-0 gradient-hero opacity-[0.05] rounded-2xl" />
+            <GlassCard className="glow-surface relative overflow-hidden">
+
               <div className="relative">
                 <div className="flex items-center gap-2 mb-3">
                   <Shield size={18} className="text-primary" />
