@@ -232,10 +232,14 @@ async function syncTransfers(userId: string, bankAccountIds: string[]) {
           bankAccountIds.includes(t.sender_bank_account_id) ||
           bankAccountIds.includes(t.receiver_bank_account_id);
         if (!involved) continue;
-        const isCredit =
-          t.type === "CREDIT" ||
-          bankAccountIds.includes(t.receiver_bank_account_id ?? "") ||
-          t.direction === "credit";
+        // ACH semantics are inverted relative to intuition: an ACH DEBIT pulls
+        // money INTO our account, a CREDIT pushes it out. Book/wire transfers
+        // are keyed off which side of the transfer we hold.
+        const isCredit = kind === "ach"
+          ? t.type === "DEBIT"
+          : bankAccountIds.includes(t.receiver_bank_account_id ?? "") ||
+            t.direction === "credit";
+
         collected.push({
           user_id: userId,
           transfer_id: t.id,
