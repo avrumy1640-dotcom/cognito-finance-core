@@ -641,7 +641,7 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
             <LimitsCheckPanel check={checkLimits("wire", num)} />
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-              <button onClick={submit} disabled={!num || !name || !routing || !account || !checkLimits("wire", num).ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send Wire</button>
+              <button onClick={submit} disabled={!num || !name || !routing || !account || !addressComplete || !checkLimits("wire", num).ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send Wire</button>
             </div>
           </div>
         </>
