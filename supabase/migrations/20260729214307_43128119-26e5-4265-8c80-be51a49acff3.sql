@@ -1,0 +1,1 @@
+DELETE FROM public.column_transfers WHERE transfer_id LIKE '%-in';
