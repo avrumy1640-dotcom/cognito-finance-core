@@ -763,9 +763,9 @@ Deno.serve(async (req) => {
       case "test_webhook":
         return json(await testWebhook(user.id));
       case "provision":
-        return json(await snapshot(user.id, { provision: true }));
+        return json(await snapshot(user.id, { provision: true, limit: page.limit, offset: page.offset }));
       case "sync":
-        return json(await snapshot(user.id, { provision: false }));
+        return json(await snapshot(user.id, { provision: false, limit: page.limit, offset: page.offset }));
       case "transfer": {
         const result = await doTransfer(user.id, body);
         return json({ ...result, snapshot: await snapshot(user.id, { provision: false }) });
