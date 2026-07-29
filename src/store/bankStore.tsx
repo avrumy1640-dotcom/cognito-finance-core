@@ -415,6 +415,19 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [applyLedger]);
 
+  const loadMoreTransactions = useCallback(async () => {
+    if (!isLiveMode() || !hasMoreTransactions || loadingMoreTransactions) return;
+    setLoadingMoreTransactions(true);
+    liveTxWindowRef.current += LIVE_TX_PAGE;
+    try {
+      await refreshLedger({ silent: true });
+    } finally {
+      setLoadingMoreTransactions(false);
+    }
+  }, [hasMoreTransactions, loadingMoreTransactions, refreshLedger]);
+
+
+
   useEffect(() => {
     void refreshLedger({ silent: true });
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
