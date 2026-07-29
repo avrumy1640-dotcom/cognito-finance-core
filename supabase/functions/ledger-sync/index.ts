@@ -927,9 +927,13 @@ Deno.serve(async (req) => {
         const result = await doTransfer(user.id, body);
         return json({ ...result, snapshot: await snapshot(user.id, { provision: false }) });
       }
+      case "submit_evidence":
+        return json(await submitEvidence(user.id, body));
 
       case "admin_list":
         return json(await adminList());
+      case "admin_compliance":
+        return json(await entityCompliance(String(body.entityId ?? "")));
       case "admin_delete":
         return json(await adminDelete(String(body.resource ?? ""), String(body.id ?? "")));
       case "admin_wipe":
@@ -946,8 +950,15 @@ Deno.serve(async (req) => {
         return json({ error: `Unknown action "${action}"` }, 400);
     }
   } catch (e) {
-    const err = e as Error & { status?: number };
-    console.error("ledger-sync error", err.message);
-    return json({ error: err.message }, err.status && err.status < 500 ? 400 : 500);
+    const err = e as ColumnError;
+    console.error("ledger-sync error", err.message, err.code ?? "");
+    // Pass Column's structured error through so the UI can map known codes.
+    return json({
+      error: err.message,
+      code: err.code ?? null,
+      type: err.type ?? null,
+      documentationUrl: err.documentationUrl ?? null,
+    }, err.status && err.status < 500 ? 400 : 500);
   }
 });
+
