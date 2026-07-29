@@ -62,6 +62,67 @@ async function column<T = any>(
   return parsed as T;
 }
 
+// ---------------------------------------------------------------------------
+// Cursor pagination.
+//
+// Column list endpoints are cursor-based (NOT offset-based): a response carries
+// `has_more`, the items are in reverse-chronological order, and the next page is
+// requested with `starting_after: <id of the last item on this page>`. Fetching a
+// single page silently truncates once an account passes `limit` records, so every
+// list call in this file must go through this helper.
+// ---------------------------------------------------------------------------
+interface PaginateOpts {
+  /** Response key holding the array (e.g. "entities"). Falls back to `data`. */
+  key?: string;
+  /** Records per request. Column caps this at 100. */
+  pageSize?: number;
+  /** Hard safety cap so a misbehaving `has_more` can never loop forever. */
+  max?: number;
+  query?: Record<string, string | number | undefined>;
+  /**
+   * Called after each page. Return `true` to stop early — used by the transfer
+   * sync to stop as soon as it reaches records it already has locally.
+   */
+  stopAfterPage?: (page: any[]) => boolean;
+}
+
+function pickList(res: any, key?: string): any[] {
+  if (Array.isArray(res)) return res;
+  if (key && Array.isArray(res?.[key])) return res[key];
+  if (Array.isArray(res?.data)) return res.data;
+  // Last resort: first array-valued property on the response.
+  for (const v of Object.values(res ?? {})) if (Array.isArray(v)) return v as any[];
+  return [];
+}
+
+async function columnPaginated<T = any>(path: string, opts: PaginateOpts = {}): Promise<T[]> {
+  const pageSize = Math.min(opts.pageSize ?? 100, 100);
+  const max = opts.max ?? 1000;
+  const out: T[] = [];
+  let startingAfter: string | undefined;
+
+  // The `has_more === false` guard is the normal exit; `max` and an empty/
+  // non-advancing page are the defensive ones.
+  for (let guard = 0; guard < Math.ceil(max / pageSize) + 1; guard++) {
+    const res = await column<any>(path, {
+      query: { ...opts.query, limit: pageSize, starting_after: startingAfter },
+    });
+    const page = pickList(res, opts.key);
+    out.push(...page);
+    if (opts.stopAfterPage?.(page)) break;
+    const last = page[page.length - 1] as any;
+    const nextCursor = last?.id;
+    if (!page.length || !nextCursor || nextCursor === startingAfter) break;
+    if (res?.has_more !== true) break;
+    if (out.length >= max) {
+      console.warn(`columnPaginated: hit safety cap of ${max} records for ${path}`);
+      break;
+    }
+    startingAfter = String(nextCursor);
+  }
+  return out;
+}
+
 const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
 // ---------------------------------------------------------------------------
