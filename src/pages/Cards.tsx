@@ -291,7 +291,7 @@ const CardsPage = () => {
             <p className="text-lg font-display font-bold text-foreground mt-1">{formatCurrency(monthSpend)}</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">Debit card spend</p>
           </GlassCard>
-          <GlassCard className="py-3">
+          <GlassCard className="glow-surface py-3">
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Daily limit</p>
               <span className="text-[10px] text-muted-foreground font-mono">{dailyPct}%</span>
