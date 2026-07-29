@@ -440,7 +440,8 @@ const HomePage = () => {
               </button>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <GlassCard onClick={() => navigate("/insights")}>
+              <GlassCard onClick={() => navigate("/insights")} className="glow-surface">
+
                 <div className="flex items-center gap-2 mb-2">
                   <ArrowDownLeft size={16} className="text-success" />
                   <span className="text-xs text-muted-foreground font-medium">Money In</span>
