@@ -230,17 +230,23 @@ Deno.serve(async (req) => {
   const eventType: string = event?.type ?? event?.event_type ?? "unknown";
   const data = event?.data ?? event?.object ?? event;
 
-  // Idempotency — same event id is acknowledged but never re-processed.
-  if (eventId) {
-    const { data: seen } = await admin.from("webhook_events")
-      .select("id").eq("provider", "column").eq("event_id", eventId).maybeSingle();
-    if (seen) return json({ ok: true, deduped: true });
-  }
-
-  const { data: logRow } = await admin.from("webhook_events").insert({
+  // Idempotency. Column can deliver the same event id more than once, possibly
+  // concurrently, so the claim is the INSERT itself: a unique index on
+  // (provider, event_id) means exactly one delivery wins and the losers exit
+  // with a 200 before touching any ledger state.
+  const { data: logRow, error: claimError } = await admin.from("webhook_events").insert({
     provider: "column", event_id: eventId, event_type: eventType,
     status: "received", payload: event, signature: provided.slice(0, 16),
   }).select("id").maybeSingle();
+
+  if (claimError) {
+    // 23505 = unique violation → this event was already claimed/processed.
+    if ((claimError as { code?: string }).code === "23505") {
+      return json({ ok: true, deduped: true });
+    }
+    console.error("webhook_events insert failed", claimError.message);
+  }
+
 
   try {
     const result = await handleEvent(eventType, data);
