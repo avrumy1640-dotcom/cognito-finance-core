@@ -383,8 +383,8 @@ Deno.serve(async (req) => {
         return json(await adminWipe({ includeWebhooks: !!body.includeWebhooks }));
       case "admin_local":
         return json({
-          entities: (await admin.from("column_entities").select("*")).data ?? [],
-          accounts: (await admin.from("column_bank_accounts").select("*")).data ?? [],
+          entities: (await admin.from("column_entities").select("*").limit(200)).data ?? [],
+          accounts: (await admin.from("column_bank_accounts").select("*").limit(200)).data ?? [],
           transfers: (await admin.from("column_transfers").select("*").limit(100)).data ?? [],
           events: (await admin.from("webhook_events").select("*").eq("provider", "column")
             .order("received_at", { ascending: false }).limit(50)).data ?? [],
@@ -394,7 +394,7 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     const err = e as Error & { status?: number };
-    console.error("column-api error", err.message);
+    console.error("ledger-sync error", err.message);
     return json({ error: err.message }, err.status && err.status < 500 ? 400 : 500);
   }
 });
