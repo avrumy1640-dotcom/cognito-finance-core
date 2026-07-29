@@ -1,35 +1,18 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard, Users, ShieldCheck, CreditCard, ArrowLeftRight, Coins,
-  Repeat, Percent, Webhook, ScrollText, LifeBuoy, KeyRound, BarChart3, LogOut, Boxes,
-} from "lucide-react";
+import { LogOut, Boxes } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRole";
 
 const nav = [
-  { to: "/admin", end: true, label: "Dashboard", icon: LayoutDashboard },
-  { to: "/admin/customers", label: "Customers", icon: Users },
-  { to: "/admin/kyc", label: "KYC Review", icon: ShieldCheck },
-  { to: "/admin/accounts", label: "Accounts", icon: BarChart3 },
-  { to: "/admin/cards", label: "Cards", icon: CreditCard },
-  { to: "/admin/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { to: "/admin/crypto", label: "Crypto", icon: Coins },
-  { to: "/admin/exchange", label: "Exchange", icon: Repeat },
-  { to: "/admin/fees", label: "Fees", icon: Percent },
-  { to: "/admin/webhooks", label: "Webhook logs", icon: Webhook },
-  { to: "/admin/audit", label: "Audit logs", icon: ScrollText },
-  { to: "/admin/tickets", label: "Support tickets", icon: LifeBuoy },
-  { to: "/admin/roles", label: "User permissions", icon: KeyRound },
   { to: "/admin/provider", label: "Provider sandbox", icon: Boxes },
-
 ];
 
 const AdminLayout = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { isAdmin, isCompliance, isSupport } = useRoles();
+  const { isAdmin } = useRoles();
 
-  const badge = isAdmin ? "Admin" : isCompliance ? "Compliance" : isSupport ? "Support" : "Staff";
+  const badge = isAdmin ? "Admin" : "Staff";
 
   return (
     <div className="min-h-screen bg-background flex">
