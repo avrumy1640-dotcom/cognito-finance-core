@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
   BadgeCheck,
-  CreditCard,
   Gift,
   ShieldCheck,
   Target,
@@ -175,10 +174,6 @@ const SecurityMock = () => (
     <MiniCard className="flex items-center justify-between">
       <span className="text-[10px] text-white/80">Real-time alerts</span>
       <span className="h-4 w-7 rounded-full gradient-lime" />
-    </MiniCard>
-    <MiniCard className="flex items-center gap-2">
-      <CreditCard size={14} className="text-primary" />
-      <span className="text-[10px] text-white/80">Freeze your card instantly</span>
     </MiniCard>
   </div>
 );
