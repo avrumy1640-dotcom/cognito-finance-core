@@ -171,22 +171,32 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: 
 const cents = (n: unknown) => (typeof n === "number" ? n : 0);
 
 /**
- * Column bank-account balances. The real field names are
- * `available_balance`, `pending_balance` and `locked_balance` — there is no
- * `holding_balance`. `current` = available + pending (money already committed
- * but not yet settled), which is the balance a customer expects to see.
+ * Column bank-account balances.
+ *
+ * The docs name these `available_balance` / `pending_balance` /
+ * `locked_balance`, but the live sandbox actually returns
+ * `available_amount` / `pending_amount` / `locked_amount` (verified against a
+ * real mirrored account). Reading only the documented names silently produced
+ * $0 everywhere, so we accept BOTH spellings and take whichever is present.
+ * `current` = available + pending.
  */
+function balanceField(b: any, name: string) {
+  const v = b?.[`${name}_balance`];
+  return typeof v === "number" ? v : cents(b?.[`${name}_amount`]);
+}
+
 function mapBalances(acct: any) {
   const b = acct?.balances ?? {};
-  const available = cents(b.available_balance) / 100;
-  const pending = cents(b.pending_balance) / 100;
+  const available = balanceField(b, "available") / 100;
+  const pending = balanceField(b, "pending") / 100;
   return {
     available,
     current: available + pending,
     pending,
-    locked: cents(b.locked_balance) / 100,
+    locked: balanceField(b, "locked") / 100,
   };
 }
+
 
 
 // ---------------------------------------------------------------------------
