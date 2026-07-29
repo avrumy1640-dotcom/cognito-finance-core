@@ -849,7 +849,7 @@ async function simulateAchReturn(userId: string, body: any) {
   const from = pickAccount(rows, "checking");
   const counterpartyId = await ensureCounterparty(userId, {
     name: magic,
-    routingNumber: String(body.routingNumber ?? "121145307"),
+    routingNumber: String(body.routingNumber ?? "021000021"),
     accountNumber: String(body.accountNumber ?? "1234567890"),
   });
   const t = await column<any>("/transfers/ach", {
