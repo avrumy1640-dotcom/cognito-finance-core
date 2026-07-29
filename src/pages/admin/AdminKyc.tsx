@@ -120,6 +120,24 @@ const AdminKyc = () => {
           { key: "submitted", header: "Submitted", render: (r) => new Date(r.submitted_at).toLocaleString() },
           { key: "status", header: "Status", render: (r) => <StatusPill status={r.status} /> },
           {
+            key: "compliance",
+            header: "Compliance",
+            render: (r) => (
+              <div className="max-w-[260px]">
+                <button
+                  onClick={() => checkCompliance(r)}
+                  disabled={checking === r.id}
+                  className="text-xs px-2.5 py-1 rounded-md bg-secondary text-foreground disabled:opacity-50"
+                >
+                  {checking === r.id ? "Checking…" : "Check requirements"}
+                </button>
+                {compliance[r.id] && (
+                  <p className="mt-1 text-[11px] text-muted-foreground break-words">{compliance[r.id]}</p>
+                )}
+              </div>
+            ),
+          },
+          {
             key: "actions",
             header: "",
             render: (r) =>
@@ -143,6 +161,7 @@ const AdminKyc = () => {
               ),
             className: "text-right",
           },
+
         ]}
       />
     </AdminPage>
