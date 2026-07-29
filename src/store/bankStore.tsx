@@ -1,6 +1,8 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import type { Transaction } from "@/types/transaction";
+import { columnClient, isColumnMode, mergeColumnIntoLedger } from "@/lib/columnClient";
+
 import {
   demoBank,
   detectPayroll,
@@ -374,9 +376,28 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
       if (!holder) holder = user.email?.split("@")[0] ?? "Account holder";
 
-      const ledger = await demoBank.load(user.id, holder, user.email ?? undefined);
+      let ledger = await demoBank.load(user.id, holder, user.email ?? undefined);
+
+      // Feature-flagged data-layer swap: when Column sandbox mode is on, live
+      // balances/transactions overlay the local ledger. Flip it back in
+      // Admin → Column sandbox to return to the demo ledger instantly.
+      if (isColumnMode()) {
+        try {
+          const snap = await columnClient.sync();
+          ledger = mergeColumnIntoLedger(ledger, snap);
+        } catch (e) {
+          console.warn("Column sync failed, staying on local ledger", e);
+          if (!opts?.silent) {
+            toast.error("Column sandbox unavailable", {
+              description: e instanceof Error ? e.message : "Showing local ledger.",
+            });
+          }
+        }
+      }
+
       await applyLedger(ledger);
       if (!opts?.silent) toast.success("Account synced");
+
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong.";
       setDataError(msg);

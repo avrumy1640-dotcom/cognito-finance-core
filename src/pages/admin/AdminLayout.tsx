@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, ShieldCheck, CreditCard, ArrowLeftRight, Coins,
-  Repeat, Percent, Webhook, ScrollText, LifeBuoy, KeyRound, BarChart3, LogOut,
+  Repeat, Percent, Webhook, ScrollText, LifeBuoy, KeyRound, BarChart3, LogOut, Boxes,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRole";
@@ -20,6 +20,8 @@ const nav = [
   { to: "/admin/audit", label: "Audit logs", icon: ScrollText },
   { to: "/admin/tickets", label: "Support tickets", icon: LifeBuoy },
   { to: "/admin/roles", label: "User permissions", icon: KeyRound },
+  { to: "/admin/column", label: "Column sandbox", icon: Boxes },
+
 ];
 
 const AdminLayout = () => {

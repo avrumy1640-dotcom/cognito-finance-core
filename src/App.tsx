@@ -63,6 +63,8 @@ import AdminWebhooks from "./pages/admin/AdminWebhooks";
 import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
 import AdminTickets from "./pages/admin/AdminTickets";
 import AdminRoles from "./pages/admin/AdminRoles";
+import AdminColumn from "./pages/admin/AdminColumn";
+
 import { AdminAccounts, AdminCrypto, AdminExchange } from "./pages/admin/AdminSimple";
 
 const queryClient = new QueryClient();
@@ -161,6 +163,8 @@ const App = () => (
                 <Route path="audit" element={<RequireAdmin><AdminAuditLogs /></RequireAdmin>} />
                 <Route path="tickets" element={<AdminTickets />} />
                 <Route path="roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
+                <Route path="column" element={<RequireAdmin><AdminColumn /></RequireAdmin>} />
+
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
