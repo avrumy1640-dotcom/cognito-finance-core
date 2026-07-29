@@ -801,6 +801,12 @@ async function diagnose() {
     sandbox: COLUMN_API_KEY.startsWith("test_"),
     webhookSecret: !!Deno.env.get("COLUMN_WEBHOOK_SECRET"),
   };
+  // Reference only: Column scopes every request by the API key itself, so no
+  // request in this file ever sends a platform_id. This is surfaced purely so
+  // it can be quoted in a Column support conversation.
+  out.platformId =
+    Deno.env.get("COLUMN_PLATFORM_ID") ??
+    (await column<any>("/platform").then((p) => p?.id ?? p?.platform_id ?? null).catch(() => null));
   try {
     // Probe only — a single record is enough to prove credentials work.
     const res = await column<any>("/entities", { query: { limit: 1 } });
