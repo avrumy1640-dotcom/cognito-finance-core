@@ -260,6 +260,16 @@ const ActivityPage = () => {
               </GlassCard>
             </div>
           ))}
+
+          {filtered.length > page.length && (
+            <button
+              onClick={() => setVisible((v) => v + PAGE_SIZE)}
+              className="w-full h-11 rounded-xl border border-border text-sm font-medium text-foreground active:bg-secondary/50 transition-colors"
+            >
+              Load {Math.min(PAGE_SIZE, filtered.length - page.length)} more
+              <span className="text-muted-foreground font-normal"> · {page.length} of {filtered.length}</span>
+            </button>
+          )}
         </div>
       </div>
       <ExportPreviewModal result={exportResult} onClose={() => setExportResult(null)} />
