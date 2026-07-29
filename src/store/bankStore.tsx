@@ -378,18 +378,18 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
       let ledger = await demoBank.load(user.id, holder, user.email ?? undefined);
 
-      // Feature-flagged data-layer swap: when Column sandbox mode is on, live
-      // balances/transactions overlay the local ledger. Flip it back in
-      // Admin → Column sandbox to return to the demo ledger instantly.
-      if (isColumnMode()) {
+      // Feature-flagged data-layer swap: when live provider mode is on, live
+      // balances/transactions overlay the local ledger. Flip it back in the
+      // internal admin console to return to the demo ledger instantly.
+      if (isLiveMode()) {
         try {
-          const snap = await columnClient.sync();
-          ledger = mergeColumnIntoLedger(ledger, snap);
+          const snap = await ledgerProvider.sync();
+          ledger = mergeProviderIntoLedger(ledger, snap);
         } catch (e) {
-          console.warn("Column sync failed, staying on local ledger", e);
+          if (import.meta.env.DEV) console.warn("Ledger sync failed, staying on local ledger", e);
           if (!opts?.silent) {
-            toast.error("Column sandbox unavailable", {
-              description: e instanceof Error ? e.message : "Showing local ledger.",
+            toast.error("Live balances unavailable", {
+              description: "Showing your most recent saved balances.",
             });
           }
         }
