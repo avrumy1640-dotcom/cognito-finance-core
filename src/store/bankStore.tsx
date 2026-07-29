@@ -378,22 +378,21 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
       let ledger = await demoBank.load(user.id, holder, user.email ?? undefined);
 
-      // Feature-flagged data-layer swap: when live provider mode is on, live
-      // balances/transactions overlay the local ledger. Flip it back in the
-      // internal admin console to return to the demo ledger instantly.
+      // Feature-flagged data-layer swap. In live mode the provider is the ONLY
+      // source of truth: a failed call raises a real error state rather than
+      // quietly showing stale or simulated numbers.
       if (isLiveMode()) {
-        try {
-          const snap = await ledgerProvider.sync();
-          ledger = mergeProviderIntoLedger(ledger, snap);
-        } catch (e) {
-          if (import.meta.env.DEV) console.warn("Ledger sync failed, staying on local ledger", e);
-          if (!opts?.silent) {
-            toast.error("Live balances unavailable", {
-              description: "Showing your most recent saved balances.",
-            });
-          }
+        const snap = await ledgerProvider.sync();
+        if (!snap.provisioned) {
+          setDataError(
+            "No live account yet. Complete identity verification to have your bank account opened with our banking partner.",
+          );
+          setDataStatus("error");
+          return;
         }
+        ledger = mergeProviderIntoLedger(ledger, snap);
       }
+
 
       await applyLedger(ledger);
       if (!opts?.silent) toast.success("Account synced");
@@ -414,7 +413,51 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Live mode: webhook-driven updates land in the mirror tables, so subscribe
+  // to them and re-hydrate the UI the moment our banking partner tells us
+  // something changed — no manual refresh required.
+  useEffect(() => {
+    if (!isLiveMode()) return;
+    const channel = supabase
+      .channel("ledger-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "column_bank_accounts" },
+        () => void refreshLedger({ silent: true }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "column_transfers" },
+        () => void refreshLedger({ silent: true }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "column_entities" },
+        () => void refreshLedger({ silent: true }))
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [refreshLedger]);
+
   const uid = () => userIdRef.current;
+
+  /**
+   * Executes a money movement against the live provider. Used only in live
+   * mode — there is no local simulation and no optimistic balance change.
+   */
+  const runLiveTransfer = useCallback(
+    async (label: string, args: import("@/lib/ledgerProvider").TransferArgs, successBody?: string) => {
+      const id = `live-${label}-${Date.now()}`;
+      toast.loading(`${label}…`, { id });
+      try {
+        const res = await ledgerProvider.transfer(args);
+        toast.success(`${label} submitted`, {
+          id,
+          description: successBody ? `${successBody} · ${res.status}` : `Status: ${res.status}`,
+        });
+        await refreshLedger({ silent: true });
+        return true;
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "Please try again.";
+        toast.error(`${label} failed`, { id, description: reason });
+        return false;
+      }
+    },
+    [refreshLedger],
+  );
+
+
 
   const runMutation = useCallback(
     async (label: string, fn: () => Promise<DemoLedger>, successBody?: string) => {
@@ -448,16 +491,30 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     const from = accountFor(args.from), to = accountFor(args.to);
     const id = uid();
     if (!from || !to || !id) return false;
+    if (isLiveMode()) {
+      void runLiveTransfer("Internal transfer", {
+        kind: "book", amount: args.amount, from: args.from, to: args.to,
+        description: args.memo || "Internal transfer",
+      }, `$${args.amount.toFixed(2)} to ${to.name}`);
+      return true;
+    }
     if (spendableBalance(from, overdraftRef.current) < args.amount) return false;
     void runMutation("Internal transfer", () => demoBank.internalTransfer(id, { fromId: from.id, toId: to.id, amount: args.amount, memo: args.memo }), `$${args.amount.toFixed(2)} to ${to.name}`);
     return true;
-  }, [runMutation]);
+  }, [runMutation, runLiveTransfer]);
 
   const send = useCallback((args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => {
     if (args.amount <= 0 || !args.recipient.trim()) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || spendableBalance(from, overdraftRef.current) < args.amount) return false;
+    if (!from || !id) return false;
+    if (isLiveMode()) {
+      toast.error("Peer-to-peer send is not available in live mode", {
+        description: "Use Bank transfer (ACH) or Wire to move money to a real account.",
+      });
+      return false;
+    }
+    if (spendableBalance(from, overdraftRef.current) < args.amount) return false;
     void runMutation("Payment", () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.recipient,
       category: "Transfers", paymentMethod: "Instant send", icon: "⚡️",
@@ -470,6 +527,12 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     const to = accountFor(args.to);
     const id = uid();
     if (!to || !id) return false;
+    if (isLiveMode()) {
+      toast.error("Mobile check deposit is not supported in live mode", {
+        description: "Fund the account with an incoming bank transfer instead.",
+      });
+      return false;
+    }
     void runMutation("Check deposit", () => demoBank.credit(id, {
       accountId: to.id, amount: args.amount, merchant: "Mobile check deposit",
       category: "Deposits", paymentMethod: "Mobile deposit", icon: "🧾", status: "pending",
@@ -481,48 +544,96 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     if (args.amount <= 0 || !args.biller.trim()) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || spendableBalance(from, overdraftRef.current) < args.amount) return false;
+    if (!from || !id) return false;
+    if (isLiveMode()) {
+      if (!args.routingNumber || !args.accountNumber) {
+        toast.error("Bill pay needs the biller's routing and account number in live mode");
+        return false;
+      }
+      void runLiveTransfer(`Bill pay — ${args.biller}`, {
+        kind: "ach", amount: args.amount, from: args.from, name: args.biller,
+        routingNumber: args.routingNumber, accountNumber: args.accountNumber,
+        description: "BILLPAY",
+      }, `$${args.amount.toFixed(2)} to ${args.biller}`);
+      return true;
+    }
+    if (spendableBalance(from, overdraftRef.current) < args.amount) return false;
     void runMutation(`Bill pay — ${args.biller}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.biller,
       category: "Bills & Utilities", paymentMethod: "Bill pay", icon: "🧾",
     }), `$${args.amount.toFixed(2)} to ${args.biller}`);
     return true;
-  }, [runMutation]);
+  }, [runMutation, runLiveTransfer]);
 
   const externalTransfer = useCallback((args: { from: "checking" | "savings"; amount: number; bank: string; routingNumber: string; accountNumber: string; memo?: string }) => {
     if (args.amount <= 0) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || spendableBalance(from, overdraftRef.current) < args.amount) return false;
+    if (!from || !id) return false;
+    if (isLiveMode()) {
+      void runLiveTransfer(`ACH transfer to ${args.bank}`, {
+        kind: "ach", amount: args.amount, from: args.from, name: args.bank,
+        routingNumber: args.routingNumber, accountNumber: args.accountNumber,
+        description: "TRANSFER",
+      }, `$${args.amount.toFixed(2)} to ${args.bank}`);
+      return true;
+    }
+    if (spendableBalance(from, overdraftRef.current) < args.amount) return false;
     void runMutation(`ACH transfer to ${args.bank}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.bank,
       category: "Transfers", paymentMethod: "ACH transfer", icon: "🏦",
     }), `$${args.amount.toFixed(2)} to ${args.bank}`);
     return true;
-  }, [runMutation]);
+  }, [runMutation, runLiveTransfer]);
 
   const wireTransfer = useCallback((args: { from: "checking" | "savings"; amount: number; beneficiaryName: string; routingNumber: string; accountNumber: string; memo?: string; fee?: number }) => {
     const fee = args.fee ?? 25;
     if (args.amount <= 0) return false;
     const from = accountFor(args.from);
     const id = uid();
-    if (!from || !id || spendableBalance(from, overdraftRef.current) < args.amount + fee) return false;
+    if (!from || !id) return false;
+    if (isLiveMode()) {
+      void runLiveTransfer(`Wire to ${args.beneficiaryName}`, {
+        kind: "wire", amount: args.amount, from: args.from, name: args.beneficiaryName,
+        routingNumber: args.routingNumber, accountNumber: args.accountNumber,
+        description: args.memo || "Wire transfer",
+      }, `$${args.amount.toFixed(2)} to ${args.beneficiaryName}`);
+      return true;
+    }
+    if (spendableBalance(from, overdraftRef.current) < args.amount + fee) return false;
     void runMutation(`Wire to ${args.beneficiaryName}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.beneficiaryName,
       category: "Transfers", paymentMethod: "Wire transfer", icon: "🌐", fee,
     }), `$${args.amount.toFixed(2)} to ${args.beneficiaryName}`);
     return true;
-  }, [runMutation]);
+  }, [runMutation, runLiveTransfer]);
 
-  const addFunds = useCallback(async (args: { to?: "checking" | "savings"; amount: number; source: string }) => {
+  const addFunds = useCallback(async (args: {
+    to?: "checking" | "savings"; amount: number; source: string;
+    routingNumber?: string; accountNumber?: string;
+  }) => {
     const to = accountFor(args.to ?? "checking");
     const id = uid();
     if (!to || !id || args.amount <= 0) return false;
+    if (isLiveMode()) {
+      if (!args.routingNumber || !args.accountNumber) {
+        toast.error("Add the funding account's routing and account number", {
+          description: "Live mode pulls the money from a real external account.",
+        });
+        return false;
+      }
+      return runLiveTransfer("Deposit", {
+        kind: "ach_pull", amount: args.amount, from: args.to ?? "checking",
+        name: args.source, routingNumber: args.routingNumber, accountNumber: args.accountNumber,
+        description: "DEPOSIT",
+      }, `$${args.amount.toFixed(2)} into ${to.name}`);
+    }
     return runMutation("Deposit", () => demoBank.credit(id, {
       accountId: to.id, amount: args.amount, merchant: args.source,
       category: "Deposits", paymentMethod: args.source, icon: "💰", status: "posted",
     }), `$${args.amount.toFixed(2)} added to ${to.name}`);
-  }, [runMutation]);
+  }, [runMutation, runLiveTransfer]);
+
 
   const cardId = () => ledgerRef.current?.cards.find((c) => c.status !== "replaced")?.id ?? ledgerRef.current?.cards[0]?.id;
 

@@ -56,6 +56,7 @@ async function column<T = any>(
   try { parsed = text ? JSON.parse(text) : null; } catch { parsed = { raw: text }; }
   if (!res.ok) {
     const msg = parsed?.message || parsed?.code || `Column ${res.status}`;
+    console.error("provider call failed", init.method ?? "GET", path, res.status, JSON.stringify(parsed));
     throw Object.assign(new Error(`${msg}`), { status: res.status, detail: parsed });
   }
   return parsed as T;
@@ -92,11 +93,11 @@ async function ensureEntity(userId: string) {
     admin.from("kyc_profiles").select("*").eq("user_id", userId).maybeSingle(),
   ]);
 
-  const first = kyc?.legal_first_name || profile?.first_name || "Test";
-  const last = kyc?.legal_last_name || profile?.last_name || "User";
+  const first = kyc?.legal_first_name || profile?.first_name || "Sandbox";
+  const last = kyc?.legal_last_name || profile?.last_name || "Tester";
   const email = profile?.email || undefined;
 
-  // Sandbox entity. We deliberately do NOT forward a real SSN; Column's sandbox
+  // Sandbox entity. We deliberately do NOT forward a real SSN; the sandbox
   // accepts the documented test SSN and returns a verified person.
   const payload: Record<string, unknown> = {
     first_name: first,
@@ -105,10 +106,10 @@ async function ensureEntity(userId: string) {
     ssn: "123456789",
     date_of_birth: (kyc?.date_of_birth as string | undefined) ?? "1990-01-01",
     address: {
-      line_1: profile?.address_line1 || "1 Market St",
-      city: profile?.city || "San Francisco",
-      state: profile?.state || "CA",
-      postal_code: profile?.postal_code || "94105",
+      line_1: kyc?.street || profile?.address_line1 || "1 Market St",
+      city: kyc?.city || profile?.city || "San Francisco",
+      state: kyc?.region || profile?.state || "CA",
+      postal_code: kyc?.postal_code || profile?.postal_code || "94105",
       country_code: "US",
     },
   };
@@ -122,26 +123,45 @@ async function ensureEntity(userId: string) {
     details: created,
   }).select().single();
   if (error) throw new Error(error.message);
+
+  // Mirror the provider's verification verdict back onto the KYC record so the
+  // app's gating reflects the real upstream decision.
+  await syncKycStatus(userId, created.verification_status);
   return row;
 }
 
-async function ensureBankAccount(userId: string, entityId: string) {
-  const { data: existing } = await admin
-    .from("column_bank_accounts").select("*").eq("user_id", userId).order("created_at");
-  if (existing && existing.length) return existing;
+/** Maps the provider verification verdict onto our own kyc_profiles status. */
+async function syncKycStatus(userId: string, verification?: string) {
+  const v = String(verification ?? "").toLowerCase();
+  const status = v === "verified" ? "verified"
+    : v === "denied" || v === "rejected" ? "rejected"
+    : v === "manual_review" || v === "pending" ? "pending"
+    : null;
+  if (!status) return;
+  await admin.from("kyc_profiles").update({ status }).eq("user_id", userId);
+}
 
+async function createAccount(userId: string, entityId: string, kind: "checking" | "savings") {
+  const description = kind === "checking" ? "Everyday Checking" : "Savings";
   const acct = await column<any>("/bank-accounts", {
     method: "POST",
-    body: { entity_id: entityId, description: "Everyday Checking", type: "CHECKING" },
+    body: { entity_id: entityId, description },
   });
 
+  // The default account number is created with the account; fall back to
+  // explicitly minting one if the sandbox did not return any.
   let numbers: any = null;
   try {
-    numbers = await column<any>(`/bank-accounts/${acct.id}/account-numbers`, {
-      method: "POST",
-      body: { description: "Primary" },
-    });
-  } catch (_) { /* account numbers are optional for read-only sync */ }
+    const list = await column<any>(`/bank-accounts/${acct.id}/account-numbers`);
+    numbers = (list?.account_numbers ?? list?.data ?? [])[0] ?? null;
+  } catch { /* ignore */ }
+  if (!numbers) {
+    try {
+      numbers = await column<any>(`/bank-accounts/${acct.id}/account-numbers`, {
+        method: "POST", body: { description: "Primary" },
+      });
+    } catch { /* account numbers are optional for read-only sync */ }
+  }
 
   const acctNum: string | undefined = numbers?.account_number;
   const { data: row, error } = await admin.from("column_bank_accounts").insert({
@@ -150,15 +170,34 @@ async function ensureBankAccount(userId: string, entityId: string) {
     bank_account_id: acct.id,
     account_number_id: numbers?.id ?? null,
     account_number_masked: acctNum ? `••••${acctNum.slice(-4)}` : null,
-    routing_number: numbers?.routing_number ?? null,
-    description: acct.description ?? "Everyday Checking",
-    account_type: "checking",
+    routing_number: numbers?.routing_number ?? acct.routing_number ?? null,
+    description: acct.description ?? description,
+    account_type: kind,
     status: acct.is_closed ? "closed" : "open",
     balances: acct.balances ?? {},
   }).select().single();
   if (error) throw new Error(error.message);
-  return [row];
+  return row;
 }
+
+async function ensureBankAccount(userId: string, entityId: string) {
+  const { data: existing } = await admin
+    .from("column_bank_accounts").select("*").eq("user_id", userId).order("created_at");
+  const have = new Set((existing ?? []).map((r: any) => r.account_type));
+  const rows = [...(existing ?? [])];
+  for (const kind of ["checking", "savings"] as const) {
+    if (have.has(kind)) continue;
+    try {
+      rows.push(await createAccount(userId, entityId, kind));
+    } catch (e) {
+      // A savings sub-account may not be supported — checking must succeed.
+      if (kind === "checking") throw e;
+      console.warn("savings account not created:", (e as Error).message);
+    }
+  }
+  return rows;
+}
+
 
 async function refreshAccounts(userId: string) {
   const { data: rows } = await admin
@@ -193,10 +232,14 @@ async function syncTransfers(userId: string, bankAccountIds: string[]) {
           bankAccountIds.includes(t.sender_bank_account_id) ||
           bankAccountIds.includes(t.receiver_bank_account_id);
         if (!involved) continue;
-        const isCredit =
-          t.type === "CREDIT" ||
-          bankAccountIds.includes(t.receiver_bank_account_id ?? "") ||
-          t.direction === "credit";
+        // ACH semantics are inverted relative to intuition: an ACH DEBIT pulls
+        // money INTO our account, a CREDIT pushes it out. Book/wire transfers
+        // are keyed off which side of the transfer we hold.
+        const isCredit = kind === "ach"
+          ? t.type === "DEBIT"
+          : bankAccountIds.includes(t.receiver_bank_account_id ?? "") ||
+            t.direction === "credit";
+
         collected.push({
           user_id: userId,
           transfer_id: t.id,
@@ -269,6 +312,212 @@ async function snapshot(userId: string, opts: { provision: boolean }) {
     })),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Money movement — every action below hits the provider for real.
+// ---------------------------------------------------------------------------
+const toCents = (n: unknown) => {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v <= 0) throw new Error("Amount must be greater than zero");
+  return Math.round(v * 100);
+};
+
+async function accountsFor(userId: string) {
+  const { data } = await admin.from("column_bank_accounts")
+    .select("*").eq("user_id", userId).order("created_at");
+  if (!data?.length) throw new Error("No account yet — finish verification first");
+  return data;
+}
+
+function pickAccount(rows: any[], which?: string) {
+  if (!which) return rows[0];
+  return rows.find((r) => r.account_type === which) ?? rows.find((r) => r.bank_account_id === which) ?? rows[0];
+}
+
+async function ensureCounterparty(userId: string, args: {
+  name: string; routingNumber: string; accountNumber: string; wire?: boolean;
+}) {
+  const routing = String(args.routingNumber ?? "").replace(/\D/g, "");
+  const account = String(args.accountNumber ?? "").replace(/\s/g, "");
+  if (routing.length !== 9) throw new Error("Routing number must be 9 digits");
+  if (!account) throw new Error("Account number is required");
+
+  let cachedId: string | null = null;
+  try {
+    const { data: cached } = await admin.from("column_counterparties")
+      .select("counterparty_id").eq("user_id", userId)
+      .eq("routing_number", routing).eq("account_number_last4", account.slice(-4))
+      .maybeSingle();
+    cachedId = cached?.counterparty_id ?? null;
+  } catch { /* mirror table optional */ }
+  if (cachedId) return cachedId;
+
+
+  const cp = await column<any>("/counterparties", {
+    method: "POST",
+    body: {
+      routing_number: routing,
+      account_number: account,
+      name: args.name?.slice(0, 64) || "Counterparty",
+      ...(args.wire ? { wire: { beneficiary_name: args.name?.slice(0, 64) || "Counterparty" } } : {}),
+    },
+  });
+  try {
+    await admin.from("column_counterparties").insert({
+      user_id: userId, counterparty_id: cp.id, name: args.name,
+      routing_number: routing, account_number_last4: account.slice(-4), raw: cp,
+    });
+  } catch { /* mirror table is optional */ }
+  return cp.id as string;
+}
+
+async function recordTransfer(userId: string, kind: string, bankAccountId: string, t: any, direction: "credit" | "debit", description: string) {
+  await admin.from("column_transfers").upsert({
+    user_id: userId,
+    transfer_id: t.id,
+    transfer_type: kind,
+    bank_account_id: bankAccountId,
+    status: String(t.status ?? "pending").toLowerCase(),
+    amount_cents: cents(t.amount),
+    currency: t.currency_code ?? "USD",
+    direction,
+    description,
+    raw: t,
+    occurred_at: t.created_at ?? new Date().toISOString(),
+  }, { onConflict: "transfer_id" });
+}
+
+async function doTransfer(userId: string, body: any) {
+  const rows = await accountsFor(userId);
+  const kind = String(body.kind ?? "book");
+  const amount = toCents(body.amount);
+  const description = String(body.description ?? "Transfer").slice(0, 120);
+
+  if (kind === "book") {
+    const from = pickAccount(rows, body.from);
+    const to = pickAccount(rows, body.to);
+    if (!from || !to || from.bank_account_id === to.bank_account_id) {
+      throw new Error("Choose two different accounts");
+    }
+    const t = await column<any>("/transfers/book", {
+      method: "POST",
+      body: {
+        sender_bank_account_id: from.bank_account_id,
+        receiver_bank_account_id: to.bank_account_id,
+        amount, currency_code: "USD", description,
+      },
+    });
+    await recordTransfer(userId, "book", from.bank_account_id, t, "debit", description);
+    await recordTransfer(userId, "book", to.bank_account_id, { ...t, id: `${t.id}-in` }, "credit", description);
+    return { transferId: t.id, status: t.status };
+  }
+
+  if (kind === "ach" || kind === "ach_pull") {
+    const from = pickAccount(rows, body.from ?? "checking");
+    const counterpartyId = body.counterpartyId
+      ?? await ensureCounterparty(userId, {
+        name: body.name ?? "External account",
+        routingNumber: body.routingNumber,
+        accountNumber: body.accountNumber,
+      });
+    // CREDIT pushes money out; DEBIT pulls money in (sandbox funding).
+    const type = kind === "ach_pull" ? "DEBIT" : "CREDIT";
+    const t = await column<any>("/transfers/ach", {
+      method: "POST",
+      body: {
+        bank_account_id: from.bank_account_id,
+        counterparty_id: counterpartyId,
+        type, amount, currency_code: "USD",
+        entry_class_code: "PPD",
+        description: description.slice(0, 10) || "GLASSBNK",
+      },
+    });
+    await recordTransfer(userId, "ach", from.bank_account_id, t, type === "DEBIT" ? "credit" : "debit", description);
+    return { transferId: t.id, status: t.status };
+  }
+
+  if (kind === "wire") {
+    const from = pickAccount(rows, body.from ?? "checking");
+    const counterpartyId = body.counterpartyId
+      ?? await ensureCounterparty(userId, {
+        name: body.name ?? "Beneficiary",
+        routingNumber: body.routingNumber,
+        accountNumber: body.accountNumber,
+        wire: true,
+      });
+    const t = await column<any>("/transfers/wire", {
+      method: "POST",
+      body: {
+        bank_account_id: from.bank_account_id,
+        counterparty_id: counterpartyId,
+        amount, currency_code: "USD", description,
+      },
+    });
+    await recordTransfer(userId, "wire", from.bank_account_id, t, "debit", description);
+    return { transferId: t.id, status: t.status };
+  }
+
+  throw new Error(`Unsupported transfer kind "${kind}"`);
+}
+
+/**
+ * Sandbox-only webhook self-test. Signs a synthetic event with the same secret
+ * our receiver verifies against and posts it to the receiver, so we can prove
+ * the end-to-end webhook path works. Scoped to the caller's own entity, and
+ * refuses to run against anything but a sandbox key.
+ */
+async function testWebhook(userId: string) {
+  assertSandboxKey();
+  const secret = Deno.env.get("COLUMN_WEBHOOK_SECRET") ?? "";
+  if (!secret) throw new Error("COLUMN_WEBHOOK_SECRET is not configured");
+  const { data: entity } = await admin.from("column_entities")
+    .select("entity_id").eq("user_id", userId).maybeSingle();
+  if (!entity) throw new Error("No entity to test against");
+
+  const body = JSON.stringify({
+    id: `evt_selftest_${crypto.randomUUID()}`,
+    type: "entity.verified",
+    data: { id: entity.entity_id, verification_status: "verified", self_test: true },
+  });
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  const signature = Array.from(new Uint8Array(sigBuf))
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/column-webhook`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Column-Signature": signature },
+    body,
+  });
+  return { status: res.status, response: await res.json().catch(() => null) };
+}
+
+/** Connectivity probe — proves the credentials work without mutating anything. */
+async function diagnose() {
+  const out: Record<string, unknown> = {
+    configured: !!COLUMN_API_KEY,
+    sandbox: COLUMN_API_KEY.startsWith("test_"),
+    webhookSecret: !!Deno.env.get("COLUMN_WEBHOOK_SECRET"),
+  };
+  try {
+    const res = await column<any>("/entities", { query: { limit: 1 } });
+    out.reachable = true;
+    out.entityCount = (res?.entities ?? res?.data ?? []).length;
+    const hooks = await column<any>("/webhook-endpoints", { query: { limit: 50 } })
+      .catch(() => null);
+    const list: any[] = hooks?.webhook_endpoints ?? hooks?.data ?? [];
+    out.webhookEndpoints = list.map((h) => ({ id: h.id, url: h.url, enabled: h.enabled ?? true }));
+    out.webhookRegistered = list.some((h) => String(h.url ?? "").includes("column-webhook"));
+  } catch (e) {
+    out.reachable = false;
+    out.error = (e as Error).message;
+  }
+  return out;
+}
+
 
 // ---------------------------------------------------------------------------
 // Admin / cleanup utilities
@@ -379,10 +628,19 @@ Deno.serve(async (req) => {
           entity: entity ?? null,
         });
       }
+      case "diagnose":
+        return json(await diagnose());
+      case "test_webhook":
+        return json(await testWebhook(user.id));
       case "provision":
         return json(await snapshot(user.id, { provision: true }));
       case "sync":
         return json(await snapshot(user.id, { provision: false }));
+      case "transfer": {
+        const result = await doTransfer(user.id, body);
+        return json({ ...result, snapshot: await snapshot(user.id, { provision: false }) });
+      }
+
       case "admin_list":
         return json(await adminList());
       case "admin_delete":

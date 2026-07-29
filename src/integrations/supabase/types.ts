@@ -161,6 +161,42 @@ export type Database = {
         }
         Relationships: []
       }
+      column_counterparties: {
+        Row: {
+          account_number_last4: string
+          counterparty_id: string
+          created_at: string
+          id: string
+          name: string | null
+          raw: Json
+          routing_number: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_number_last4: string
+          counterparty_id: string
+          created_at?: string
+          id?: string
+          name?: string | null
+          raw?: Json
+          routing_number: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_number_last4?: string
+          counterparty_id?: string
+          created_at?: string
+          id?: string
+          name?: string | null
+          raw?: Json
+          routing_number?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       column_entities: {
         Row: {
           created_at: string

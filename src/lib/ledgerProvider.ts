@@ -45,16 +45,46 @@ export interface ProviderSnapshot {
 
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("ledger-sync", { body });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Surface the real server-side reason instead of a generic "non-2xx".
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.text === "function") {
+      try {
+        const detail = JSON.parse(await ctx.text()) as { error?: string };
+        if (detail?.error) throw new Error(detail.error);
+      } catch (e) {
+        if (e instanceof Error && e.message && !/JSON/.test(e.message)) throw e;
+      }
+    }
+    throw new Error(error.message);
+  }
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
   return data as T;
 }
 
+export interface TransferArgs {
+  kind: "book" | "ach" | "ach_pull" | "wire";
+  amount: number;
+  description?: string;
+  /** "checking" | "savings" | a provider account id */
+  from?: string;
+  to?: string;
+  name?: string;
+  routingNumber?: string;
+  accountNumber?: string;
+}
+
 export const ledgerProvider = {
   status: () => call<{ sandbox: boolean; configured: boolean; entity: unknown }>({ action: "status" }),
+  diagnose: () =>
+    call<{ configured: boolean; sandbox: boolean; webhookSecret: boolean; reachable: boolean; entityCount?: number; error?: string }>({
+      action: "diagnose",
+    }),
   /** Creates the sandbox entity + bank account if they don't exist yet. */
   provision: () => call<ProviderSnapshot>({ action: "provision" }),
   sync: () => call<ProviderSnapshot>({ action: "sync" }),
+  transfer: (args: TransferArgs) =>
+    call<{ transferId: string; status: string; snapshot: ProviderSnapshot }>({ action: "transfer", ...args }),
   adminList: () => call<Record<string, unknown>>({ action: "admin_list" }),
   adminLocal: () => call<Record<string, unknown>>({ action: "admin_local" }),
   adminDelete: (resource: string, id: string) => call<unknown>({ action: "admin_delete", resource, id }),
@@ -65,35 +95,44 @@ export const ledgerProvider = {
     }),
 };
 
+
 /**
- * Overlays live provider balances and transactions onto the existing ledger
- * shape so the UI stays completely unchanged — this is a data-layer swap only.
+ * Replaces the local ledger's balances and transactions with the live provider
+ * state. In live mode NOTHING is simulated: an account the provider does not
+ * know about is shown at zero rather than at its last demo value.
  */
 export function mergeProviderIntoLedger(ledger: DemoLedger, snap: ProviderSnapshot): DemoLedger {
   if (!snap.provisioned || !snap.accounts.length) return ledger;
-  const primary = snap.accounts[0];
-  const checking = ledger.accounts.find((a) => a.type === "checking");
 
-  const accounts: DemoAccount[] = ledger.accounts.map((a) =>
-    a.id === checking?.id
-      ? {
-          ...a,
-          name: primary.name || a.name,
-          accountNumber: primary.accountNumber || a.accountNumber,
-          routingNumber: primary.routingNumber || a.routingNumber,
-          availableBalance: primary.available,
-          currentBalance: primary.current,
-          pendingAmount: primary.pending,
-          status: primary.status,
-        }
-      : a,
-  );
+  const byType = (t: string) => snap.accounts.find((a) => a.type === t);
+  const idMap = new Map<string, string>(); // local account id -> provider account id
+
+  const accounts: DemoAccount[] = ledger.accounts.map((a) => {
+    const live = byType(a.type) ?? (a.type === "checking" ? snap.accounts[0] : undefined);
+    if (!live) {
+      return { ...a, availableBalance: 0, currentBalance: 0, pendingAmount: 0 };
+    }
+    idMap.set(live.id, a.id);
+    return {
+      ...a,
+      name: live.name || a.name,
+      accountNumber: live.accountNumber || a.accountNumber,
+      routingNumber: live.routingNumber || a.routingNumber,
+      availableBalance: live.available,
+      currentBalance: live.current,
+      pendingAmount: live.pending,
+      status: live.status,
+    };
+  });
+
+  const fallbackId = accounts.find((a) => a.type === "checking")?.id ?? accounts[0]?.id;
 
   const transactions: DemoTransaction[] = snap.transactions.map((t) => ({
     ...t,
-    icon: t.type === "credit" ? "ArrowDownLeft" : "ArrowUpRight",
-    account: checking?.id ?? t.account,
+    icon: t.type === "credit" ? "↓" : "↑",
+    account: idMap.get(t.account) ?? fallbackId ?? t.account,
   }));
 
   return { ...ledger, accounts, transactions };
 }
+

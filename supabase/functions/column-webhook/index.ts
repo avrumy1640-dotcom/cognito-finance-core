@@ -60,6 +60,17 @@ async function handleEvent(type: string, data: any) {
       .update({ verification_status: status, details: data })
       .eq("entity_id", entityId).select("user_id").maybeSingle();
     if (row?.user_id) {
+      // Mirror the partner's verdict onto our own KYC gate so access changes
+      // in real time, without the user re-submitting anything.
+      const v = String(status).toLowerCase();
+      const mapped = v === "verified" ? "verified"
+        : v === "denied" || v === "rejected" ? "rejected"
+        : v === "pending" || v === "manual_review" ? "pending" : null;
+      if (mapped) {
+        await admin.from("kyc_profiles")
+          .update({ status: mapped, reviewed_at: new Date().toISOString() })
+          .eq("user_id", row.user_id);
+      }
       await notify(row.user_id, {
         type: "alert",
         title: status === "verified" ? "Identity verified" : `Identity check: ${status}`,
@@ -67,6 +78,7 @@ async function handleEvent(type: string, data: any) {
         dedupe_key: `column-entity-${entityId}-${status}`,
       });
     }
+
     return `entity ${entityId} → ${status}`;
   }
 
@@ -80,8 +92,12 @@ async function handleEvent(type: string, data: any) {
     const userId = await userForBankAccount(accId)
       ?? await userForBankAccount(t.receiver_bank_account_id)
       ?? await userForBankAccount(t.sender_bank_account_id);
-    const isCredit = t.type === "CREDIT" || t.direction === "credit"
-      || !!(t.receiver_bank_account_id && (await userForBankAccount(t.receiver_bank_account_id)));
+    // ACH DEBIT pulls money IN; ACH CREDIT pushes it out. Book/wire transfers
+    // are credits when we are the receiving side.
+    const isCredit = kind === "ach"
+      ? t.type === "DEBIT"
+      : !!(t.receiver_bank_account_id && (await userForBankAccount(t.receiver_bank_account_id)));
+
     const status = String(t.status ?? type.split(".").pop() ?? "pending").toLowerCase();
     await admin.from("column_transfers").upsert({
       user_id: userId,

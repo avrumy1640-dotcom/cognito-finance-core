@@ -28,7 +28,7 @@ import { COUNTRIES, US_STATES } from "@/lib/countries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useKyc } from "@/hooks/useKyc";
-import { isLiveMode } from "@/lib/ledgerProvider";
+import { isLiveMode, ledgerProvider } from "@/lib/ledgerProvider";
 import { SANDBOX_KYC, SANDBOX_OUTCOMES } from "@/lib/sandboxKyc";
 
 const ID_TYPE_MAP = { passport: 1, national_id: 2, drivers_license: 3 } as const;
@@ -246,7 +246,7 @@ const VerifyIdentity = () => {
       street: d.street, city: d.city, region: d.region.toUpperCase(),
       postal_code: d.postal_code, country: d.country.toUpperCase(),
       employment_status: d.employment_status,
-      status: "verified" as const,
+      status: (sandbox ? "pending" : "verified") as "pending" | "verified",
       submitted_at: new Date().toISOString(),
       reviewed_at: new Date().toISOString(),
       rejection_reason: null,
@@ -254,8 +254,8 @@ const VerifyIdentity = () => {
 
     toast.loading("Verifying your identity…", { id: "kyc" });
     const { error: upsertErr } = await supabase.from("kyc_profiles").upsert(insertPayload, { onConflict: "user_id" });
-    setSubmitting(false);
     if (upsertErr) {
+      setSubmitting(false);
       const isAuth = /jwt|auth|session/i.test(upsertErr.message);
       toast.error(isAuth ? "Your session expired." : upsertErr.message, { id: "kyc" });
       setSubmitError({
@@ -266,10 +266,30 @@ const VerifyIdentity = () => {
       return;
     }
 
-    toast.success("Identity verified — your account is now active.", { id: "kyc" });
+    // Live mode: this is where the real account is opened with our banking
+    // partner. A failure here must be visible — we never pretend it worked.
+    if (sandbox) {
+      try {
+        toast.loading("Opening your account with our banking partner…", { id: "kyc" });
+        const snap = await ledgerProvider.provision();
+        if (!snap.provisioned) throw new Error("Our banking partner did not return an account");
+        toast.success("Identity submitted and your account is open.", { id: "kyc" });
+      } catch (e) {
+        setSubmitting(false);
+        const message = e instanceof Error ? e.message : "Account creation failed";
+        toast.error("Account could not be opened", { id: "kyc", description: message });
+        setSubmitError({ kind: "provider", message, retryable: true });
+        return;
+      }
+    } else {
+      toast.success("Identity verified — your account is now active.", { id: "kyc" });
+    }
+
+    setSubmitting(false);
     clearDraft();
     await refresh();
   };
+
 
 
   const saveAndExit = () => {
