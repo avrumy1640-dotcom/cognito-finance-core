@@ -579,15 +579,28 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
   const [account, setAccount] = useState("");
   const [amount, setAmount] = useState("");
   const [memo, setMemo] = useState("");
+  // Beneficiary address — required for the sanctions screening every wire goes
+  // through, so it is collected up front rather than failing at submit.
+  const [line1, setLine1] = useState("");
+  const [city, setCity] = useState("");
+  const [region, setRegion] = useState("");
+  const [postal, setPostal] = useState("");
   const { wireTransfer, accounts, spendable } = useBank();
   const num = Number(amount);
   const fee = 25;
+  const addressComplete = !!(line1.trim() && city.trim() && region.trim() && postal.trim());
 
   const submit = () => {
     if (num <= 0) return toast.error("Enter amount");
     if (num + fee > spendable("checking")) return toast.error("Insufficient funds (includes $25 fee)");
     if (routing.replace(/\D/g, "").length !== 9) return toast.error("Routing number must be 9 digits");
-    const ok = wireTransfer({ from: "checking", amount: num, beneficiaryName: name, routingNumber: routing, accountNumber: account, memo, fee });
+    if (!addressComplete) return toast.error("Beneficiary address is required for wires");
+    const ok = wireTransfer({
+      from: "checking", amount: num, beneficiaryName: name, routingNumber: routing,
+      accountNumber: account, memo, fee,
+      beneficiaryLine1: line1, beneficiaryCity: city,
+      beneficiaryState: region, beneficiaryPostalCode: postal, beneficiaryCountry: "US",
+    });
     if (!ok) return toast.error("Wire failed");
     toast.success("Wire initiated", { description: `$${num.toFixed(2)} + $${fee} fee` });
     setStep("success");
@@ -603,6 +616,18 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
             <Field label="Beneficiary name" value={name} onChange={setName} placeholder="Full legal name" />
             <Field label="Routing number" value={routing} onChange={setRouting} placeholder="9 digits" />
             <Field label="Beneficiary account" value={account} onChange={setAccount} placeholder="Account #" />
+            <div className="rounded-xl bg-secondary/50 p-3 space-y-3">
+              <p className="text-[11px] text-muted-foreground">
+                Beneficiary address — required by the receiving bank for sanctions screening.
+              </p>
+              <Field label="Street address" value={line1} onChange={setLine1} placeholder="123 Main St" />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="City" value={city} onChange={setCity} placeholder="San Francisco" />
+                <Field label="State" value={region} onChange={(v) => setRegion(v.toUpperCase().slice(0, 2))} placeholder="CA" />
+              </div>
+              <Field label="ZIP code" value={postal} onChange={setPostal} placeholder="94105" />
+            </div>
+
             <Field label="Memo (optional)" value={memo} onChange={setMemo} placeholder="Wire reference" />
             <div>
               <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Amount</label>
