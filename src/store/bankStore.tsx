@@ -106,6 +106,25 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+/**
+ * Wire recipients need a full beneficiary address: Column OFAC-screens the
+ * beneficiary and rejects wire counterparties without one.
+ */
+export interface WireTransferArgs {
+  from: "checking" | "savings";
+  amount: number;
+  beneficiaryName: string;
+  routingNumber: string;
+  accountNumber: string;
+  memo?: string;
+  fee?: number;
+  beneficiaryLine1?: string;
+  beneficiaryCity?: string;
+  beneficiaryState?: string;
+  beneficiaryPostalCode?: string;
+  beneficiaryCountry?: string;
+}
+
 interface Ctx {
   accounts: { checking: Account | null; savings: Account | null };
   transactions: Transaction[];
