@@ -877,14 +877,14 @@ async function simulateIncomingWire(userId: string, body: any) {
   const to = pickAccount(rows, body.to ?? "checking");
   if (!to.account_number_id) throw new Error("That account has no account number to receive into");
 
-  const t = await column<any>("/simulate/receive-a-wire-transfer", {
+  // Column's documented shape: POST /simulate/receive-wire with
+  // { destination_account_number_id, amount, currency_code }.
+  const t = await column<any>("/simulate/receive-wire", {
     method: "POST",
     body: {
-      account_number_id: to.account_number_id,
+      destination_account_number_id: to.account_number_id,
       amount,
       currency_code: "USD",
-      description: String(body.description ?? "SIMULATED INCOMING WIRE").slice(0, 120),
-      originator_name: String(body.originatorName ?? "ACME PAYROLL").slice(0, 64),
     },
   });
   return { transferId: t?.id ?? null, status: t?.status ?? "submitted", amount };
