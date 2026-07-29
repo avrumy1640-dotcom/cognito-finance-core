@@ -70,7 +70,7 @@ const PhoneFrame = ({ children }: { children: React.ReactNode }) => (
           </div>
 
           {/* screen */}
-          <div className="gradient-hero relative h-[430px] w-full overflow-hidden px-3.5 pb-4 pt-9 text-white">
+          <div className="gradient-hero relative h-[404px] w-full overflow-hidden px-3.5 pb-4 pt-9 text-white">
             <div className="pointer-events-none absolute -top-16 left-1/2 h-52 w-52 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,hsl(82_92%_62%/0.22),transparent_70%)]" />
             {/* status bar */}
             <div className="relative mb-2 flex items-center justify-between px-1 text-[9px] font-semibold tracking-tight text-white/85">
@@ -439,7 +439,7 @@ const Intro = () => {
         }}
       >
         {/* ---- full-bleed hero stage ---- */}
-        <div className="gradient-hero relative overflow-hidden rounded-b-[2.5rem] pb-14">
+        <div className="gradient-hero relative overflow-hidden rounded-b-[2.5rem] pb-10">
           <div className="pointer-events-none absolute -top-24 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,hsl(82_92%_62%/0.20),transparent_68%)]" />
           <div className="pointer-events-none absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-[radial-gradient(circle,hsl(82_92%_62%/0.12),transparent_70%)]" />
 
@@ -482,7 +482,7 @@ const Intro = () => {
         </div>
 
         {/* ---- copy section ---- */}
-        <div className="relative -mt-6 flex flex-1 flex-col">
+        <div className="relative flex flex-1 flex-col">
           <div className="mx-auto w-full max-w-md px-7 pt-4">
             <div className="flex items-center gap-2">
               <Icon size={14} className="text-primary" />
