@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -6,7 +7,8 @@ import ToggleRow from "@/components/glass/ToggleRow";
 
 import { useNotifications } from "@/hooks/useNotifications";
 import { useNotificationPrefs, NotificationPrefs } from "@/hooks/useNotificationPrefs";
-import { ArrowLeft, Settings, CheckCheck } from "lucide-react";
+import { ArrowLeft, Settings, CheckCheck, Trash2 } from "lucide-react";
+import ConfirmDialog from "@/components/glass/ConfirmDialog";
 
 const iconMap: Record<string, string> = {
   deposit: "💰",
@@ -23,7 +25,15 @@ const NotificationsPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isSettings = location.pathname.endsWith("/settings");
-  const { items: notifications, unread, markRead: markNotificationRead, markAllRead, status } = useNotifications();
+  const { items: notifications, unread, markRead: markNotificationRead, markAllRead, clearAll, status } = useNotifications();
+  const [clearOpen, setClearOpen] = useState(false);
+
+  const handleClearAll = async () => {
+    setClearOpen(false);
+    const { error } = await clearAll();
+    if (error) toast.error("Couldn't clear notifications", { description: error });
+    else toast.success("Notifications cleared");
+  };
   const { prefs, status: prefsStatus, update } = useNotificationPrefs();
 
   const togglePref = async (key: keyof NotificationPrefs, label: string) => {
@@ -145,6 +155,16 @@ const NotificationsPage = () => {
                 <CheckCheck size={18} className="text-muted-foreground" />
               </button>
             )}
+            {notifications.length > 0 && (
+              <button
+                onClick={() => setClearOpen(true)}
+                className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center"
+                title="Clear all notifications"
+                aria-label="Clear all notifications"
+              >
+                <Trash2 size={18} className="text-destructive" />
+              </button>
+            )}
             <button
               onClick={() => navigate("/notifications/settings")}
               className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center"
@@ -194,6 +214,16 @@ const NotificationsPage = () => {
           ))}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={clearOpen}
+        onOpenChange={setClearOpen}
+        title="Clear all notifications?"
+        description="This permanently removes every notification from your history. Alerts about future activity will still arrive."
+        confirmLabel="Clear all"
+        destructive
+        onConfirm={() => void handleClearAll()}
+      />
     </div>
   );
 };

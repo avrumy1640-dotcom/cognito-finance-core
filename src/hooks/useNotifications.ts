@@ -79,7 +79,21 @@ export function useNotifications() {
     await supabase.from("notifications").update({ read_at: now }).eq("user_id", user.id).is("read_at", null);
   }, [user]);
 
-  return { items, status, error, unread, reload: load, markRead, markAllRead };
+  /** Permanently removes every notification for the signed-in user. */
+  const clearAll = useCallback(async () => {
+    if (!user) return { error: "Not signed in" as string | undefined };
+    const previous = items;
+    setItems([]);
+    const { error: err } = await supabase.from("notifications").delete().eq("user_id", user.id);
+    if (err) {
+      setItems(previous); // put them back — the delete never happened
+      return { error: err.message };
+    }
+    await load(); // confirm against the server, not just optimistically
+    return {};
+  }, [user, items, load]);
+
+  return { items, status, error, unread, reload: load, markRead, markAllRead, clearAll };
 }
 
 /** Unread badge only — cheap enough to mount on the dashboard. */

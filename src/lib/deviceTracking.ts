@@ -21,10 +21,32 @@ export function detectDeviceLabel(ua: string): string {
   return "Browser";
 }
 
+/** A device counts as "gone quiet" after this long; a return trip re-alerts. */
+const STALE_DEVICE_DAYS = 30;
+
 export async function recordSignIn(userId: string) {
   const ua = navigator.userAgent;
   const label = detectDeviceLabel(ua);
   const deviceId = getDeviceId();
+  const now = new Date();
+
+  // Is this browser already known to the account? Real banks only alert on a
+  // NEW or long-dormant device — not on every routine sign-in.
+  let known: { last_seen_at: string | null } | null = null;
+  try {
+    const { data } = await supabase
+      .from("trusted_devices")
+      .select("last_seen_at")
+      .eq("user_id", userId)
+      .eq("device_id", deviceId)
+      .maybeSingle();
+    known = data ?? null;
+  } catch { /* treat as unknown */ }
+
+  const lastSeen = known?.last_seen_at ? Date.parse(known.last_seen_at) : null;
+  const dormant =
+    lastSeen !== null && now.getTime() - lastSeen > STALE_DEVICE_DAYS * 24 * 60 * 60 * 1000;
+  const isNewDevice = !known;
 
   // Best-effort — never throw into the auth flow.
   try {
@@ -42,25 +64,25 @@ export async function recordSignIn(userId: string) {
         device_id: deviceId,
         label,
         user_agent: ua,
-        last_seen_at: new Date().toISOString(),
+        last_seen_at: now.toISOString(),
       },
       { onConflict: "user_id,device_id" }
     );
   } catch { /* ignore */ }
 
-  // Security alert, exactly like a real bank sends on every sign-in.
+  if (!isNewDevice && !dormant) return; // routine login on a trusted device
+
   try {
-    const when = new Date();
     await supabase.functions.invoke("notify", {
       body: {
         type: "security",
-        title: "New sign-in to your account",
-        body: `${label} · ${Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown location"} · ${when.toLocaleString(
+        title: isNewDevice ? "New sign-in from a new device" : "Sign-in after a long break",
+        body: `${label} \u00b7 ${Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown location"} \u00b7 ${now.toLocaleString(
           "en-US",
           { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
         )}. If this wasn't you, secure your account now.`,
-        dedupe_key: `signin-${deviceId}-${when.toISOString().slice(0, 16)}`,
-        data: { device: label, deviceId },
+        dedupe_key: `signin-${deviceId}-${now.toISOString().slice(0, 10)}`,
+        data: { device: label, deviceId, reason: isNewDevice ? "new_device" : "dormant_device" },
       },
     });
   } catch { /* ignore */ }

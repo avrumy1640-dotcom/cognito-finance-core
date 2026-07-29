@@ -392,21 +392,24 @@ async function syncTransfers(
         },
       });
       for (const t of items) {
-        const accId = t.bank_account_id ?? t.sender_bank_account_id ?? t.receiver_bank_account_id;
-        const involved =
-          bankAccountIds.includes(accId) ||
-          bankAccountIds.includes(t.sender_bank_account_id) ||
-          bankAccountIds.includes(t.receiver_bank_account_id);
+        const sender = t.sender_bank_account_id ?? null;
+        const receiver = t.receiver_bank_account_id ?? null;
+        const accId = t.bank_account_id ?? sender ?? receiver;
+        const weSend = !!sender && bankAccountIds.includes(sender);
+        const weReceive = !!receiver && bankAccountIds.includes(receiver);
+        const involved = weSend || weReceive || bankAccountIds.includes(accId);
         if (!involved) continue;
+
+        const dir = String(t.direction ?? t.type ?? "").toLowerCase();
         // ACH semantics are inverted relative to intuition: an ACH DEBIT pulls
         // money INTO our account, a CREDIT pushes it out. Book/wire transfers
-        // are keyed off which side of the transfer we hold.
+        // are keyed off which side of the transfer we hold; incoming wires only
+        // carry a direction/CREDIT marker on the receiving account.
         const isCredit = kind === "ach"
-          ? t.type === "DEBIT"
-          : bankAccountIds.includes(t.receiver_bank_account_id ?? "") ||
-            t.direction === "credit";
+          ? String(t.type ?? "").toUpperCase() === "DEBIT"
+          : weReceive || (!weSend && (dir === "credit" || t.is_incoming === true));
 
-        collected.push({
+        const base = {
           user_id: userId,
           transfer_id: t.id,
           transfer_type: kind,
@@ -418,7 +421,16 @@ async function syncTransfers(
           description: t.description ?? t.merchant_name ?? `${kind.toUpperCase()} transfer`,
           raw: t,
           occurred_at: t.created_at ?? new Date().toISOString(),
-        });
+        };
+
+        if (weSend && weReceive) {
+          // Internal book transfer: one Column record, but the customer should
+          // see both sides — money leaving one account and landing in the other.
+          collected.push({ ...base, transfer_id: `${t.id}:out`, bank_account_id: sender!, direction: "debit" });
+          collected.push({ ...base, transfer_id: `${t.id}:in`, bank_account_id: receiver!, direction: "credit" });
+        } else {
+          collected.push({ ...base, bank_account_id: weReceive ? receiver! : weSend ? sender! : base.bank_account_id });
+        }
       }
     } catch (e) {
       // A transfer type may be unavailable in sandbox — log rather than swallow.
@@ -645,8 +657,10 @@ async function doTransfer(userId: string, body: any) {
       },
       idempotencyKey: await transferKey(userId, "book", amount, to.bank_account_id, requestId),
     });
-    await recordTransfer(userId, "book", from.bank_account_id, t, "debit", description);
-    await recordTransfer(userId, "book", to.bank_account_id, { ...t, id: `${t.id}-in` }, "credit", description);
+    // Same leg IDs the sync uses, so the mirrored rows update in place
+    // instead of appearing twice once Column reports the transfer back.
+    await recordTransfer(userId, "book", from.bank_account_id, { ...t, id: `${t.id}:out` }, "debit", description);
+    await recordTransfer(userId, "book", to.bank_account_id, { ...t, id: `${t.id}:in` }, "credit", description);
     return { transferId: t.id, status: t.status };
   }
 
@@ -849,7 +863,7 @@ async function simulateAchReturn(userId: string, body: any) {
   const from = pickAccount(rows, "checking");
   const counterpartyId = await ensureCounterparty(userId, {
     name: magic,
-    routingNumber: String(body.routingNumber ?? "121145307"),
+    routingNumber: String(body.routingNumber ?? "021000021"),
     accountNumber: String(body.accountNumber ?? "1234567890"),
   });
   const t = await column<any>("/transfers/ach", {
@@ -866,7 +880,21 @@ async function simulateAchReturn(userId: string, body: any) {
     idempotencyKey: `sim-return-${userId}-${magic}-${crypto.randomUUID()}`,
   });
   await recordTransfer(userId, "ach", from.bank_account_id, t, "debit", `Simulated ${magic}`);
-  return { transferId: t.id, status: t.status, expectedReturn: magic };
+
+  // Sandbox ACH only returns once the transfer has actually settled through the
+  // simulated Fed. Force settlement so the return (and its webhook) fires now
+  // instead of whenever the sandbox batch window next opens.
+  let settled = false;
+  try {
+    await column<any>("/simulate/transfers/ach/settle", {
+      method: "POST",
+      body: { ach_transfer_id: t.id },
+    });
+    settled = true;
+  } catch (e) {
+    console.warn("could not force ACH settlement", (e as Error).message);
+  }
+  return { transferId: t.id, status: t.status, expectedReturn: magic, settled };
 }
 
 /** Sandbox-only incoming-wire simulator. */
@@ -877,14 +905,14 @@ async function simulateIncomingWire(userId: string, body: any) {
   const to = pickAccount(rows, body.to ?? "checking");
   if (!to.account_number_id) throw new Error("That account has no account number to receive into");
 
-  const t = await column<any>("/simulate/receive-a-wire-transfer", {
+  // Column's documented shape: POST /simulate/receive-wire with
+  // { destination_account_number_id, amount, currency_code }.
+  const t = await column<any>("/simulate/receive-wire", {
     method: "POST",
     body: {
-      account_number_id: to.account_number_id,
+      destination_account_number_id: to.account_number_id,
       amount,
       currency_code: "USD",
-      description: String(body.description ?? "SIMULATED INCOMING WIRE").slice(0, 120),
-      originator_name: String(body.originatorName ?? "ACME PAYROLL").slice(0, 64),
     },
   });
   return { transferId: t?.id ?? null, status: t?.status ?? "submitted", amount };

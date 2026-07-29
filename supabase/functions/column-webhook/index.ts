@@ -168,27 +168,40 @@ async function handleEvent(type: string, data: any) {
     const status = String(t.status ?? type.split(".").pop() ?? "pending").toLowerCase();
     const occurredAt = t.created_at ?? new Date().toISOString();
 
-    // Out-of-order safety: never regress a transfer we already know is further
-    // along. Re-delivery of the same event is a no-op, not a state change.
-    const { data: prev } = await admin.from("column_transfers")
-      .select("status, occurred_at").eq("transfer_id", transferId).maybeSingle();
-    if (!shouldApply(prev as any, status, occurredAt)) {
-      return `${kind} transfer ${transferId}: ignored out-of-order "${status}" (have "${prev?.status}")`;
-    }
+    // Internal book transfers are mirrored as two legs (":out" / ":in"), so a
+    // status update has to land on whichever rows we already hold.
+    const legIds = [transferId, `${transferId}:out`, `${transferId}:in`];
+    const { data: existing } = await admin.from("column_transfers")
+      .select("transfer_id, status, occurred_at").in("transfer_id", legIds);
+    const rows = existing ?? [];
 
-    await admin.from("column_transfers").upsert({
-      user_id: userId,
-      transfer_id: transferId,
-      transfer_type: kind,
-      bank_account_id: accId ?? null,
-      status,
-      amount_cents: cents(t.amount),
-      currency: t.currency_code ?? "USD",
-      direction: isCredit ? "credit" : "debit",
-      description: t.description ?? `${kind.toUpperCase()} transfer`,
-      raw: t,
-      occurred_at: occurredAt,
-    }, { onConflict: "transfer_id" });
+    if (rows.length) {
+      const applied: string[] = [];
+      for (const row of rows) {
+        if (!shouldApply(row as any, status, occurredAt)) continue;
+        await admin.from("column_transfers")
+          .update({ status, raw: t, occurred_at: occurredAt })
+          .eq("transfer_id", row.transfer_id);
+        applied.push(row.transfer_id);
+      }
+      if (!applied.length) {
+        return `${kind} transfer ${transferId}: ignored out-of-order "${status}"`;
+      }
+    } else {
+      await admin.from("column_transfers").upsert({
+        user_id: userId,
+        transfer_id: transferId,
+        transfer_type: kind,
+        bank_account_id: accId ?? null,
+        status,
+        amount_cents: cents(t.amount),
+        currency: t.currency_code ?? "USD",
+        direction: isCredit ? "credit" : "debit",
+        description: t.description ?? `${kind.toUpperCase()} transfer`,
+        raw: t,
+        occurred_at: occurredAt,
+      }, { onConflict: "transfer_id" });
+    }
 
     if (["returned", "rejected", "failed", "canceled", "cancelled"].includes(status)) {
       await notify(userId, {
