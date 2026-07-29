@@ -209,15 +209,17 @@ async function handleEvent(type: string, data: any) {
     return `${kind} transfer ${transferId} → ${status}`;
   }
 
-  // --- account events, incl. overdraft ------------------------------------
+  // --- account events, incl. overdraft and freeze -------------------------
   if (type.startsWith("bank_account.") || type.startsWith("account.")) {
     const accId = data?.id ?? data?.bank_account_id;
     if (!accId) return "ignored: no account id";
     const overdrawn = type.includes("overdraft") || data?.is_overdrawn === true;
+    const frozen = type.includes("frozen") || data?.is_frozen === true;
+    const status = data?.is_closed ? "closed" : frozen ? "frozen" : "open";
     const { data: row } = await admin.from("column_bank_accounts").update({
       balances: data?.balances ?? {},
       is_overdrawn: overdrawn,
-      status: data?.is_closed ? "closed" : "open",
+      status,
     }).eq("bank_account_id", accId).select("user_id").maybeSingle();
     if (overdrawn && row?.user_id) {
       await notify(row.user_id, {
@@ -227,8 +229,17 @@ async function handleEvent(type: string, data: any) {
         dedupe_key: `column-overdraft-${accId}-${new Date().toISOString().slice(0, 10)}`,
       });
     }
-    return `account ${accId} updated${overdrawn ? " (overdrawn)" : ""}`;
+    if (frozen && row?.user_id) {
+      await notify(row.user_id, {
+        type: "alert",
+        title: "Your account has been frozen",
+        body: "Money movement is paused while our banking partner reviews the account. Contact support for help.",
+        dedupe_key: `column-frozen-${accId}`,
+      });
+    }
+    return `account ${accId} → ${status}${overdrawn ? " (overdrawn)" : ""}`;
   }
+
 
   return `unhandled event type ${type}`;
 }
