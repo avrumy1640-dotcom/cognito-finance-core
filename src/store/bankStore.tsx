@@ -633,7 +633,7 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     return true;
   }, [runMutation, runLiveTransfer]);
 
-  const wireTransfer = useCallback((args: { from: "checking" | "savings"; amount: number; beneficiaryName: string; routingNumber: string; accountNumber: string; memo?: string; fee?: number }) => {
+  const wireTransfer = useCallback((args: WireTransferArgs) => {
     const fee = args.fee ?? 25;
     if (args.amount <= 0) return false;
     const from = accountFor(args.from);
@@ -644,9 +644,16 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
         kind: "wire", amount: args.amount, from: args.from, name: args.beneficiaryName,
         routingNumber: args.routingNumber, accountNumber: args.accountNumber,
         description: args.memo || "Wire transfer",
+        // Required for the provider's OFAC screening of the beneficiary.
+        beneficiaryLine1: args.beneficiaryLine1,
+        beneficiaryCity: args.beneficiaryCity,
+        beneficiaryState: args.beneficiaryState,
+        beneficiaryPostalCode: args.beneficiaryPostalCode,
+        beneficiaryCountry: args.beneficiaryCountry || "US",
       }, `$${args.amount.toFixed(2)} to ${args.beneficiaryName}`);
       return true;
     }
+
     if (spendableBalance(from, overdraftRef.current) < args.amount + fee) return false;
     void runMutation(`Wire to ${args.beneficiaryName}`, () => demoBank.debit(id, {
       accountId: from.id, amount: args.amount, merchant: args.beneficiaryName,
