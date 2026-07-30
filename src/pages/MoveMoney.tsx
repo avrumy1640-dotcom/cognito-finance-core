@@ -24,15 +24,15 @@ import RequireKyc from "@/components/RequireKyc";
 import { FeesTimingCard, LimitsCheckPanel } from "@/components/money/FeesTimingCard";
 import { checkLimits } from "@/lib/txPolicy";
 
-// Primary tiles kept intentionally small (Chime/Revolut pattern). Send is now
-// a hub screen with a method selector (P2P, ACH, Wire). Advanced actions
-// (Scheduled, Bill Pay, Beneficiaries) live behind the More sheet so the
-// first-time user isn't overwhelmed.
+// Primary tiles kept intentionally small (Chime/Revolut pattern). Send is a
+// hub screen with a method selector (own accounts, ACH, Wire). Advanced
+// actions (Scheduled, Bill Pay, Beneficiaries) live behind the More sheet so
+// the first-time user isn't overwhelmed.
 const primaryActions = [
-  { label: "Send", desc: "Person, bank, or wire", icon: Send, id: "send" },
-  { label: "Add Money", desc: "Wire, SEPA, or debit card", icon: Plus, id: "add" },
-  { label: "Request", desc: "Ask someone to pay you", icon: QrCode, id: "receive" },
-  { label: "More", desc: "Scheduled, bills, beneficiaries", icon: ChevronRight, id: "more" },
+  { label: "Move", desc: "Between accounts · Instant", icon: ArrowLeftRight, id: "transfer" },
+  { label: "Send", desc: "Bank transfer or wire", icon: Send, id: "send" },
+  { label: "Add Money", desc: "Pull from an external bank", icon: Plus, id: "add" },
+  { label: "More", desc: "Scheduled, bills, requests", icon: ChevronRight, id: "more" },
 ];
 
 // Every method here maps to a real rail our banking partner supports. Speed
