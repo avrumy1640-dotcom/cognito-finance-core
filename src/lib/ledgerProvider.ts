@@ -163,6 +163,9 @@ export interface WebhookDelivery {
   id: string;
   eventId: string | null;
   eventType: string | null;
+  /** The partner reports the outcome as SUCCEEDED / FAILED / PENDING. */
+  status: string | null;
+  scheduledAt: string | null;
   statusCode: number | null;
   success: boolean | null;
   attempts: number | null;
