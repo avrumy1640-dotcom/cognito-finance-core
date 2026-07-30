@@ -14,6 +14,14 @@ import type { DemoAccount, DemoLedger, DemoTransaction } from "@/lib/demoBank";
 // COLUMN_API_KEY from a `test_` key to a `live_` key — no code change here.
 
 
+/** One human with ownership rights over an account. */
+export interface AccountOwner {
+  userId: string;
+  name: string;
+  role: "primary" | "joint";
+  isMe: boolean;
+}
+
 export interface ProviderAccount {
   id: string;
   name: string;
@@ -25,7 +33,12 @@ export interface ProviderAccount {
   available: number;
   current: number;
   pending: number;
+  /** True when more than one entity owns the account at the provider. */
+  isJoint?: boolean;
+  myRole?: "primary" | "joint";
+  owners?: AccountOwner[];
 }
+
 
 export interface ProviderSnapshot {
   provisioned: boolean;
