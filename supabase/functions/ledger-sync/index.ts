@@ -1252,16 +1252,19 @@ async function listWebhookEndpoints() {
 async function verifyWebhookEndpoint(id: string, eventType: string) {
   if (!/^[A-Za-z0-9_\-]+$/.test(id)) throw new Error("Invalid endpoint id");
   const type = String(eventType || "ach.outgoing_transfer.initiated");
+  // The body takes `event_type` and NOTHING else — sending a second alias
+  // field makes Column reject the whole call with `invalid_field_value`.
   const res = await columnAny<any>(
     [`/webhook-endpoints/${id}/verify`, `/webhook_endpoints/${id}/verify`],
-    { method: "POST", body: { event_type: type, type } },
+    { method: "POST", body: { event_type: type } },
   );
   return {
     endpointId: id,
     eventType: type,
     statusCode: res?.response_status_code ?? res?.status_code ?? null,
     responseBody: res?.response_body ?? res?.body ?? null,
-    success: res?.success ?? res?.is_success ?? null,
+    success: res?.success ?? res?.is_success
+      ?? (typeof res?.status === "string" ? res.status.toUpperCase() === "SUCCEEDED" : null),
     raw: res,
   };
 }
@@ -1273,18 +1276,26 @@ async function webhookDeliveries(id: string, limit = 25) {
     { query: { limit: Math.min(Math.max(limit, 1), 100) } },
   );
   const items = pickList(res, "webhook_deliveries");
-  return items.map((d: any) => ({
-    id: d.id,
-    eventId: d.event_id ?? d.event?.id ?? null,
-    eventType: d.event_type ?? d.event?.type ?? null,
-    statusCode: d.response_status_code ?? d.status_code ?? null,
-    success: d.is_success ?? d.success ?? null,
-    attempts: d.attempt_count ?? d.attempts ?? null,
-    error: d.error_message ?? d.error ?? null,
-    createdAt: d.created_at ?? null,
-    responseBody: typeof d.response_body === "string" ? d.response_body.slice(0, 500) : null,
-  }));
+  // A delivery is `{ event, scheduled_at, status }` — the outcome lives in
+  // `status` (SUCCEEDED / FAILED / PENDING), not in an HTTP status code.
+  return items.map((d: any, i: number) => {
+    const status = typeof d?.status === "string" ? d.status.toUpperCase() : null;
+    return {
+      id: String(d?.id ?? d?.event?.id ?? `${id}-${i}`),
+      eventId: d?.event_id ?? d?.event?.id ?? null,
+      eventType: d?.event_type ?? d?.event?.type ?? null,
+      status,
+      scheduledAt: d?.scheduled_at ?? null,
+      statusCode: d?.response_status_code ?? d?.status_code ?? null,
+      success: status ? status === "SUCCEEDED" : (d?.is_success ?? d?.success ?? null),
+      attempts: d?.attempt_count ?? d?.attempts ?? null,
+      error: d?.error_message ?? d?.error ?? null,
+      createdAt: d?.created_at ?? d?.scheduled_at ?? d?.event?.created_at ?? null,
+      responseBody: typeof d?.response_body === "string" ? d.response_body.slice(0, 500) : null,
+    };
+  });
 }
+
 
 /**
  * Reconciliation: walks Column's own record of webhook events and flags any
