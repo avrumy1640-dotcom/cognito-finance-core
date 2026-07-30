@@ -308,6 +308,9 @@ export function mergeProviderIntoLedger(ledger: DemoLedger, snap: ProviderSnapsh
       currentBalance: live.current,
       pendingAmount: live.pending,
       status: live.status,
+      isJoint: live.isJoint ?? (live.owners?.length ?? 0) > 1,
+      myRole: live.myRole,
+      owners: live.owners,
     };
   });
 
