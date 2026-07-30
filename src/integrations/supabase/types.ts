@@ -659,8 +659,10 @@ export type Database = {
           citizenship: string | null
           country: string | null
           created_at: string
+          date_of_birth: string | null
           email: string | null
           employer: string | null
+          employment_status: string | null
           id: string
           occupation: string | null
           onboarded_at: string | null
@@ -686,8 +688,10 @@ export type Database = {
           citizenship?: string | null
           country?: string | null
           created_at?: string
+          date_of_birth?: string | null
           email?: string | null
           employer?: string | null
+          employment_status?: string | null
           id?: string
           occupation?: string | null
           onboarded_at?: string | null
@@ -713,8 +717,10 @@ export type Database = {
           citizenship?: string | null
           country?: string | null
           created_at?: string
+          date_of_birth?: string | null
           email?: string | null
           employer?: string | null
+          employment_status?: string | null
           id?: string
           occupation?: string | null
           onboarded_at?: string | null

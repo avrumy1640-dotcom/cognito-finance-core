@@ -40,13 +40,16 @@ interface Data {
   business_name: string;
   first_name: string;
   last_name: string;
+  date_of_birth: string;
   phone: string;
   country: string;
+  citizenship: string;
   address_street: string;
   address_city: string;
   address_region: string;
   address_postal_code: string;
   occupation: string;
+  employment_status: string;
   annual_income: string;
   source_of_funds: string;
   tax_id_number: string;
@@ -59,13 +62,16 @@ const EMPTY: Data = {
   business_name: "",
   first_name: "",
   last_name: "",
+  date_of_birth: "",
   phone: "",
   country: "",
+  citizenship: "",
   address_street: "",
   address_city: "",
   address_region: "",
   address_postal_code: "",
   occupation: "",
+  employment_status: "",
   annual_income: "",
   source_of_funds: "",
   tax_id_number: "",
@@ -84,10 +90,26 @@ const SOURCES = [
   "Employment income", "Business income", "Investment income", "Savings",
   "Sale of assets", "Inheritance / gift", "Retirement", "Other",
 ];
-const INCOME_BANDS = [
-  "Under $25,000", "$25,000 – $50,000", "$50,000 – $100,000",
-  "$100,000 – $250,000", "$250,000 – $500,000", "Over $500,000",
+const EMPLOYMENT: { id: string; label: string }[] = [
+  { id: "employed", label: "Employed" },
+  { id: "self_employed", label: "Self-employed" },
+  { id: "freelancer", label: "Freelancer" },
+  { id: "student", label: "Student" },
+  { id: "retired", label: "Retired" },
+  { id: "homemaker", label: "Homemaker" },
+  { id: "unemployed", label: "Unemployed" },
 ];
+/** Latest DOB that still makes someone 18. */
+const maxDobString = () => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 18);
+  return d.toISOString().slice(0, 10);
+};
+const ageFrom = (v: string) => {
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return NaN;
+  return (Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000);
+};
 const REQUIRES_TAX_ID = new Set(["US", "CA", "GB", "DE", "FR", "ES", "IT", "NL", "AU"]);
 const DIAL_CODES: Record<string, string> = {
   US: "+1", CA: "+1", GB: "+44", DE: "+49", FR: "+33", ES: "+34", IT: "+39",
@@ -176,7 +198,7 @@ function buildSteps(data: Data): Step[] {
     id: "name",
     kicker: kicker("Name"),
     title: "What's your legal name?",
-    subtitle: "Match your government-issued ID exactly.",
+    subtitle: "Match your government-issued ID exactly — we use this to open your account.",
     validate: (d) =>
       d.first_name.trim().length > 0 && d.last_name.trim().length > 0
         ? null
@@ -198,6 +220,31 @@ function buildSteps(data: Data): Step[] {
           autoFocus={false}
         />
       </div>
+    ),
+  });
+
+  list.push({
+    id: "dob",
+    kicker: kicker("Birthday"),
+    title: "When were you born?",
+    subtitle: "You must be 18 or older to open an account.",
+    validate: (d) => {
+      if (!d.date_of_birth) return "Enter your date of birth.";
+      const age = ageFrom(d.date_of_birth);
+      if (Number.isNaN(age)) return "Enter a valid date.";
+      if (age < 18) return "You must be at least 18 years old.";
+      if (age >= 120) return "Enter a valid date of birth.";
+      return null;
+    },
+    render: ({ data, setField, submit }) => (
+      <TextInput
+        type="date"
+        max={maxDobString()}
+        value={data.date_of_birth}
+        onChange={(v) => setField("date_of_birth", v)}
+        onEnter={submit}
+        autoComplete="bday"
+      />
     ),
   });
 
@@ -229,7 +276,26 @@ function buildSteps(data: Data): Step[] {
       <ChoiceList
         items={COUNTRIES.map(([c, l, flag]) => ({ id: c, label: l, prefix: flag }))}
         value={data.country}
-        onChange={(v) => setField("country", v)}
+        // Citizenship defaults to residence; the next step lets them change it.
+        onChange={(v) => {
+          setField("country", v);
+          if (!data.citizenship) setField("citizenship", v);
+        }}
+      />
+    ),
+  });
+
+  list.push({
+    id: "citizenship",
+    kicker: kicker("Citizenship"),
+    title: "What's your citizenship?",
+    subtitle: "Required by our banking partner for compliance screening.",
+    validate: (d) => (d.citizenship ? null : "Choose your citizenship."),
+    render: ({ data, setField }) => (
+      <ChoiceList
+        items={COUNTRIES.map(([c, l, flag]) => ({ id: c, label: l, prefix: flag }))}
+        value={data.citizenship || data.country}
+        onChange={(v) => setField("citizenship", v)}
       />
     ),
   });
@@ -283,6 +349,20 @@ function buildSteps(data: Data): Step[] {
   });
 
   list.push({
+    id: "employment",
+    kicker: kicker("Employment"),
+    title: "What's your employment status?",
+    validate: (d) => (d.employment_status ? null : "Choose your employment status."),
+    render: ({ data, setField }) => (
+      <ChoiceList
+        items={EMPLOYMENT}
+        value={data.employment_status}
+        onChange={(v) => setField("employment_status", v)}
+      />
+    ),
+  });
+
+  list.push({
     id: "occupation",
     kicker: kicker("Work"),
     title: isBusiness ? "What does your business do?" : "What do you do for work?",
@@ -301,13 +381,19 @@ function buildSteps(data: Data): Step[] {
     id: "income",
     kicker: kicker("Income"),
     title: "Estimated annual income?",
-    subtitle: "Ballpark is fine.",
-    validate: (d) => (d.annual_income ? null : "Choose an estimated income range."),
-    render: ({ data, setField }) => (
-      <ChoiceList
-        items={INCOME_BANDS.map((b) => ({ id: b, label: b }))}
+    subtitle: "Ballpark is fine — enter a whole number in USD.",
+    validate: (d) => {
+      const n = Number(d.annual_income.replace(/[^0-9]/g, ""));
+      return n > 0 ? null : "Enter your estimated annual income.";
+    },
+    render: ({ data, setField, submit }) => (
+      <TextInput
+        inputMode="numeric"
+        prefix="$"
         value={data.annual_income}
-        onChange={(v) => setField("annual_income", v)}
+        onChange={(v) => setField("annual_income", v.replace(/[^0-9]/g, ""))}
+        onEnter={submit}
+        placeholder="120000"
       />
     ),
   });
@@ -476,14 +562,17 @@ const Onboarding = () => {
           business_name: prof.business_name || "",
           first_name: first || "",
           last_name: rest.join(" ") || "",
+          date_of_birth: prof.date_of_birth || "",
           phone: prof.phone || "",
           country: prof.country || "",
+          citizenship: prof.citizenship || "",
           address_street: prof.address_street || "",
           address_city: prof.address_city || "",
           address_region: prof.address_region || "",
           address_postal_code: prof.address_postal_code || "",
           occupation: prof.occupation || "",
-          annual_income: prof.annual_income || "",
+          employment_status: prof.employment_status || "",
+          annual_income: (prof.annual_income || "").replace(/[^0-9]/g, ""),
           source_of_funds: prof.source_of_funds || "",
           tax_id_number: prof.tax_id_number || "",
           tos: !!prof.tos_accepted_at,
@@ -532,13 +621,16 @@ const Onboarding = () => {
         account_type: d.account_type || null,
         business_name: d.business_name || null,
         preferred_name: `${d.first_name} ${d.last_name}`.trim() || null,
+        date_of_birth: d.date_of_birth || null,
         phone: d.phone || null,
         country: d.country || null,
+        citizenship: d.citizenship || d.country || null,
         address_street: d.address_street || null,
         address_city: d.address_city || null,
         address_region: d.address_region || null,
         address_postal_code: d.address_postal_code || null,
         occupation: d.occupation || null,
+        employment_status: d.employment_status || null,
         annual_income: d.annual_income || null,
         source_of_funds: d.source_of_funds || null,
         tax_country: d.country || null,
@@ -560,14 +652,17 @@ const Onboarding = () => {
         account_type: d.account_type,
         business_name: d.business_name || null,
         preferred_name: `${d.first_name} ${d.last_name}`.trim(),
+        date_of_birth: d.date_of_birth,
         phone: d.phone,
         country: d.country,
+        citizenship: d.citizenship || d.country,
         preferred_currency: "USD",
         address_street: d.address_street,
         address_city: d.address_city,
         address_region: d.address_region,
         address_postal_code: d.address_postal_code,
         occupation: d.occupation,
+        employment_status: d.employment_status,
         annual_income: d.annual_income,
         source_of_funds: d.source_of_funds,
         tax_country: d.country || null,
@@ -781,6 +876,7 @@ const Onboarding = () => {
 
 const TextInput = ({
   value, onChange, onEnter, placeholder, autoComplete, autoFocus = true, secure = false,
+  type, max, inputMode, prefix,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -789,6 +885,11 @@ const TextInput = ({
   autoComplete?: string;
   autoFocus?: boolean;
   secure?: boolean;
+  type?: string;
+  max?: string;
+  inputMode?: "text" | "numeric" | "tel" | "email";
+  /** Static adornment rendered inside the field (e.g. a currency symbol). */
+  prefix?: string;
 }) => {
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -808,16 +909,25 @@ const TextInput = ({
   };
 
   return (
-    <input
-      ref={ref}
-      type={secure ? "password" : "text"}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onKeyDown={handleKey}
-      placeholder={placeholder}
-      autoComplete={autoComplete}
-      className="w-full px-4 py-5 rounded-2xl bg-secondary text-foreground text-lg border-2 border-transparent outline-none focus:border-primary/50 focus:bg-card transition-all placeholder:text-muted-foreground/60"
-    />
+    <div className="relative">
+      {prefix && (
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg text-muted-foreground pointer-events-none">
+          {prefix}
+        </span>
+      )}
+      <input
+        ref={ref}
+        type={secure ? "password" : type ?? "text"}
+        max={max}
+        inputMode={inputMode}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKey}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        className={`w-full py-5 rounded-2xl bg-secondary text-foreground text-lg border-2 border-transparent outline-none focus:border-primary/50 focus:bg-card transition-all placeholder:text-muted-foreground/60 ${prefix ? "pl-9 pr-4" : "px-4"}`}
+      />
+    </div>
   );
 };
 
