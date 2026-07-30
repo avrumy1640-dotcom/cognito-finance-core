@@ -44,6 +44,51 @@ export type Database = {
         }
         Relationships: []
       }
+      account_statements: {
+        Row: {
+          bank_account_id: string
+          created_at: string
+          csv_document_id: string | null
+          id: string
+          pdf_document_id: string | null
+          period_end: string | null
+          period_start: string | null
+          raw: Json
+          report_id: string
+          statement_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          bank_account_id: string
+          created_at?: string
+          csv_document_id?: string | null
+          id?: string
+          pdf_document_id?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          raw?: Json
+          report_id: string
+          statement_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          bank_account_id?: string
+          created_at?: string
+          csv_document_id?: string | null
+          id?: string
+          pdf_document_id?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          raw?: Json
+          report_id?: string
+          statement_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string

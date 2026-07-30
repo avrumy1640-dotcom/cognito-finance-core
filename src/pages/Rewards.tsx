@@ -35,6 +35,16 @@ const Rewards = () => {
           </div>
         </div>
 
+        {/* Honesty banner — cashback is tied to the simulated card programme. */}
+        <p className="text-[11px] leading-relaxed text-muted-foreground px-1">
+          Cashback is part of the Glass Card demonstration. Rewards shown here are simulated,
+          are not funded by a live card programme, and redemptions do not move real money.
+        </p>
+
+
+
+
+
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <GlassCard elevated className="relative overflow-hidden">
             <div className="absolute inset-0 gradient-hero opacity-[0.08] rounded-2xl" />

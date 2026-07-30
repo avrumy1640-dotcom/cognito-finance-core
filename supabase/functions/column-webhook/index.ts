@@ -228,18 +228,54 @@ async function handleEvent(type: string, data: any) {
     return `${kind} transfer ${transferId} → ${status}`;
   }
 
+  // --- statements & reports ----------------------------------------------
+  // Column generates a real monthly statement (PDF + CSV) per open account and
+  // announces it as a completed settlement report. Mirror the pointer so the
+  // customer's Documents screen shows the bank's own statement, not ours.
+  if (type.startsWith("reporting.")) {
+    const r = data ?? {};
+    const accId = r.statement_subject_id ?? r.bank_account_id;
+    if (!r.id || !accId) return "ignored: report without a subject account";
+    if (!type.includes("monthly_statement")) return `reporting event ${type} ignored`;
+
+    await admin.from("account_statements").upsert({
+      bank_account_id: String(accId),
+      report_id: String(r.id),
+      statement_type: String(r.type ?? "bank_account_monthly_statement"),
+      period_start: r.from_date ?? null,
+      period_end: r.to_date ?? null,
+      pdf_document_id: r.pdf_document_id || null,
+      csv_document_id: r.csv_document_id || null,
+      status: String(r.status ?? "completed").toLowerCase(),
+      raw: r,
+    }, { onConflict: "report_id" });
+
+    const userId = await userForBankAccount(String(accId));
+    await notify(userId, {
+      type: "alert",
+      title: "Your monthly statement is ready",
+      body: r.to_date ? `Statement period ending ${r.to_date} is available in Documents.` : "A new statement is available in Documents.",
+      dedupe_key: `column-statement-${r.id}`,
+    });
+    return `statement ${r.id} recorded for ${accId}`;
+  }
+
   // --- account events, incl. overdraft and freeze -------------------------
   if (type.startsWith("bank_account.") || type.startsWith("account.")) {
     const accId = data?.id ?? data?.bank_account_id;
     if (!accId) return "ignored: no account id";
     const overdrawn = type.includes("overdraft") || data?.is_overdrawn === true;
     const frozen = type.includes("frozen") || data?.is_frozen === true;
-    const status = data?.is_closed ? "closed" : frozen ? "frozen" : "open";
+    // Column's account object reports a `status` string; `is_closed` is not a
+    // real field, so trust `status` first and only then the event name.
+    const raw = String(data?.status ?? "").trim().toLowerCase();
+    const status = raw || (data?.is_closed || type.includes("closed") ? "closed" : frozen ? "frozen" : "open");
     const { data: row } = await admin.from("column_bank_accounts").update({
       balances: data?.balances ?? {},
       is_overdrawn: overdrawn,
       status,
     }).eq("bank_account_id", accId).select("user_id").maybeSingle();
+
     if (overdrawn && row?.user_id) {
       await notify(row.user_id, {
         type: "alert",

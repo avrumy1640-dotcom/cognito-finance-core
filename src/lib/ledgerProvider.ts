@@ -141,12 +141,27 @@ export interface TransferArgs {
 export type ColumnDocumentType =
   | "identity_license" | "identity_passport" | "identity_utility"
   | "bank_statement" | "source_of_funds_document" | "source_of_wealth_document"
-  | "complete_customer_file" | "other";
+  | "complete_customer_file" | "screenshot" | "other";
 
 export type ColumnEvidencePurpose =
   | "identity_verification" | "proof_of_address" | "ofac_screening"
   | "pep_screening" | "adverse_media_screening" | "complete_customer_file"
-  | "signed_account_agreement" | "attestation_terms_of_service";
+  | "signed_account_agreement" | "attestation_terms_of_service"
+  | "attestation_account_info_truth" | "attestation_privacy_policy"
+  | "tax_id_confirmation" | "edd";
+
+/** One real monthly statement produced by the banking partner. */
+export interface ProviderStatement {
+  id: string;
+  bankAccountId: string;
+  accountName: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  hasPdf: boolean;
+  hasCsv: boolean;
+  status: string;
+}
+
 
 /** One required field on the partner's compliance record. */
 export interface ComplianceItem {
@@ -229,6 +244,14 @@ export const ledgerProvider = {
     call<{ entityId: string | null; verificationStatus: string | null; requirements: ComplianceItem[] }>({
       action: "my_compliance",
     }),
+  /** The partner's own monthly statements for every account the user owns. */
+  statements: () => call<{ statements: ProviderStatement[] }>({ action: "statements" }),
+  /** Short-lived (60s) signed download link for one statement. */
+  statementUrl: (statementId: string, format: "pdf" | "csv" = "pdf") =>
+    call<{ url: string; format: string; expiresInSeconds: number }>({
+      action: "statement_url", statementId, format,
+    }),
+
   /** Joint ownership: pending requests in both directions + owner rosters. */
   jointList: () => call<JointOverview>({ action: "joint_list" }),
   jointRequest: (bankAccountId: string, email: string) =>
