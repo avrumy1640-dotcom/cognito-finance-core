@@ -116,6 +116,69 @@ export interface TransferArgs {
   beneficiaryCountry?: string;
 }
 
+/* --------------------------------------------------------------------------
+ * Provider enums and admin shapes.
+ *
+ * `documentType` and `purposes` are FIXED enums on the partner's evidence
+ * endpoint — an arbitrary string is rejected, which is how an upload can fail
+ * silently. Typing them here makes an invalid value a compile error.
+ * ------------------------------------------------------------------------ */
+export type ColumnDocumentType =
+  | "identity_license" | "identity_passport" | "identity_utility"
+  | "bank_statement" | "source_of_funds_document" | "source_of_wealth_document"
+  | "complete_customer_file" | "other";
+
+export type ColumnEvidencePurpose =
+  | "identity_verification" | "proof_of_address" | "ofac_screening"
+  | "pep_screening" | "adverse_media_screening" | "complete_customer_file"
+  | "signed_account_agreement" | "attestation_terms_of_service";
+
+/** One required field on the partner's compliance record. */
+export interface ComplianceItem {
+  field: string;
+  /** All four real field statuses — "invalid" is NOT the same as "missing". */
+  status: "complete" | "missing" | "invalid" | "pending" | "unknown";
+  message?: string;
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  description: string | null;
+  enabledEvents: string[];
+  isDisabled: boolean;
+  createdAt: string | null;
+}
+
+export interface WebhookVerifyResult {
+  endpointId: string;
+  eventType: string;
+  statusCode: number | null;
+  responseBody: string | null;
+  success: boolean | null;
+  raw: unknown;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  eventId: string | null;
+  eventType: string | null;
+  statusCode: number | null;
+  success: boolean | null;
+  attempts: number | null;
+  error: string | null;
+  createdAt: string | null;
+  responseBody: string | null;
+}
+
+export interface EventReconciliation {
+  checked: number;
+  recorded: number;
+  missingCount: number;
+  missing: Array<{ id: string; type: string | null; createdAt: string | null }>;
+}
+
+
 export const ledgerProvider = {
   status: () => call<{ sandbox: boolean; configured: boolean; entity: unknown }>({ action: "status" }),
   diagnose: () =>
