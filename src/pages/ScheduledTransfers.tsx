@@ -238,7 +238,8 @@ const ScheduleForm = ({ initial, onClose, onSaved, accountsAvailable }: {
 
   const save = async () => {
     if (!num || num <= 0) return toast.error("Enter an amount");
-    if (!toLabel.trim()) return toast.error("Enter a recipient");
+    if (!toLabel.trim()) return toast.error("Choose a destination account");
+    if (toLabel.trim() === fromAccount) return toast.error("Choose two different accounts");
     setSaving(true);
     const scheduledFor = new Date(date).toISOString();
     const payload = {
