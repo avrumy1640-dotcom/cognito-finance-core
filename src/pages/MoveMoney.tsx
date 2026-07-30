@@ -368,86 +368,11 @@ const Row = ({ label, value, bold, success }: { label: string; value: string; bo
   </div>
 );
 
-const SendMoneySheet = ({ onClose }: { onClose: () => void }) => {
-  const { accounts, send, spendable } = useBank();
-  const [step, setStep] = useState<"form" | "review" | "success">("form");
-  const [recipient, setRecipient] = useState("");
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const numAmount = Number(amount);
-  const insufficient = numAmount > spendable("checking");
-
-  const confirm = () => {
-    const ok = send({ from: "checking", amount: numAmount, recipient, note });
-    if (!ok) {
-      toast.error("Payment failed", { description: "Check recipient and amount." });
-      return;
-    }
-    toast.success(`Sent $${numAmount.toFixed(2)}`, { description: `to ${recipient}` });
-    setStep("success");
-  };
-
-  return (
-    <Sheet onClose={onClose}>
-      {step === "form" && (
-        <>
-          <h2 className="text-xl font-display font-bold text-foreground mb-5">Send Money</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Recipient</label>
-              <input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="Email, phone, or name" className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Amount</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">$</span>
-                <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full p-3 pl-8 rounded-xl bg-secondary text-foreground text-2xl font-bold border-0 outline-none text-balance-display" />
-              </div>
-              {insufficient && numAmount > 0 && <p className="text-xs text-destructive mt-1">Insufficient funds</p>}
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Note</label>
-              <input value={note} onChange={(e) => setNote(e.target.value)} className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none" placeholder="What's this for? 💸" />
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-              <button onClick={() => setStep("review")} disabled={!numAmount || !recipient.trim() || insufficient} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Review</button>
-            </div>
-          </div>
-        </>
-      )}
-      {step === "review" && (() => {
-        const limitCheck = checkLimits("send", numAmount);
-        return (
-          <>
-            <h2 className="text-xl font-display font-bold text-foreground mb-5">Review Payment</h2>
-            <GlassCard className="space-y-3 mb-3">
-              <Row label="To" value={recipient} />
-              <Row label="Amount" value={`$${numAmount.toFixed(2)}`} bold />
-              <Row label="From" value="Everyday Checking" />
-              {note && <Row label="Note" value={note} />}
-            </GlassCard>
-            <div className="space-y-3 mb-5">
-              <FeesTimingCard kind="send" amount={numAmount} />
-              <LimitsCheckPanel check={limitCheck} />
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setStep("form")} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Back</button>
-              <button onClick={confirm} disabled={!limitCheck.ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send</button>
-            </div>
-          </>
-        );
-      })()}
-      {step === "success" && (
-        <SuccessView title="Money Sent" subtitle={`$${numAmount.toFixed(2)} sent to ${recipient}`} onDone={onClose} />
-      )}
-    </Sheet>
-  );
-};
-
+// Instant peer-to-peer send was removed: our banking partner has no P2P rail,
+// so the screen could never complete a payment. Money leaves the bank via ACH
+// or wire, both of which are real, connected flows.
 // Mobile check deposit and the old "AddMoneySheet" stub have been removed —
-// mobile deposit is handled in-app, and Add Money is now handled
-// by the real AddMoneyPanel component (Bank Transfer / Debit Card / ACH).
+// Add Money is handled by the real AddMoneyPanel component.
 
 
 
