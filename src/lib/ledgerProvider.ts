@@ -14,6 +14,14 @@ import type { DemoAccount, DemoLedger, DemoTransaction } from "@/lib/demoBank";
 // COLUMN_API_KEY from a `test_` key to a `live_` key — no code change here.
 
 
+/** One human with ownership rights over an account. */
+export interface AccountOwner {
+  userId: string;
+  name: string;
+  role: "primary" | "joint";
+  isMe: boolean;
+}
+
 export interface ProviderAccount {
   id: string;
   name: string;
@@ -25,7 +33,12 @@ export interface ProviderAccount {
   available: number;
   current: number;
   pending: number;
+  /** True when more than one entity owns the account at the provider. */
+  isJoint?: boolean;
+  myRole?: "primary" | "joint";
+  owners?: AccountOwner[];
 }
+
 
 export interface ProviderSnapshot {
   provisioned: boolean;
@@ -62,6 +75,8 @@ const FRIENDLY_CODES: Record<string, string> = {
   bank_account_not_found: "We couldn't find that account. Check the account number and try again.",
   counterparty_not_found: "That recipient no longer exists. Re-enter their bank details.",
   transfer_amount_limit_exceeded: "This amount is over your transfer limit.",
+  // Raised by OUR server-side limit engine, which already ships friendly copy
+  // naming the exact cap and the remaining allowance — so don't overwrite it.
   invalid_request_error: "Some of the details entered aren't valid. Review the form and try again.",
 };
 
@@ -182,6 +197,19 @@ export interface EventReconciliation {
 }
 
 
+export interface JointOverview {
+  incoming: Array<{ id: string; bankAccountId: string; from: string; createdAt: string }>;
+  outgoing: Array<{
+    id: string; bankAccountId: string; accountName: string; to: string;
+    status: string; createdAt: string;
+  }>;
+  accounts: Array<{
+    id: string; name: string; type: string;
+    myRole: "primary" | "joint";
+    owners: AccountOwner[];
+  }>;
+}
+
 export const ledgerProvider = {
   status: () => call<{ sandbox: boolean; configured: boolean; entity: unknown }>({ action: "status" }),
   diagnose: () =>
@@ -201,6 +229,18 @@ export const ledgerProvider = {
     call<{ entityId: string | null; verificationStatus: string | null; requirements: ComplianceItem[] }>({
       action: "my_compliance",
     }),
+  /** Joint ownership: pending requests in both directions + owner rosters. */
+  jointList: () => call<JointOverview>({ action: "joint_list" }),
+  jointRequest: (bankAccountId: string, email: string) =>
+    call<{ sent: boolean; message: string }>({ action: "joint_request", bankAccountId, email }),
+  jointRespond: (requestId: string, accept: boolean) =>
+    call<{ status: string; bankAccountId?: string }>({ action: "joint_respond", requestId, accept }),
+  jointCancel: (requestId: string) => call<{ status: string }>({ action: "joint_cancel", requestId }),
+  jointRemove: (bankAccountId: string, userId?: string) =>
+    call<{ removed: boolean; providerRemoved: boolean; providerNote: string | null }>({
+      action: "joint_remove", bankAccountId, userId,
+    }),
+
   adminList: () => call<Record<string, unknown>>({ action: "admin_list" }),
   adminLocal: () => call<Record<string, unknown>>({ action: "admin_local" }),
   adminCompliance: (entityId: string) =>
@@ -268,6 +308,9 @@ export function mergeProviderIntoLedger(ledger: DemoLedger, snap: ProviderSnapsh
       currentBalance: live.current,
       pendingAmount: live.pending,
       status: live.status,
+      isJoint: live.isJoint ?? (live.owners?.length ?? 0) > 1,
+      myRole: live.myRole,
+      owners: live.owners,
     };
   });
 

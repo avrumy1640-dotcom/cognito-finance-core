@@ -28,6 +28,7 @@ import {
   QrCode,
   Inbox,
   X,
+  Users,
 } from "lucide-react";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -130,7 +131,21 @@ const AccountDetail = () => {
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-semibold text-primary uppercase tracking-widest">{kicker}</p>
             <h1 className="text-[22px] font-display font-bold text-foreground leading-tight tracking-tight truncate">{account.name}</h1>
+            {account.isJoint && (
+              <button
+                onClick={() => navigate("/joint-accounts")}
+                className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-medium text-primary"
+              >
+                <Users size={12} />
+                Joint account
+                {(() => {
+                  const other = account.owners?.find((o) => !o.isMe);
+                  return other ? ` · with ${other.name}` : "";
+                })()}
+              </button>
+            )}
           </div>
+
           <div className={`w-10 h-10 rounded-xl ${isSavings ? "gradient-savings" : "gradient-hero"} flex items-center justify-center shadow-lg shadow-primary/20`}>
             {isSavings ? <TrendingUp size={18} className="text-primary-foreground" /> : <Wallet size={18} className="text-primary-foreground" />}
           </div>

@@ -349,7 +349,63 @@ async function createAccount(userId: string, entityId: string, kind: "checking" 
     balances: acct.balances ?? {},
   }).select().single();
   if (error) throw new Error(error.message);
+  // The creator is the PRIMARY owner. `account_owners` — not
+  // `column_bank_accounts.user_id` — is the authority on who may touch an
+  // account, so every new account must land there in the same breath.
+  await admin.from("account_owners").upsert({
+    bank_account_id: acct.id, user_id: userId, entity_id: entityId, role: "primary",
+  }, { onConflict: "bank_account_id,user_id" });
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Ownership resolution.
+//
+// Every read and every debit resolves accounts through `account_owners`, which
+// carries both the account's creator (role "primary") and any accepted joint
+// owner. Nothing in this file may fall back to `column_bank_accounts.user_id`
+// alone — that column is only the creator, not the access list.
+// ---------------------------------------------------------------------------
+export interface OwnedAccount extends Record<string, any> {
+  owner_role: "primary" | "joint";
+}
+
+async function ownedAccountRows(userId: string): Promise<OwnedAccount[]> {
+  const { data: links } = await admin.from("account_owners")
+    .select("bank_account_id, role").eq("user_id", userId);
+  const ids = (links ?? []).map((l: any) => l.bank_account_id);
+  if (!ids.length) return [];
+  const roleBy = new Map((links ?? []).map((l: any) => [l.bank_account_id, l.role]));
+  const { data } = await admin.from("column_bank_accounts")
+    .select("*").in("bank_account_id", ids).order("created_at");
+  return (data ?? []).map((r: any) => ({ ...r, owner_role: roleBy.get(r.bank_account_id) ?? "primary" }))
+    // Own accounts first so a bare "checking" selector always means MY checking.
+    .sort((a, b) => (a.owner_role === "primary" ? 0 : 1) - (b.owner_role === "primary" ? 0 : 1));
+}
+
+/** Owner roster for a set of accounts, with display names for the UI. */
+async function ownersFor(bankAccountIds: string[]) {
+  if (!bankAccountIds.length) return new Map<string, any[]>();
+  const { data: links } = await admin.from("account_owners")
+    .select("bank_account_id, user_id, role").in("bank_account_id", bankAccountIds);
+  const userIds = [...new Set((links ?? []).map((l: any) => l.user_id))];
+  const { data: profs } = userIds.length
+    ? await admin.from("profiles").select("user_id, preferred_name, email").in("user_id", userIds)
+    : { data: [] as any[] };
+  const profBy = new Map((profs ?? []).map((p: any) => [p.user_id, p]));
+  const out = new Map<string, any[]>();
+  for (const l of links ?? []) {
+    const p = profBy.get(l.user_id);
+    const list = out.get(l.bank_account_id) ?? [];
+    list.push({
+      userId: l.user_id,
+      role: l.role,
+      name: p?.preferred_name || (p?.email ? String(p.email).split("@")[0] : "Owner"),
+      email: p?.email ?? null,
+    });
+    out.set(l.bank_account_id, list);
+  }
+  return out;
 }
 
 async function ensureBankAccount(userId: string, entityId: string) {
@@ -372,10 +428,9 @@ async function ensureBankAccount(userId: string, entityId: string) {
 
 
 async function refreshAccounts(userId: string) {
-  const { data: rows } = await admin
-    .from("column_bank_accounts").select("*").eq("user_id", userId).order("created_at");
+  const rows = await ownedAccountRows(userId);
   const out: any[] = [];
-  for (const r of rows ?? []) {
+  for (const r of rows) {
     try {
       const live = await column<any>(`/bank-accounts/${r.bank_account_id}`);
       await admin.from("column_bank_accounts").update({
@@ -389,6 +444,7 @@ async function refreshAccounts(userId: string) {
   }
   return out;
 }
+
 
 const TX_PAGE_SIZE = 50;
 
@@ -408,12 +464,15 @@ async function syncTransfers(
 ) {
   if (!bankAccountIds.length) return { rows: [], hasMore: false, total: 0 };
 
+  // Scoped by ACCOUNT, not by user: a joint account's history belongs to every
+  // owner, so the watermark must consider rows first mirrored by a co-owner.
   const [{ data: newest }, { count: stalePending }] = await Promise.all([
-    admin.from("column_transfers").select("occurred_at").eq("user_id", userId)
+    admin.from("column_transfers").select("occurred_at").in("bank_account_id", bankAccountIds)
       .order("occurred_at", { ascending: false }).limit(1).maybeSingle(),
     admin.from("column_transfers").select("transfer_id", { count: "exact", head: true })
-      .eq("user_id", userId).not("status", "in", '("completed","settled","posted","returned","canceled")'),
+      .in("bank_account_id", bankAccountIds).not("status", "in", '("completed","settled","posted","returned","canceled")'),
   ]);
+
   const watermark = newest?.occurred_at ? Date.parse(newest.occurred_at as string) : null;
   const fullWalk = watermark === null || (stalePending ?? 0) > 0;
 
@@ -487,8 +546,9 @@ async function syncTransfers(
   const limit = Math.min(Math.max(Number(page.limit) || TX_PAGE_SIZE, 1), 500);
   const offset = Math.max(Number(page.offset) || 0, 0);
   const { data, count } = await admin
-    .from("column_transfers").select("*", { count: "exact" }).eq("user_id", userId)
+    .from("column_transfers").select("*", { count: "exact" }).in("bank_account_id", bankAccountIds)
     .order("occurred_at", { ascending: false })
+
     .range(offset, offset + limit - 1);
   const rows = data ?? [];
   return { rows, hasMore: offset + rows.length < (count ?? rows.length), total: count ?? rows.length };
@@ -518,9 +578,10 @@ async function snapshot(
   }
 
   const ids = accounts.map((a) => a.bank_account_id);
-  const { rows: transfers, hasMore, total } = await syncTransfers(userId, ids, {
-    limit: opts.limit, offset: opts.offset,
-  });
+  const [{ rows: transfers, hasMore, total }, ownerMap] = await Promise.all([
+    syncTransfers(userId, ids, { limit: opts.limit, offset: opts.offset }),
+    ownersFor(ids),
+  ]);
 
   return {
     provisioned: true,
@@ -531,16 +592,23 @@ async function snapshot(
       entityId: entity.entity_id,
       verificationStatus: entity.verification_status,
     },
-    accounts: accounts.map((a) => ({
-      id: a.bank_account_id,
-      name: a.description ?? "Everyday Checking",
-      type: a.account_type ?? "checking",
-      accountNumber: a.account_number_masked ?? "••••0000",
-      routingNumber: a.routing_number ?? "",
-      status: a.status === "open" ? "Active" : "Closed",
-      isOverdrawn: a.is_overdrawn ?? false,
-      ...mapBalances(a),
-    })),
+    accounts: accounts.map((a) => {
+      const owners = ownerMap.get(a.bank_account_id) ?? [];
+      return {
+        id: a.bank_account_id,
+        name: a.description ?? "Everyday Checking",
+        type: a.account_type ?? "checking",
+        accountNumber: a.account_number_masked ?? "••••0000",
+        routingNumber: a.routing_number ?? "",
+        status: a.status === "open" ? "Active" : "Closed",
+        isOverdrawn: a.is_overdrawn ?? false,
+        isJoint: owners.length > 1,
+        myRole: (a as any).owner_role ?? "primary",
+        owners: owners.map((o) => ({ userId: o.userId, name: o.name, role: o.role, isMe: o.userId === userId })),
+        ...mapBalances(a),
+      };
+    }),
+
     transactions: transfers.map((t: any) => ({
       id: t.transfer_id,
       merchant: t.description ?? "Transfer",
@@ -568,11 +636,11 @@ const toCents = (n: unknown) => {
 };
 
 async function accountsFor(userId: string) {
-  const { data } = await admin.from("column_bank_accounts")
-    .select("*").eq("user_id", userId).order("created_at");
-  if (!data?.length) throw new Error("No account yet — finish verification first");
-  return data;
+  const rows = await ownedAccountRows(userId);
+  if (!rows.length) throw new Error("No account yet — finish verification first");
+  return rows;
 }
+
 
 /**
  * Resolve a source/destination account STRICTLY within the caller's own rows.
@@ -699,12 +767,103 @@ async function transferKey(userId: string, kind: string, amount: number, dest: s
     .map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// ---------------------------------------------------------------------------
+// AUTHORITATIVE transfer limits.
+//
+// The mirror of `src/lib/txPolicy.ts`, but this copy is the one that counts:
+// it runs server-side, before Column is called, and computes usage from our
+// own `column_transfers` history rather than from anything the client sends.
+// A direct API call that skips the UI hits exactly the same wall.
+// ---------------------------------------------------------------------------
+type LimitKind = "book" | "ach" | "ach_pull" | "wire";
+
+interface ServerLimit {
+  key: string;
+  label: string;
+  /** Cap in cents. */
+  perTxn?: number;
+  rolling?: number;
+  window: "daily" | "monthly";
+}
+
+const SERVER_LIMITS: Record<LimitKind, ServerLimit | null> = {
+  // Money never leaves the customer at the bank on a book transfer, so there
+  // is no regulatory cap — only a sanity ceiling against fat-finger errors.
+  book: { key: "daily_internal", label: "daily transfer between your accounts", rolling: 250_000_00, window: "daily" },
+  ach: { key: "daily_ach", label: "daily ACH transfer limit", perTxn: 25_000_00, rolling: 25_000_00, window: "daily" },
+  wire: { key: "daily_wire", label: "daily wire transfer limit", perTxn: 100_000_00, rolling: 100_000_00, window: "daily" },
+  ach_pull: { key: "monthly_deposit", label: "monthly deposit limit", perTxn: 25_000_00, rolling: 25_000_00, window: "monthly" },
+};
+
+/** Start of today / this month in US Eastern, expressed as a UTC instant. */
+function windowStart(window: "daily" | "monthly") {
+  const now = new Date();
+  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const offsetMs = now.getTime() - et.getTime();
+  const local = window === "daily"
+    ? new Date(et.getFullYear(), et.getMonth(), et.getDate())
+    : new Date(et.getFullYear(), et.getMonth(), 1);
+  return new Date(local.getTime() + offsetMs).toISOString();
+}
+
+/** Cents already used against a limit, from real settled + pending history. */
+async function usedCents(userId: string, kind: LimitKind, limit: ServerLimit) {
+  // Book legs are mirrored twice (in + out); count only the debit leg.
+  const direction = kind === "ach_pull" ? "credit" : "debit";
+  const type = kind === "book" ? "book" : kind === "wire" ? "wire" : "ach";
+  const { data } = await admin.from("column_transfers")
+    .select("amount_cents")
+    .eq("user_id", userId)
+    .eq("transfer_type", type)
+    .eq("direction", direction)
+    .gte("occurred_at", windowStart(limit.window))
+    // A returned / cancelled / rejected transfer never moved money, so it must
+    // not eat into the customer's allowance.
+    .not("status", "in", '("returned","canceled","cancelled","rejected","failed")');
+  return (data ?? []).reduce((sum: number, r: any) => sum + Number(r.amount_cents ?? 0), 0);
+}
+
+const usd = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+class LimitError extends Error {
+  code = "transfer_limit_exceeded";
+  /** 400, not 500 — this is a rejected request, not a server fault. */
+  status = 400;
+}
+
+/**
+ * Throws when the requested amount would breach a per-transaction or rolling
+ * limit. Called on EVERY transfer path, before any provider call.
+ */
+async function assertWithinLimits(userId: string, kind: LimitKind, amountCents: number) {
+  const limit = SERVER_LIMITS[kind];
+  if (!limit) return;
+  if (limit.perTxn && amountCents > limit.perTxn) {
+    throw new LimitError(`This transfer is over the ${limit.label} of ${usd(limit.perTxn)} per transfer.`);
+  }
+  if (!limit.rolling) return;
+  const used = await usedCents(userId, kind, limit);
+  if (used + amountCents > limit.rolling) {
+    const left = Math.max(0, limit.rolling - used);
+    throw new LimitError(
+      `This would exceed your ${limit.label} of ${usd(limit.rolling)}. ` +
+      `You have ${usd(left)} left in this ${limit.window === "daily" ? "day" : "month"}.`,
+    );
+  }
+}
+
 async function doTransfer(userId: string, body: any) {
   const rows = await accountsFor(userId);
   const kind = String(body.kind ?? "book");
   const amount = toCents(body.amount);
   const description = String(body.description ?? "Transfer").slice(0, 120);
   const requestId = typeof body.requestId === "string" ? body.requestId.slice(0, 64) : undefined;
+
+  // Server-side gate. The UI checks limits too, but this is the check that
+  // actually protects the bank — it cannot be skipped by calling the API directly.
+  await assertWithinLimits(userId, kind as LimitKind, amount);
+
+
 
   if (kind === "book") {
     const from = pickAccount(rows, body.from);
@@ -1370,6 +1529,212 @@ async function reconcileEvents(limit = 200) {
 
 
 // ---------------------------------------------------------------------------
+// Joint accounts.
+//
+// Backed by Column's real ownership model: `POST /bank-accounts/{id}/owner`
+// with an `entity_id` adds a second verified entity as an owner of the same
+// account. Our `account_owners` table mirrors that so RLS grants both humans
+// access. Nothing here can be triggered unilaterally — an owner is only added
+// after the invitee explicitly accepts a request addressed to them.
+// ---------------------------------------------------------------------------
+
+/** Throws unless the caller is the PRIMARY owner of the account. */
+async function assertPrimaryOwner(userId: string, bankAccountId: string) {
+  const { data } = await admin.from("account_owners")
+    .select("role").eq("user_id", userId).eq("bank_account_id", bankAccountId).maybeSingle();
+  if (!data) throw new Error("That account isn't one of yours");
+  if (data.role !== "primary") throw new Error("Only the primary owner can manage joint owners");
+}
+
+async function verifiedEntityFor(userId: string) {
+  const { data } = await admin.from("column_entities")
+    .select("entity_id, verification_status").eq("user_id", userId).maybeSingle();
+  if (!data?.entity_id) return null;
+  const ok = String(data.verification_status ?? "").toLowerCase();
+  return ok === "verified" || ok === "approved" ? data.entity_id as string : null;
+}
+
+async function jointList(userId: string) {
+  const mine = await ownedAccountRows(userId);
+  const ids = mine.map((a) => a.bank_account_id);
+  const [{ data: incoming }, { data: outgoing }] = await Promise.all([
+    admin.from("joint_owner_requests").select("*").eq("invitee_user_id", userId).eq("status", "pending"),
+    ids.length
+      ? admin.from("joint_owner_requests").select("*").in("bank_account_id", ids).eq("requester_user_id", userId)
+        .order("created_at", { ascending: false }).limit(50)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
+  const userIds = [...new Set([...(incoming ?? []), ...(outgoing ?? [])]
+    .flatMap((r: any) => [r.requester_user_id, r.invitee_user_id]))];
+  const { data: profs } = userIds.length
+    ? await admin.from("profiles").select("user_id, preferred_name, email").in("user_id", userIds)
+    : { data: [] as any[] };
+  const nameOf = (id: string) => {
+    const p = (profs ?? []).find((x: any) => x.user_id === id);
+    return p?.preferred_name || (p?.email ? String(p.email).split("@")[0] : "Customer");
+  };
+  const accountName = (id: string) =>
+    mine.find((a) => a.bank_account_id === id)?.description ?? "Account";
+
+  const owners = await ownersFor(ids);
+  return {
+    incoming: (incoming ?? []).map((r: any) => ({
+      id: r.id, bankAccountId: r.bank_account_id, from: nameOf(r.requester_user_id),
+      createdAt: r.created_at,
+    })),
+    outgoing: (outgoing ?? []).map((r: any) => ({
+      id: r.id, bankAccountId: r.bank_account_id, accountName: accountName(r.bank_account_id),
+      to: nameOf(r.invitee_user_id), status: r.status, createdAt: r.created_at,
+    })),
+    accounts: mine.map((a) => ({
+      id: a.bank_account_id,
+      name: a.description ?? "Account",
+      type: a.account_type,
+      myRole: a.owner_role,
+      owners: (owners.get(a.bank_account_id) ?? []).map((o) => ({
+        userId: o.userId, name: o.name, role: o.role, isMe: o.userId === userId,
+      })),
+    })),
+  };
+}
+
+async function jointRequest(userId: string, body: any) {
+  const bankAccountId = String(body?.bankAccountId ?? "");
+  const email = String(body?.email ?? "").trim().toLowerCase();
+  if (!bankAccountId) throw new Error("Choose an account");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Enter a valid email address");
+  await assertPrimaryOwner(userId, bankAccountId);
+
+  // Deliberately opaque from here on: this endpoint must never become a way to
+  // discover whether an email belongs to a customer. Every non-actionable
+  // outcome returns the SAME response as a successful send.
+  const opaque = {
+    sent: true,
+    message: `If ${email} belongs to a verified Glass Bank customer, the request is now waiting in their app for approval.`,
+  };
+
+  const { data: prof } = await admin.from("profiles")
+    .select("user_id, email").ilike("email", email).maybeSingle();
+  const inviteeId = prof?.user_id as string | undefined;
+  if (!inviteeId || inviteeId === userId) return opaque;
+  if (!(await verifiedEntityFor(inviteeId))) return opaque;
+
+  const { data: already } = await admin.from("account_owners")
+    .select("id").eq("bank_account_id", bankAccountId).eq("user_id", inviteeId).maybeSingle();
+  if (already) return opaque;
+
+  // A pending request is deduped by a PARTIAL unique index, which upsert can't
+  // target — so check first and let the index be the backstop on a race.
+  const { data: pending } = await admin.from("joint_owner_requests")
+    .select("id").eq("bank_account_id", bankAccountId)
+    .eq("invitee_user_id", inviteeId).eq("status", "pending").maybeSingle();
+  if (pending) return opaque;
+
+  const { error: insErr } = await admin.from("joint_owner_requests").insert({
+    bank_account_id: bankAccountId,
+    requester_user_id: userId,
+    invitee_user_id: inviteeId,
+    status: "pending",
+  });
+  if (insErr && !/duplicate key/i.test(insErr.message)) throw new Error(insErr.message);
+
+  try {
+    await admin.from("notifications").insert({
+      user_id: inviteeId,
+      title: "Joint account request",
+      body: "Someone invited you to become a joint owner of their account.",
+      type: "security",
+    });
+  } catch { /* notifications table is optional */ }
+
+  return opaque;
+}
+
+async function jointRespond(userId: string, body: any) {
+  const requestId = String(body?.requestId ?? "");
+  const accept = !!body?.accept;
+  // Scoped to the INVITEE: nobody can accept a request addressed to someone else.
+  const { data: reqRow } = await admin.from("joint_owner_requests")
+    .select("*").eq("id", requestId).eq("invitee_user_id", userId).eq("status", "pending").maybeSingle();
+  if (!reqRow) throw new Error("That request is no longer available");
+
+  if (!accept) {
+    await admin.from("joint_owner_requests")
+      .update({ status: "declined", responded_at: new Date().toISOString() }).eq("id", requestId);
+    return { status: "declined" };
+  }
+
+  const entityId = await verifiedEntityFor(userId);
+  if (!entityId) throw new Error("Finish your identity verification before joining an account");
+
+  // Column is the source of truth for ownership — it must accept the new owner
+  // before we grant anyone access on our side.
+  await column<any>(`/bank-accounts/${reqRow.bank_account_id}/owner`, {
+    method: "POST",
+    body: { entity_id: entityId },
+    idempotencyKey: `joint-${reqRow.id}`,
+  });
+
+  await admin.from("account_owners").upsert({
+    bank_account_id: reqRow.bank_account_id,
+    user_id: userId,
+    entity_id: entityId,
+    role: "joint",
+  }, { onConflict: "bank_account_id,user_id" });
+
+  await admin.from("joint_owner_requests")
+    .update({ status: "accepted", responded_at: new Date().toISOString() }).eq("id", requestId);
+
+  try {
+    await admin.from("notifications").insert({
+      user_id: reqRow.requester_user_id,
+      title: "Joint owner added",
+      body: "Your joint account request was accepted.",
+      type: "security",
+    });
+  } catch { /* optional */ }
+
+  return { status: "accepted", bankAccountId: reqRow.bank_account_id };
+}
+
+async function jointCancel(userId: string, body: any) {
+  const requestId = String(body?.requestId ?? "");
+  const { error } = await admin.from("joint_owner_requests")
+    .update({ status: "canceled", responded_at: new Date().toISOString() })
+    .eq("id", requestId).eq("requester_user_id", userId).eq("status", "pending");
+  if (error) throw new Error(error.message);
+  return { status: "canceled" };
+}
+
+async function jointRemove(userId: string, body: any) {
+  const bankAccountId = String(body?.bankAccountId ?? "");
+  const targetUserId = String(body?.userId ?? userId);
+  const { data: target } = await admin.from("account_owners")
+    .select("*").eq("bank_account_id", bankAccountId).eq("user_id", targetUserId).maybeSingle();
+  if (!target) throw new Error("That person isn't an owner of this account");
+  if (target.role === "primary") throw new Error("The primary owner can't be removed — close the account instead");
+  // Either you're removing yourself (leaving), or you're the primary owner.
+  if (targetUserId !== userId) await assertPrimaryOwner(userId, bankAccountId);
+
+  // Column documents ADDING an owner; removal is not a documented public
+  // endpoint, so we attempt it and report the outcome honestly rather than
+  // pretending the upstream change happened.
+  let providerRemoved = false;
+  let providerNote: string | null = null;
+  try {
+    await column<any>(`/bank-accounts/${bankAccountId}/owner/${target.entity_id}`, { method: "DELETE" });
+    providerRemoved = true;
+  } catch (e) {
+    providerNote = (e as Error).message;
+  }
+
+  await admin.from("account_owners").delete().eq("id", target.id);
+  return { removed: true, providerRemoved, providerNote };
+}
+
+// ---------------------------------------------------------------------------
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -1415,7 +1780,7 @@ Deno.serve(async (req) => {
 
     // Rate limit per caller. Admin/mutating actions get a much tighter budget
     // than read-only status/sync polling.
-    const isMutating = isAdminAction || ["provision", "transfer", "submit_evidence"].includes(action);
+    const isMutating = isAdminAction || ["provision", "transfer", "submit_evidence", "joint_request", "joint_respond", "joint_cancel", "joint_remove"].includes(action);
     const rl = rateLimit(`ledger:${user.id}:${isMutating ? "write" : "read"}`, isMutating ? 10 : 60);
     if (!rl.allowed) return tooManyRequests(rl.retryAfter, corsHeaders);
 
@@ -1425,6 +1790,17 @@ Deno.serve(async (req) => {
     }
 
     switch (action) {
+      case "joint_list":
+        return json(await jointList(user.id));
+      case "joint_request":
+        return json(await jointRequest(user.id, body));
+      case "joint_respond":
+        return json(await jointRespond(user.id, body));
+      case "joint_cancel":
+        return json(await jointCancel(user.id, body));
+      case "joint_remove":
+        return json(await jointRemove(user.id, body));
+
       case "status": {
         const { data: entity } = await admin
           .from("column_entities").select("entity_id, verification_status")

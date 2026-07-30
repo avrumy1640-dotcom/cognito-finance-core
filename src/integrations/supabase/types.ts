@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_owners: {
+        Row: {
+          bank_account_id: string
+          created_at: string
+          entity_id: string | null
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bank_account_id: string
+          created_at?: string
+          entity_id?: string | null
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bank_account_id?: string
+          created_at?: string
+          entity_id?: string | null
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -404,6 +434,39 @@ export type Database = {
           percent_bps?: number
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      joint_owner_requests: {
+        Row: {
+          bank_account_id: string
+          created_at: string
+          id: string
+          invitee_user_id: string
+          requester_user_id: string
+          responded_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          bank_account_id: string
+          created_at?: string
+          id?: string
+          invitee_user_id: string
+          requester_user_id: string
+          responded_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          bank_account_id?: string
+          created_at?: string
+          id?: string
+          invitee_user_id?: string
+          requester_user_id?: string
+          responded_at?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1227,6 +1290,10 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      user_owns_bank_account: {
+        Args: { _bank_account_id: string; _user_id: string }
+        Returns: boolean
       }
     }
     Enums: {

@@ -379,6 +379,8 @@ const Settings = () => {
             <LinkRow label="Personal information" onClick={() => navigate("/profile/personal")} />
             <LinkRow label="Identity & verification" onClick={() => navigate("/profile/verify")} />
             <LinkRow label="Statements & documents" onClick={() => navigate("/profile/documents")} />
+            <LinkRow label="Joint accounts" onClick={() => navigate("/joint-accounts")} />
+
           </GlassCard>
         </Section>
 

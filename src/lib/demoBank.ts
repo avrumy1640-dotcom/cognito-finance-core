@@ -37,6 +37,10 @@ export interface DemoAccount {
   pendingAmount: number;
   status: string;
   openedDate: string;
+  /** Set when the provider reports more than one owning entity. */
+  isJoint?: boolean;
+  myRole?: "primary" | "joint";
+  owners?: { userId: string; name: string; role: "primary" | "joint"; isMe: boolean }[];
   apy?: number;
   interestEarned?: number;
   depositDetails: {
