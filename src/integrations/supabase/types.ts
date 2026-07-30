@@ -1291,10 +1291,6 @@ export type Database = {
           read_ct: number
         }[]
       }
-      user_owns_bank_account: {
-        Args: { _bank_account_id: string; _user_id: string }
-        Returns: boolean
-      }
     }
     Enums: {
       app_role: "admin" | "compliance" | "support" | "user"
