@@ -1390,6 +1390,11 @@ Deno.serve(async (req) => {
       const result = await doTransfer(body.onBehalfOf, body);
       return json(result);
     }
+    // Anyone else asking to act "on behalf of" someone is rejected outright
+    // rather than quietly downgraded to their own identity.
+    if (body?.onBehalfOf !== undefined) return json({ error: "Forbidden" }, 403);
+
+
 
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
