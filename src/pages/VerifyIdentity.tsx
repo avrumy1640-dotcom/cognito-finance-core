@@ -30,6 +30,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useKyc } from "@/hooks/useKyc";
 import { ledgerProvider } from "@/lib/ledgerProvider";
 import { SANDBOX_KYC, SANDBOX_OUTCOMES } from "@/lib/sandboxKyc";
+import { loadIdentityProfile } from "@/lib/identityProfile";
 
 const ID_TYPE_MAP = { passport: 1, national_id: 2, drivers_license: 3 } as const;
 
@@ -58,18 +59,19 @@ const schema = z.object({
   ]),
   occupation: z.string().trim().min(1, "Occupation is required").max(80),
   income: z.string().regex(/^\d+$/, "Annual income (digits only)"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
   confirm: z.literal(true, { message: "You must confirm the information is accurate" }),
 });
 
 type FormState = Omit<z.infer<typeof schema>, "confirm"> & { confirm: boolean };
 
+// Blank by default: anything still blank after profile hydration is a genuine
+// gap we must ask about. Pre-seeding "US"/"employed" would hide real gaps.
 const empty: FormState = {
   legal_first_name: "", legal_last_name: "", date_of_birth: "", call_number: "",
   id_type: "passport", id_number: "", id_issued_date: "", id_expiration_date: "",
   street: "", city: "", region: "", postal_code: "",
-  country: "US", citizenship: "US",
-  employment_status: "employed", occupation: "", income: "", password: "", confirm: false,
+  country: "", citizenship: "",
+  employment_status: "" as FormState["employment_status"], occupation: "", income: "", confirm: false,
 };
 
 const ID_OPTIONS: { value: FormState["id_type"]; label: string; hint: string }[] = [
@@ -142,7 +144,7 @@ const VerifyIdentity = () => {
 
   const applySandbox = (lastName = SANDBOX_KYC.legal_last_name) => {
     setFieldErrors({});
-    setForm((f) => ({ ...f, ...SANDBOX_KYC, legal_last_name: lastName, password: f.password }));
+    setForm((f) => ({ ...f, ...SANDBOX_KYC, legal_last_name: lastName }));
     toast.success(`Sandbox test data loaded (${lastName})`);
   };
 
@@ -173,7 +175,7 @@ const VerifyIdentity = () => {
       if (raw) {
         const parsed = JSON.parse(raw) as { form?: Partial<FormState>; step?: number; showIntro?: boolean };
         if (parsed.form) {
-          const { password: _p, id_number: _i, date_of_birth: _d, ...safe } =
+          const { id_number: _i, date_of_birth: _d, ...safe } =
             parsed.form as Partial<FormState> & Record<string, unknown>;
           setForm((f) => ({ ...f, ...(safe as Partial<FormState>) }));
         }
@@ -189,11 +191,42 @@ const VerifyIdentity = () => {
   useEffect(() => {
     if (!hydratedRef.current) return;
     try {
-      const { password: _p, id_number: _i, date_of_birth: _d, ...safeForm } = form;
+      const { id_number: _i, date_of_birth: _d, ...safeForm } = form;
       localStorage.setItem(draftKey(user?.id), JSON.stringify({ form: safeForm, step, showIntro }));
     } catch { /* quota — ignore */ }
   }, [form, step, showIntro, user?.id]);
 
+  // Single source of truth: everything the user already gave us during
+  // onboarding is pulled from `profiles`. This screen never re-asks for it.
+  const [identityLoading, setIdentityLoading] = useState(true);
+  useEffect(() => {
+    if (!user) { setIdentityLoading(false); return; }
+    let alive = true;
+    (async () => {
+      const p = await loadIdentityProfile(user.id);
+      if (!alive) return;
+      setForm((f) => ({
+        ...f,
+        legal_first_name: f.legal_first_name || p.first_name,
+        legal_last_name: f.legal_last_name || p.last_name,
+        date_of_birth: f.date_of_birth || p.date_of_birth,
+        call_number: f.call_number || p.phone,
+        street: f.street || p.street,
+        city: f.city || p.city,
+        region: f.region || p.region,
+        postal_code: f.postal_code || p.postal_code,
+        country: f.country || p.country,
+        citizenship: f.citizenship || p.citizenship,
+        occupation: f.occupation || p.occupation,
+        employment_status: (f.employment_status || p.employment_status) as FormState["employment_status"],
+        income: f.income || p.annual_income,
+      }));
+      setIdentityLoading(false);
+    })();
+    return () => { alive = false; };
+  }, [user]);
+
+  // The KYC row's legal name wins if a review already recorded one.
   useEffect(() => {
     if (profile) {
       setForm((f) => ({
@@ -315,10 +348,32 @@ const VerifyIdentity = () => {
   };
 
 
+  // Everything on this screen except the ID document and the selfie was
+  // already collected during onboarding. We show it back read-only and only
+  // render an editor for a field that is genuinely missing (legacy accounts or
+  // an interrupted onboarding) — we never re-ask for data we already hold.
+  const gaps = useMemo(() => {
+    const g: string[] = [];
+    if (!form.legal_first_name.trim()) g.push("legal_first_name");
+    if (!form.legal_last_name.trim()) g.push("legal_last_name");
+    if (!form.date_of_birth) g.push("date_of_birth");
+    if (!/^\+[1-9]\d{6,14}$/.test(form.call_number)) g.push("call_number");
+    if (!form.street.trim()) g.push("street");
+    if (!form.city.trim()) g.push("city");
+    if (form.region.trim().length < 2) g.push("region");
+    if (form.postal_code.trim().length < 3) g.push("postal_code");
+    if (form.country.length !== 2) g.push("country");
+    if (form.citizenship.length !== 2) g.push("citizenship");
+    if (!form.employment_status) g.push("employment_status");
+    if (!form.occupation.trim()) g.push("occupation");
+    if (!/^\d+$/.test(form.income)) g.push("income");
+    return g;
+  }, [form]);
+
   const steps = useMemo<StepDef[]>(() => [
     {
-      kicker: "01 · Legal identity",
-      title: "Let's confirm who you are",
+      kicker: "01 · Review your details",
+      title: gaps.length ? "A few details are still missing" : "Confirm your details",
       errors: () => {
         const e: FieldErrors = {};
         if (!form.legal_first_name.trim()) e.legal_first_name = "First name is required";
@@ -333,36 +388,174 @@ const VerifyIdentity = () => {
         const digits = form.call_number.replace(/\D/g, "");
         if (!digits) e.call_number = "Mobile number is required";
         else if (!/^\+[1-9]\d{6,14}$/.test(form.call_number)) e.call_number = "Enter a valid mobile number";
+        if (!form.street.trim()) e.street = "Street address is required";
+        if (!form.city.trim()) e.city = "City is required";
+        if (form.region.trim().length < 2) e.region = "State / region is required";
+        if (form.postal_code.trim().length < 3) e.postal_code = "Enter a valid postal code";
+        if (form.country.length !== 2) e.country = "Select your country";
+        if (form.citizenship.length !== 2) e.citizenship = "Select your citizenship";
+        if (!form.employment_status) e.employment_status = "Employment status is required";
+        if (!form.occupation.trim()) e.occupation = "Occupation is required";
+        if (!/^\d+$/.test(form.income)) e.income = "Enter your annual income in digits";
         return e;
       },
-      render: (err) => (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Legal first name" value={form.legal_first_name} error={err.legal_first_name} onChange={(v) => set("legal_first_name", v)} />
-            <Field label="Legal last name" value={form.legal_last_name} error={err.legal_last_name} onChange={(v) => set("legal_last_name", v)} />
+      render: (err) => {
+        const has = (k: string) => !gaps.includes(k);
+        const countryName = COUNTRIES.find((c) => c.code === form.country)?.name || form.country;
+        const citizenName = COUNTRIES.find((c) => c.code === form.citizenship)?.name || form.citizenship;
+        const rows: [string, string][] = [];
+        if (has("legal_first_name") && has("legal_last_name"))
+          rows.push(["Legal name", `${form.legal_first_name} ${form.legal_last_name}`]);
+        if (has("date_of_birth")) rows.push(["Date of birth", form.date_of_birth]);
+        if (has("call_number")) rows.push(["Mobile", form.call_number]);
+        if (has("street") && has("city") && has("region") && has("postal_code") && has("country"))
+          rows.push(["Home address", `${form.street}, ${form.city}, ${form.region} ${form.postal_code}, ${countryName}`]);
+        if (has("citizenship")) rows.push(["Citizenship", citizenName]);
+        if (has("employment_status"))
+          rows.push(["Employment", EMPLOYMENT.find((o) => o.value === form.employment_status)?.label || form.employment_status]);
+        if (has("occupation")) rows.push(["Occupation", form.occupation]);
+        if (has("income")) rows.push(["Annual income", `$${Number(form.income).toLocaleString()}`]);
+
+        return (
+          <div className="space-y-4">
+            {rows.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card divide-y divide-border">
+                {rows.map(([label, value]) => (
+                  <div key={label} className="flex items-start justify-between gap-4 px-4 py-3">
+                    <span className="text-xs text-muted-foreground font-medium shrink-0">{label}</span>
+                    <span className="text-sm text-foreground font-medium text-right">{value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {rows.length > 0 && (
+              <button
+                type="button"
+                onClick={() => navigate("/profile/personal")}
+                className="text-xs text-primary font-semibold"
+              >
+                Something look wrong? Update it in Personal information
+              </button>
+            )}
+
+            {gaps.length > 0 && (
+              <div className="space-y-4 pt-1">
+                {(!has("legal_first_name") || !has("legal_last_name")) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Legal first name" value={form.legal_first_name} error={err.legal_first_name} onChange={(v) => set("legal_first_name", v)} />
+                    <Field label="Legal last name" value={form.legal_last_name} error={err.legal_last_name} onChange={(v) => set("legal_last_name", v)} />
+                  </div>
+                )}
+                {!has("date_of_birth") && (
+                  <Field label="Date of birth" type="date" max={dobMax} value={form.date_of_birth}
+                    error={err.date_of_birth} onChange={(v) => set("date_of_birth", v)} />
+                )}
+                {!has("call_number") && (
+                  <PhoneField
+                    value={form.call_number}
+                    onChange={(v) => set("call_number", v)}
+                    defaultCountry={form.country || "US"}
+                    error={err.call_number}
+                    hint="We'll text security codes to this number."
+                  />
+                )}
+                {(!has("street") || !has("city") || !has("region") || !has("postal_code") || !has("country")) && (
+                  <div className="space-y-3">
+                    <AddressAutocomplete
+                      label="Street address"
+                      value={form.street}
+                      error={err.street}
+                      country={form.country}
+                      onChange={(v) => set("street", v)}
+                      onSelect={(s) => {
+                        setForm((f) => ({
+                          ...f,
+                          street: s.street || f.street,
+                          city: s.city || f.city,
+                          region: s.region || f.region,
+                          postal_code: s.postal_code || f.postal_code,
+                          country: s.country || f.country,
+                        }));
+                        setFieldErrors((e) => ({ ...e, street: undefined, city: undefined, region: undefined, postal_code: undefined, country: undefined }));
+                      }}
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="City" value={form.city} error={err.city} onChange={(v) => set("city", v)} />
+                      {form.country === "US" ? (
+                        <SearchSelect
+                          label="State"
+                          value={form.region}
+                          error={err.region}
+                          placeholder="Select state"
+                          searchPlaceholder="Search states"
+                          options={US_STATES.map((s) => ({ value: s.code, label: s.name, hint: s.code }))}
+                          onChange={(v) => set("region", v)}
+                        />
+                      ) : (
+                        <Field label="State / region" value={form.region} error={err.region} onChange={(v) => set("region", v)} />
+                      )}
+                    </div>
+                    <Field label="Postal code" value={form.postal_code} error={err.postal_code} onChange={(v) => set("postal_code", v)} />
+                    <SearchSelect
+                      label="Country"
+                      value={form.country}
+                      error={err.country}
+                      placeholder="Select country"
+                      searchPlaceholder="Search countries"
+                      options={COUNTRIES.map((c) => ({ value: c.code, label: c.name, prefix: c.flag }))}
+                      onChange={(v) => { if (v !== form.country) set("region", ""); set("country", v); }}
+                    />
+                  </div>
+                )}
+                {!has("citizenship") && (
+                  <SearchSelect
+                    label="Citizenship"
+                    value={form.citizenship}
+                    error={err.citizenship}
+                    placeholder="Select citizenship"
+                    searchPlaceholder="Search countries"
+                    options={COUNTRIES.map((c) => ({ value: c.code, label: c.name, prefix: c.flag }))}
+                    onChange={(v) => set("citizenship", v)}
+                  />
+                )}
+                {!has("employment_status") && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-semibold mb-1.5 block uppercase tracking-wide">Employment status</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {EMPLOYMENT.map((o) => {
+                        const active = form.employment_status === o.value;
+                        return (
+                          <button
+                            key={o.value}
+                            type="button"
+                            onClick={() => set("employment_status", o.value)}
+                            className={`p-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                              active ? "border-primary bg-primary/5 text-foreground" : "border-border bg-card text-muted-foreground"
+                            }`}
+                          >
+                            {o.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {!has("occupation") && (
+                  <Field label="Occupation" value={form.occupation} error={err.occupation} onChange={(v) => set("occupation", v)} />
+                )}
+                {!has("income") && (
+                  <Field label="Annual income (USD)" placeholder="50000" value={form.income} error={err.income}
+                    onChange={(v) => set("income", v.replace(/[^0-9]/g, ""))} />
+                )}
+              </div>
+            )}
+
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-1">
+              <Lock size={11} /> Your legal name must exactly match your government-issued ID.
+            </p>
           </div>
-          <Field label="Date of birth" type="date" max={dobMax} value={form.date_of_birth}
-            error={err.date_of_birth}
-            onChange={(v) => {
-              set("date_of_birth", v);
-              // Surface the age rule as soon as a date is picked, not only on submit.
-              const age = ageFrom(v);
-              if (v && !Number.isNaN(age) && age < 18) {
-                setFieldErrors((e) => ({ ...e, date_of_birth: "You must be at least 18 years old" }));
-              }
-            }} />
-          <PhoneField
-            value={form.call_number}
-            onChange={(v) => set("call_number", v)}
-            defaultCountry={form.country || "US"}
-            error={err.call_number}
-            hint="We'll text security codes to this number."
-          />
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-1">
-            <Lock size={11} /> Must exactly match your government-issued ID.
-          </p>
-        </div>
-      ),
+        );
+      },
     },
     {
       kicker: "02 · Identity document",
@@ -409,124 +602,14 @@ const VerifyIdentity = () => {
         </div>
       ),
     },
+    // Home address and work/income steps intentionally removed: onboarding is
+    // the single place those are collected. See the review step above.
     {
-      kicker: "03 · Home address",
-      title: "Where do you live?",
-      errors: () => {
-        const e: FieldErrors = {};
-        if (!form.street.trim()) e.street = "Street address is required";
-        if (!form.city.trim()) e.city = "City is required";
-        if (form.region.trim().length < 2) e.region = form.country === "US" ? "Select your state" : "State / region is required";
-        if (form.postal_code.trim().length < 3) e.postal_code = "Enter a valid postal code";
-        if (form.country.length !== 2) e.country = "Select your country";
-        if (form.citizenship.length !== 2) e.citizenship = "Select your citizenship";
-        return e;
-      },
-      render: (err) => (
-        <div className="space-y-4">
-          <AddressAutocomplete
-            label="Street address"
-            value={form.street}
-            error={err.street}
-            country={form.country}
-            onChange={(v) => set("street", v)}
-            onSelect={(s) => {
-              setForm((f) => ({
-                ...f,
-                street: s.street || f.street,
-                city: s.city || f.city,
-                region: s.region || f.region,
-                postal_code: s.postal_code || f.postal_code,
-                country: s.country || f.country,
-              }));
-              setFieldErrors((e) => ({ ...e, street: undefined, city: undefined, region: undefined, postal_code: undefined, country: undefined }));
-            }}
-          />
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="City" value={form.city} error={err.city} onChange={(v) => set("city", v)} />
-            {form.country === "US" ? (
-              <SearchSelect
-                label="State"
-                value={form.region}
-                error={err.region}
-                placeholder="Select state"
-                searchPlaceholder="Search states"
-                options={US_STATES.map((s) => ({ value: s.code, label: s.name, hint: s.code }))}
-                onChange={(v) => set("region", v)}
-              />
-            ) : (
-              <Field label="State / region" value={form.region} error={err.region} onChange={(v) => set("region", v)} />
-            )}
-          </div>
-          <Field label="Postal code" value={form.postal_code} error={err.postal_code} onChange={(v) => set("postal_code", v)} />
-          <SearchSelect
-            label="Country"
-            value={form.country}
-            error={err.country}
-            placeholder="Select country"
-            searchPlaceholder="Search countries"
-            options={COUNTRIES.map((c) => ({ value: c.code, label: c.name, prefix: c.flag }))}
-            onChange={(v) => {
-              // Switching to/from the US swaps the state control, so reset the region.
-              if (v !== form.country) set("region", "");
-              set("country", v);
-            }}
-          />
-          <SearchSelect
-            label="Citizenship"
-            value={form.citizenship}
-            error={err.citizenship}
-            placeholder="Select citizenship"
-            searchPlaceholder="Search countries"
-            options={COUNTRIES.map((c) => ({ value: c.code, label: c.name, prefix: c.flag }))}
-            onChange={(v) => set("citizenship", v)}
-          />
-        </div>
-      ),
-    },
-    {
-      kicker: "04 · Work & income",
-      title: "A bit about your work",
-      errors: () => {
-        const e: FieldErrors = {};
-        if (!form.occupation.trim()) e.occupation = "Occupation is required";
-        if (!/^\d+$/.test(form.income)) e.income = "Enter your annual income in digits";
-        return e;
-      },
-      render: (err) => (
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs text-muted-foreground font-semibold mb-1.5 block uppercase tracking-wide">Employment status</label>
-            <div className="grid grid-cols-2 gap-2">
-              {EMPLOYMENT.map((o) => {
-                const active = form.employment_status === o.value;
-                return (
-                  <button
-                    key={o.value}
-                    onClick={() => set("employment_status", o.value)}
-                    className={`p-3 rounded-xl border-2 text-sm font-medium transition-all ${
-                      active ? "border-primary bg-primary/5 text-foreground" : "border-border bg-card text-muted-foreground"
-                    }`}
-                  >
-                    {o.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <Field label="Occupation" value={form.occupation} error={err.occupation} onChange={(v) => set("occupation", v)} />
-          <Field label="Annual income (USD)" placeholder="50000" value={form.income} error={err.income} onChange={(v) => set("income", v.replace(/[^0-9]/g, ""))} />
-        </div>
-      ),
-    },
-    {
-      kicker: "05 · Selfie & finish",
+      kicker: "03 · Selfie & finish",
       title: "Take a quick selfie",
       errors: () => {
         const e: FieldErrors = {};
         if (!selfie) e.selfie = "A selfie photo is required";
-        if (form.password.length < 8) e.password = "Password must be at least 8 characters";
         if (!form.confirm) e.confirm = "Please confirm your information is accurate";
         return e;
       },
@@ -553,8 +636,7 @@ const VerifyIdentity = () => {
           />
           {err.selfie && <p className="text-[11px] text-destructive font-medium">{err.selfie}</p>}
 
-          <Field label="Create account password" type="password" placeholder="At least 8 characters"
-            value={form.password} error={err.password} onChange={(v) => set("password", v)} />
+
 
           <div>
             <label className="flex items-start gap-3 p-3.5 rounded-xl bg-secondary cursor-pointer">
@@ -570,7 +652,7 @@ const VerifyIdentity = () => {
       ),
     },
 
-  ], [form, selfie]);
+  ], [form, selfie, gaps, dobMax, navigate, profile, status]);
 
   const current = steps[step];
 
@@ -587,7 +669,7 @@ const VerifyIdentity = () => {
     else await submit();
   };
 
-  if (kycLoading) {
+  if (kycLoading || identityLoading) {
     return <div className="min-h-dvh flex items-center justify-center bg-background"><Loader2 className="animate-spin text-primary" /></div>;
   }
 

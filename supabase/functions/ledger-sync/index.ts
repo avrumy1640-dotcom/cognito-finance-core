@@ -212,8 +212,11 @@ async function ensureEntity(userId: string) {
     admin.from("kyc_profiles").select("*").eq("user_id", userId).maybeSingle(),
   ]);
 
-  const first = kyc?.legal_first_name || profile?.first_name || "Sandbox";
-  const last = kyc?.legal_last_name || profile?.last_name || "Tester";
+  // `profiles` is the single source of truth for identity data — onboarding
+  // collects it exactly once. The kyc row only ever refines the legal name.
+  const profileName = String(profile?.preferred_name ?? "").trim().split(/\s+/);
+  const first = kyc?.legal_first_name || profileName[0] || "Sandbox";
+  const last = kyc?.legal_last_name || profileName.slice(1).join(" ") || "Tester";
   const email = profile?.email || undefined;
 
   // Sandbox entity. We deliberately do NOT forward a real SSN; the sandbox
@@ -225,14 +228,15 @@ async function ensureEntity(userId: string) {
     last_name: last,
     email,
     ssn: "123456789",
-    date_of_birth: (kyc?.date_of_birth as string | undefined) ?? "1990-01-01",
+    date_of_birth: (profile?.date_of_birth as string | undefined)
+      ?? (kyc?.date_of_birth as string | undefined) ?? "1990-01-01",
     pep_status: "not_checked",
     address: {
-      line_1: kyc?.street || profile?.address_line1 || "1 Market St",
-      city: kyc?.city || profile?.city || "San Francisco",
-      state: kyc?.region || profile?.state || "CA",
-      postal_code: kyc?.postal_code || profile?.postal_code || "94105",
-      country_code: "US",
+      line_1: profile?.address_street || kyc?.street || "1 Market St",
+      city: profile?.address_city || kyc?.city || "San Francisco",
+      state: profile?.address_region || kyc?.region || "CA",
+      postal_code: profile?.address_postal_code || kyc?.postal_code || "94105",
+      country_code: (profile?.country || kyc?.country || "US").toUpperCase(),
     },
   };
 
