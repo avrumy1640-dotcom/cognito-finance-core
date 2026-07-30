@@ -731,7 +731,8 @@ async function doTransfer(userId: string, body: any) {
   if (kind === "ach" || kind === "ach_pull") {
     const from = pickAccount(rows, body.from ?? "checking");
     const counterpartyId = body.counterpartyId
-      ?? await ensureCounterparty(userId, {
+      ? await assertOwnCounterparty(userId, String(body.counterpartyId))
+      : await ensureCounterparty(userId, {
         name: body.name ?? "External account",
         routingNumber: body.routingNumber,
         accountNumber: body.accountNumber,
