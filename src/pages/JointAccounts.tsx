@@ -95,6 +95,8 @@ const JointAccounts = () => {
       <Seo
         title="Joint accounts | Glass Bank"
         description="Add a verified co-owner to a Glass Bank account. Both owners see the balance, transactions, and can move money."
+        path="/joint-accounts"
+        noindex
       />
       <div className="px-5 pt-14 pb-28 space-y-5 max-w-2xl mx-auto">
         <header className="flex items-center gap-3">
