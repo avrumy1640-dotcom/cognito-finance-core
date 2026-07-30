@@ -858,7 +858,7 @@ async function doTransfer(userId: string, body: any) {
   const requestId = typeof body.requestId === "string" ? body.requestId.slice(0, 64) : undefined;
 
   // Server-side gate. The UI checks limits too, but this is the check that
-  // actually protects the bank — it cannot be skipped by calling the API直接.
+  // actually protects the bank — it cannot be skipped by calling the API directly.
   await assertWithinLimits(userId, kind as LimitKind, amount);
 
 
