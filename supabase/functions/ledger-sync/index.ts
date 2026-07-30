@@ -767,12 +767,101 @@ async function transferKey(userId: string, kind: string, amount: number, dest: s
     .map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// ---------------------------------------------------------------------------
+// AUTHORITATIVE transfer limits.
+//
+// The mirror of `src/lib/txPolicy.ts`, but this copy is the one that counts:
+// it runs server-side, before Column is called, and computes usage from our
+// own `column_transfers` history rather than from anything the client sends.
+// A direct API call that skips the UI hits exactly the same wall.
+// ---------------------------------------------------------------------------
+type LimitKind = "book" | "ach" | "ach_pull" | "wire";
+
+interface ServerLimit {
+  key: string;
+  label: string;
+  /** Cap in cents. */
+  perTxn?: number;
+  rolling?: number;
+  window: "daily" | "monthly";
+}
+
+const SERVER_LIMITS: Record<LimitKind, ServerLimit | null> = {
+  // Money never leaves the customer at the bank on a book transfer, so there
+  // is no regulatory cap — only a sanity ceiling against fat-finger errors.
+  book: { key: "daily_internal", label: "daily transfer between your accounts", rolling: 250_000_00, window: "daily" },
+  ach: { key: "daily_ach", label: "daily ACH transfer limit", perTxn: 25_000_00, rolling: 25_000_00, window: "daily" },
+  wire: { key: "daily_wire", label: "daily wire transfer limit", perTxn: 100_000_00, rolling: 100_000_00, window: "daily" },
+  ach_pull: { key: "monthly_deposit", label: "monthly deposit limit", perTxn: 25_000_00, rolling: 25_000_00, window: "monthly" },
+};
+
+/** Start of today / this month in US Eastern, expressed as a UTC instant. */
+function windowStart(window: "daily" | "monthly") {
+  const now = new Date();
+  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const offsetMs = now.getTime() - et.getTime();
+  const local = window === "daily"
+    ? new Date(et.getFullYear(), et.getMonth(), et.getDate())
+    : new Date(et.getFullYear(), et.getMonth(), 1);
+  return new Date(local.getTime() + offsetMs).toISOString();
+}
+
+/** Cents already used against a limit, from real settled + pending history. */
+async function usedCents(userId: string, kind: LimitKind, limit: ServerLimit) {
+  // Book legs are mirrored twice (in + out); count only the debit leg.
+  const direction = kind === "ach_pull" ? "credit" : "debit";
+  const type = kind === "book" ? "book" : kind === "wire" ? "wire" : "ach";
+  const { data } = await admin.from("column_transfers")
+    .select("amount_cents")
+    .eq("user_id", userId)
+    .eq("transfer_type", type)
+    .eq("direction", direction)
+    .gte("occurred_at", windowStart(limit.window))
+    // A returned / cancelled / rejected transfer never moved money, so it must
+    // not eat into the customer's allowance.
+    .not("status", "in", '("returned","canceled","cancelled","rejected","failed")');
+  return (data ?? []).reduce((sum: number, r: any) => sum + Number(r.amount_cents ?? 0), 0);
+}
+
+const usd = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+class LimitError extends Error {
+  code = "transfer_limit_exceeded";
+}
+
+/**
+ * Throws when the requested amount would breach a per-transaction or rolling
+ * limit. Called on EVERY transfer path, before any provider call.
+ */
+async function assertWithinLimits(userId: string, kind: LimitKind, amountCents: number) {
+  const limit = SERVER_LIMITS[kind];
+  if (!limit) return;
+  if (limit.perTxn && amountCents > limit.perTxn) {
+    throw new LimitError(`This transfer is over the ${limit.label} of ${usd(limit.perTxn)} per transfer.`);
+  }
+  if (!limit.rolling) return;
+  const used = await usedCents(userId, kind, limit);
+  if (used + amountCents > limit.rolling) {
+    const left = Math.max(0, limit.rolling - used);
+    throw new LimitError(
+      `This would exceed your ${limit.label} of ${usd(limit.rolling)}. ` +
+      `You have ${usd(left)} left in this ${limit.window === "daily" ? "day" : "month"}.`,
+    );
+  }
+}
+
 async function doTransfer(userId: string, body: any) {
   const rows = await accountsFor(userId);
   const kind = String(body.kind ?? "book");
   const amount = toCents(body.amount);
   const description = String(body.description ?? "Transfer").slice(0, 120);
   const requestId = typeof body.requestId === "string" ? body.requestId.slice(0, 64) : undefined;
+
+  // Server-side gate. The UI checks limits too, but this is the check that
+  // actually protects the bank — it cannot be skipped by calling the API直接.
+  await assertWithinLimits(userId, kind as LimitKind, amount);
+
+
 
   if (kind === "book") {
     const from = pickAccount(rows, body.from);
