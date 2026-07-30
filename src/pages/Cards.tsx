@@ -206,6 +206,15 @@ const CardsPage = () => {
           </div>
         </motion.div>
 
+        {/* Honesty banner — card issuing is not live infrastructure. */}
+        <p className="text-[11px] leading-relaxed text-muted-foreground px-1">
+          Card features are a product demonstration. Glass Bank does not yet run a live card
+          programme, so card numbers, controls, and spending shown here are simulated and no
+          physical or virtual card is issued.
+        </p>
+
+
+
         {/* KYC trust banner */}
         {kycStatus !== "verified" && (
           <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>

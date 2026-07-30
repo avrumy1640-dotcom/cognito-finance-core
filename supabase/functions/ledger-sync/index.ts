@@ -197,6 +197,21 @@ function mapBalances(acct: any) {
   };
 }
 
+/**
+ * Column's bank-account object carries a `status` string (`open`, `closed`,
+ * `frozen`, …). It does NOT expose `is_closed` — reading that field always
+ * produced `undefined`, so every account was mirrored as "open" even after it
+ * was closed upstream. Read `status` and only fall back to the booleans.
+ */
+function accountStatus(acct: any): string {
+  const s = String(acct?.status ?? "").trim().toLowerCase();
+  if (s) return s;
+  if (acct?.is_closed === true) return "closed";
+  if (acct?.is_frozen === true) return "frozen";
+  return "open";
+}
+
+
 
 
 // ---------------------------------------------------------------------------
@@ -345,7 +360,7 @@ async function createAccount(userId: string, entityId: string, kind: "checking" 
     routing_number: numbers?.routing_number ?? acct.routing_number ?? null,
     description: acct.description ?? description,
     account_type: kind,
-    status: acct.is_closed ? "closed" : "open",
+    status: accountStatus(acct),
     balances: acct.balances ?? {},
   }).select().single();
   if (error) throw new Error(error.message);
@@ -435,7 +450,7 @@ async function refreshAccounts(userId: string) {
       const live = await column<any>(`/bank-accounts/${r.bank_account_id}`);
       await admin.from("column_bank_accounts").update({
         balances: live.balances ?? {},
-        status: live.is_closed ? "closed" : "open",
+        status: accountStatus(live),
       }).eq("id", r.id);
       out.push({ ...r, balances: live.balances ?? {} });
     } catch {
@@ -905,7 +920,13 @@ async function doTransfer(userId: string, body: any) {
         counterparty_id: counterpartyId,
         type, amount, currency_code: "USD",
         entry_class_code: "PPD",
-        description: description.slice(0, 10) || "GLASSBNK",
+        // `description` is our own 255-char reference. The 10-character field
+        // the RECEIVER sees on their statement is `company_entry_description`
+        // — truncating `description` to 10 was throwing away the real memo.
+        description: description || "Transfer",
+        company_entry_description:
+          (description.toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim().slice(0, 10) || "PAYMENT"),
+
       },
       idempotencyKey: await transferKey(userId, kind, amount, counterpartyId, requestId),
     });
@@ -954,12 +975,17 @@ const DOCUMENT_TYPES = new Set([
   "identity_license", "identity_passport", "identity_utility",
   "bank_statement", "bank_transaction_report", "bank_summary_report",
   "dda_agreement", "w9", "irs_letter", "check_attachment",
-  "monthly_statement", "daily_statement",
+  "monthly_statement", "daily_statement", "bank_interest_report",
+  "daily_loan_tape", "daily_originations_activity", "daily_transaction_activity",
+  "receivable_purchases", "monthly_applications", "monthly_loan_reporting",
+  "network_settlement_file", "screenshot", "loan_daily_summary", "1099_int",
   "certificate_of_business_formation", "company_bylaws_or_agreements",
-  "certificate_of_good_standing", "ownership_structure", "ein_confirmation",
+  "certificate_of_good_standing", "active_status_certificate",
+  "ownership_structure", "ein_confirmation",
   "business_license_or_permit", "source_of_funds_document",
   "source_of_wealth_document", "complete_customer_file", "other",
 ]);
+
 
 /** App label → Column enum. Anything already valid passes through untouched. */
 const DOCUMENT_TYPE_ALIASES: Record<string, string> = {
@@ -1024,17 +1050,26 @@ async function submitEvidence(userId: string, body: any) {
   const form = new FormData();
   form.append("file", new Blob([bytes], { type: mime }), `${documentType}.${ext}`);
   form.append("evidence_type", "file");
-  // One record per purpose, all referencing the same file — Column expects the
-  // repeated field, not a comma-joined string.
-  for (const p of purposes) form.append("purposes", p);
+  // Multipart form fields are strings, so Column takes the purposes as ONE
+  // comma-separated value (the JSON endpoint is the one that takes an array).
+  // Repeating the field produced a single record for the last value only.
+  form.append("purposes", purposes.join(","));
   form.append("document_type", documentType);
 
-  const res = await column<any>(`/entities/${entity.entity_id}/documents`, {
+  // The real endpoint is `/entities/{id}/evidence` — `/documents` under an
+  // entity does not exist, so every upload was failing upstream.
+  const res = await column<any>(`/entities/${entity.entity_id}/evidence`, {
     method: "POST",
     form,
     idempotencyKey: `evidence-${userId}-${documentType}-${bytes.byteLength}`,
   });
-  return { documentId: res?.id ?? null, entityId: entity.entity_id, status: res?.status ?? "submitted" };
+  const first = Array.isArray(res?.evidence) ? res.evidence[0] : null;
+  return {
+    documentId: first?.data?.document?.id ?? first?.id ?? res?.id ?? null,
+    entityId: entity.entity_id,
+    status: res?.status ?? "submitted",
+  };
+
 }
 
 /**
@@ -1734,6 +1769,113 @@ async function jointRemove(userId: string, body: any) {
 }
 
 // ---------------------------------------------------------------------------
+// Statements.
+//
+// Column generates a real monthly statement (PDF + CSV) for every open bank
+// account and fires `reporting.bank_account_monthly_statement.completed` when
+// it is ready. Those statements are settlement reports: the report object
+// carries `pdf_document_id` / `csv_document_id`, and a document's `url` is a
+// signed link that expires after 60 seconds — so we mint it on demand rather
+// than storing it.
+// ---------------------------------------------------------------------------
+
+/** Mirrors one settlement-report object into `account_statements`. */
+export async function upsertStatement(report: any, bankAccountId?: string) {
+  const accountId = bankAccountId ?? report?.statement_subject_id ?? report?.bank_account_id;
+  if (!accountId || !report?.id) return null;
+  const { data } = await admin.from("account_statements").upsert({
+    bank_account_id: String(accountId),
+    report_id: String(report.id),
+    statement_type: String(report.type ?? "bank_account_monthly_statement"),
+    period_start: report.from_date ?? null,
+    period_end: report.to_date ?? null,
+    pdf_document_id: report.pdf_document_id || null,
+    csv_document_id: report.csv_document_id || null,
+    status: String(report.status ?? "completed").toLowerCase(),
+    raw: report,
+  }, { onConflict: "report_id" }).select().maybeSingle();
+  return data;
+}
+
+/**
+ * Backfills from the reporting API, then returns everything we hold for the
+ * caller's accounts. Statements the partner has not produced yet simply do not
+ * appear — we never invent one.
+ */
+async function listStatements(userId: string) {
+  const rows = await ownedAccountRows(userId);
+  const ids = rows.map((r) => r.bank_account_id);
+  if (!ids.length) return { statements: [] };
+
+  const nameBy = new Map(rows.map((r) => [r.bank_account_id, r.description || r.account_type]));
+
+  for (const id of ids) {
+    try {
+      const reports = await columnPaginated<any>("/reporting", {
+        key: "settlement_reports",
+        max: 60,
+        query: { statement_subject_id: id, type: "bank_account_monthly_statement" },
+      });
+      for (const r of reports) {
+        if (String(r?.status ?? "").toLowerCase() !== "completed") continue;
+        await upsertStatement(r, id);
+      }
+    } catch (e) {
+      // Reporting access is a platform-level permission; a failure here must
+      // not blank out statements we already mirrored.
+      console.warn("statement backfill failed", id, (e as Error).message);
+    }
+  }
+
+  const { data } = await admin.from("account_statements")
+    .select("*").in("bank_account_id", ids).order("period_end", { ascending: false }).limit(200);
+
+  return {
+    statements: (data ?? []).map((s: any) => ({
+      id: s.id,
+      bankAccountId: s.bank_account_id,
+      accountName: nameBy.get(s.bank_account_id) ?? "Account",
+      periodStart: s.period_start,
+      periodEnd: s.period_end,
+      hasPdf: !!s.pdf_document_id,
+      hasCsv: !!s.csv_document_id,
+      status: s.status,
+    })),
+  };
+}
+
+/** Mints a short-lived download link for one of the caller's own statements. */
+async function statementUrl(userId: string, body: any) {
+  const statementId = String(body?.statementId ?? "");
+  const format = String(body?.format ?? "pdf").toLowerCase() === "csv" ? "csv" : "pdf";
+  const { data: row } = await admin.from("account_statements")
+    .select("*").eq("id", statementId).maybeSingle();
+  if (!row) throw new Error("Statement not found");
+
+  // Ownership is resolved server-side against account_owners — the client's
+  // claim about which account a statement belongs to is never trusted.
+  const { data: owns } = await admin.from("account_owners")
+    .select("id").eq("bank_account_id", row.bank_account_id).eq("user_id", userId).maybeSingle();
+  if (!owns) throw new Error("That statement isn't one of yours");
+
+  const documentId = format === "csv" ? row.csv_document_id : row.pdf_document_id;
+  if (!documentId) throw new Error(`No ${format.toUpperCase()} available for this statement`);
+
+  let url: string | null = null;
+  try {
+    const doc = await column<any>(`/documents/${documentId}`);
+    url = doc?.url ?? null;
+  } catch {
+    const docs = await columnPaginated<any>("/documents", { key: "documents", max: 100 });
+    url = docs.find((d: any) => d?.id === documentId)?.url ?? null;
+  }
+  if (!url) throw new Error("The statement download link has expired — try again");
+  return { url, format, expiresInSeconds: 60 };
+}
+
+// ---------------------------------------------------------------------------
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -1825,6 +1967,13 @@ Deno.serve(async (req) => {
       }
       case "submit_evidence":
         return json(await submitEvidence(user.id, body));
+
+      case "statements":
+        return json(await listStatements(user.id));
+      case "statement_url":
+        return json(await statementUrl(user.id, body));
+
+
 
       case "admin_list":
         return json(await adminList());
