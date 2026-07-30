@@ -861,8 +861,6 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     retry: () => void refreshLedger(),
     setTransactionCategory,
     transfer,
-    send,
-    depositCheck,
     payBill,
     externalTransfer,
     wireTransfer,
