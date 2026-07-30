@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import {
   ShieldCheck,
   ShieldAlert,
+  AlertTriangle,
   Clock,
   Search,
   Sparkles,
