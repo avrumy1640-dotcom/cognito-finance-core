@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import {
   ShieldCheck,
   ShieldAlert,
+  AlertTriangle,
   Clock,
   Search,
   Sparkles,
@@ -11,7 +12,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { KycProfile, KycStatus } from "@/hooks/useKyc";
-import { ledgerProvider } from "@/lib/ledgerProvider";
+import { ledgerProvider, type ComplianceItem } from "@/lib/ledgerProvider";
 
 type DisplayState = "unverified" | "pending" | "under_review" | "verified" | "rejected";
 
@@ -27,6 +28,30 @@ interface Props {
 }
 
 const UNDER_REVIEW_AFTER_MIN = 5;
+
+/**
+ * Our banking partner reports four distinct statuses per required field, and
+ * they call for four different customer actions. Collapsing them all into
+ * "missing" tells someone to re-supply a detail they already gave when the
+ * real problem is that it needs correcting — or that nothing is needed at all.
+ */
+const REQUIREMENT_COPY: Record<
+  ComplianceItem["status"],
+  { Icon: typeof ShieldAlert; label: string; className: string }
+> = {
+  complete: { Icon: ShieldCheck, label: "Received and accepted", className: "text-success" },
+  missing: { Icon: ShieldAlert, label: "We still need this from you", className: "text-warning-foreground" },
+  invalid: { Icon: AlertTriangle, label: "This needs to be corrected and re-submitted", className: "text-destructive" },
+  pending: { Icon: Clock, label: "Being checked — nothing needed from you", className: "text-primary" },
+  unknown: { Icon: Search, label: "Under review", className: "text-muted-foreground" },
+};
+
+/** `date_of_birth` → "Date of birth". */
+const prettyField = (field: string) => {
+  const s = field.replace(/[._-]+/g, " ").trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "Requirement";
+};
+
 
 const fmtElapsed = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -70,8 +95,11 @@ const KycStatusCard = ({
       : "unverified";
 
   // What our banking partner still needs, straight from their compliance
-  // endpoint — so a stuck application says exactly what's missing.
-  const [requirements, setRequirements] = useState<string[]>([]);
+  // endpoint — so a stuck application says exactly what's missing. The partner
+  // reports four distinct per-field statuses and they mean different things to
+  // the customer: `invalid` needs correcting, `missing` needs providing, and
+  // `pending` needs nothing at all but patience.
+  const [requirements, setRequirements] = useState<ComplianceItem[]>([]);
   useEffect(() => {
     if (display === "verified" || display === "unverified") { setRequirements([]); return; }
     let cancelled = false;
@@ -79,18 +107,12 @@ const KycStatusCard = ({
       try {
         const res = await ledgerProvider.myCompliance();
         if (cancelled) return;
-        const list = (res.requirements ?? [])
-          .map((r) => {
-            if (typeof r === "string") return r;
-            const o = r as Record<string, unknown>;
-            return String(o.description ?? o.message ?? o.field ?? o.name ?? "");
-          })
-          .filter(Boolean);
-        setRequirements(list);
+        setRequirements((res.requirements ?? []).filter((r) => r.status !== "complete"));
       } catch { /* the status card must render even if compliance is unreachable */ }
     })();
     return () => { cancelled = true; };
   }, [display, status]);
+
 
   useEffect(() => {
     if (display !== "pending" && display !== "under_review") return;
@@ -208,17 +230,25 @@ const KycStatusCard = ({
       </div>
 
       {requirements.length > 0 && (
-        <div className="rounded-2xl bg-background/60 p-3.5 space-y-1.5">
-          <p className="text-xs font-semibold">Still needed by our banking partner</p>
-          <ul className="space-y-1">
-            {requirements.map((r) => (
-              <li key={r} className="text-xs opacity-80 flex gap-2">
-                <span aria-hidden>•</span><span>{r}</span>
-              </li>
-            ))}
+        <div className="rounded-2xl bg-background/60 p-3.5 space-y-2">
+          <p className="text-xs font-semibold">What our banking partner still needs</p>
+          <ul className="space-y-1.5">
+            {requirements.map((r) => {
+              const c = REQUIREMENT_COPY[r.status];
+              return (
+                <li key={`${r.field}-${r.status}`} className="text-xs flex items-start gap-2">
+                  <c.Icon size={12} className={`mt-0.5 shrink-0 ${c.className}`} />
+                  <span className="flex-1">
+                    <span className="font-medium">{prettyField(r.field)}</span>
+                    <span className="opacity-75"> — {r.message || c.label}</span>
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
+
 
       {/* Progress rail */}
       <div className="flex items-center gap-2">

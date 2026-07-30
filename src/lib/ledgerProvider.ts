@@ -116,6 +116,72 @@ export interface TransferArgs {
   beneficiaryCountry?: string;
 }
 
+/* --------------------------------------------------------------------------
+ * Provider enums and admin shapes.
+ *
+ * `documentType` and `purposes` are FIXED enums on the partner's evidence
+ * endpoint — an arbitrary string is rejected, which is how an upload can fail
+ * silently. Typing them here makes an invalid value a compile error.
+ * ------------------------------------------------------------------------ */
+export type ColumnDocumentType =
+  | "identity_license" | "identity_passport" | "identity_utility"
+  | "bank_statement" | "source_of_funds_document" | "source_of_wealth_document"
+  | "complete_customer_file" | "other";
+
+export type ColumnEvidencePurpose =
+  | "identity_verification" | "proof_of_address" | "ofac_screening"
+  | "pep_screening" | "adverse_media_screening" | "complete_customer_file"
+  | "signed_account_agreement" | "attestation_terms_of_service";
+
+/** One required field on the partner's compliance record. */
+export interface ComplianceItem {
+  field: string;
+  /** All four real field statuses — "invalid" is NOT the same as "missing". */
+  status: "complete" | "missing" | "invalid" | "pending" | "unknown";
+  message?: string;
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  description: string | null;
+  enabledEvents: string[];
+  isDisabled: boolean;
+  createdAt: string | null;
+}
+
+export interface WebhookVerifyResult {
+  endpointId: string;
+  eventType: string;
+  statusCode: number | null;
+  responseBody: string | null;
+  success: boolean | null;
+  raw: unknown;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  eventId: string | null;
+  eventType: string | null;
+  /** The partner reports the outcome as SUCCEEDED / FAILED / PENDING. */
+  status: string | null;
+  scheduledAt: string | null;
+  statusCode: number | null;
+  success: boolean | null;
+  attempts: number | null;
+  error: string | null;
+  createdAt: string | null;
+  responseBody: string | null;
+}
+
+export interface EventReconciliation {
+  checked: number;
+  recorded: number;
+  missingCount: number;
+  missing: Array<{ id: string; type: string | null; createdAt: string | null }>;
+}
+
+
 export const ledgerProvider = {
   status: () => call<{ sandbox: boolean; configured: boolean; entity: unknown }>({ action: "status" }),
   diagnose: () =>
@@ -128,17 +194,31 @@ export const ledgerProvider = {
   transfer: (args: TransferArgs) =>
     call<{ transferId: string; status: string; snapshot: ProviderSnapshot }>({ action: "transfer", ...args }),
   /** Uploads a KYC document and links it to the entity as verification evidence. */
-  submitEvidence: (args: { dataUrl: string; documentType: string; purpose?: string }) =>
+  submitEvidence: (args: { dataUrl: string; documentType: ColumnDocumentType; purposes?: ColumnEvidencePurpose[] }) =>
     call<{ documentId: string | null; entityId: string; status: string }>({ action: "submit_evidence", ...args }),
   /** What the banking partner still needs from the signed-in user, if anything. */
   myCompliance: () =>
-    call<{ entityId: string | null; verificationStatus: string | null; requirements: unknown[] }>({
+    call<{ entityId: string | null; verificationStatus: string | null; requirements: ComplianceItem[] }>({
       action: "my_compliance",
     }),
   adminList: () => call<Record<string, unknown>>({ action: "admin_list" }),
   adminLocal: () => call<Record<string, unknown>>({ action: "admin_local" }),
-  adminCompliance: (entityId: string) => call<Record<string, unknown>>({ action: "admin_compliance", entityId }),
+  adminCompliance: (entityId: string) =>
+    call<{ items: ComplianceItem[] } & Record<string, unknown>>({ action: "admin_compliance", entityId }),
   adminDelete: (resource: string, id: string) => call<unknown>({ action: "admin_delete", resource, id }),
+  /** Every webhook endpoint Column currently has registered for this platform. */
+  adminWebhookEndpoints: () =>
+    call<{ endpoints: WebhookEndpoint[] }>({ action: "admin_webhook_endpoints" }),
+  /** Asks Column to make a real delivery attempt so we can see the response. */
+  adminWebhookVerify: (id: string, eventType = "ach.outgoing_transfer.initiated") =>
+    call<WebhookVerifyResult>({ action: "admin_webhook_verify", id, eventType }),
+  /** Column's own log of recent delivery attempts to an endpoint. */
+  adminWebhookDeliveries: (id: string, limit = 25) =>
+    call<{ deliveries: WebhookDelivery[] }>({ action: "admin_webhook_deliveries", id, limit }),
+  /** Flags events Column recorded that never reached our webhook_events table. */
+  adminReconcileEvents: (limit = 200) =>
+    call<EventReconciliation>({ action: "admin_reconcile_events", limit }),
+
   /** Registers this deployment's webhook receiver with the provider (idempotent). */
   adminRegisterWebhook: () =>
     call<{ created: boolean; url: string; endpoint: Record<string, unknown> }>({ action: "admin_register_webhook" }),

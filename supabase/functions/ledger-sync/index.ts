@@ -219,6 +219,12 @@ async function ensureEntity(userId: string) {
   const last = kyc?.legal_last_name || profileName.slice(1).join(" ") || "Tester";
   const email = profile?.email || undefined;
 
+  // Column's person `income` is an ARRAY of numbers (whole dollars) so a range
+  // can be expressed — a bare number is rejected. We collect a single figure
+  // during onboarding, so we send a one-element array.
+  const incomeDigits = String(profile?.annual_income ?? "").replace(/[^0-9]/g, "");
+  const income = incomeDigits ? [Number(incomeDigits)] : undefined;
+
   // Sandbox entity. We deliberately do NOT forward a real SSN; the sandbox
   // accepts the documented test SSN and returns a verified person.
   // `pep_status` is required by Column's person payload; we do not ask the
@@ -231,6 +237,8 @@ async function ensureEntity(userId: string) {
     date_of_birth: (profile?.date_of_birth as string | undefined)
       ?? (kyc?.date_of_birth as string | undefined) ?? "1990-01-01",
     pep_status: "not_checked",
+    ...(income ? { income } : {}),
+    ...(profile?.occupation ? { occupation: String(profile.occupation).slice(0, 64) } : {}),
     address: {
       line_1: profile?.address_street || kyc?.street || "1 Market St",
       city: profile?.address_city || kyc?.city || "San Francisco",
@@ -249,10 +257,14 @@ async function ensureEntity(userId: string) {
     user_id: userId,
     entity_id: created.id,
     entity_type: "person",
-    verification_status: created.verification_status ?? "unverified",
+    // Column returns this UPPERCASE (VERIFIED / PENDING / MANUAL_REVIEW /
+    // DENIED / UNVERIFIED). We normalise to lowercase on the way in so every
+    // comparison in this app — and in the webhook handler — is case-stable.
+    verification_status: normalizeVerification(created.verification_status),
     details: created,
   }).select().single();
   if (error) throw new Error(error.message);
+
 
   // Mirror the provider's verification verdict back onto the KYC record so the
   // app's gating reflects the real upstream decision.
@@ -260,9 +272,22 @@ async function ensureEntity(userId: string) {
   return row;
 }
 
+/**
+ * Column reports `verification_status` in UPPERCASE (`VERIFIED`, `PENDING`,
+ * `MANUAL_REVIEW`, `DENIED`, `UNVERIFIED`). Everything we persist and compare
+ * against is lowercase, so all ingest points funnel through here — a raw
+ * uppercase value silently failing an `=== "verified"` check is exactly the
+ * class of bug this prevents.
+ */
+export function normalizeVerification(raw: unknown): string {
+  const v = String(raw ?? "").trim().toLowerCase();
+  return v || "unverified";
+}
+
 /** Maps the provider verification verdict onto our own kyc_profiles status. */
 async function syncKycStatus(userId: string, verification?: string) {
-  const v = String(verification ?? "").toLowerCase();
+  const v = normalizeVerification(verification);
+
   const status = v === "verified" ? "verified"
     : v === "denied" || v === "rejected" ? "rejected"
     : v === "manual_review" || v === "pending" ? "pending"
@@ -724,6 +749,63 @@ async function doTransfer(userId: string, body: any) {
 }
 
 /**
+ * Column's `document_type` and `purposes` are FIXED ENUMS — an arbitrary
+ * string ("selfie", "drivers_license") is rejected by the API, which is how a
+ * document upload can silently fail. We validate here, and map the few
+ * app-side labels that don't line up onto the real enum member.
+ */
+const DOCUMENT_TYPES = new Set([
+  "identity_license", "identity_passport", "identity_utility",
+  "bank_statement", "bank_transaction_report", "bank_summary_report",
+  "dda_agreement", "w9", "irs_letter", "check_attachment",
+  "monthly_statement", "daily_statement",
+  "certificate_of_business_formation", "company_bylaws_or_agreements",
+  "certificate_of_good_standing", "ownership_structure", "ein_confirmation",
+  "business_license_or_permit", "source_of_funds_document",
+  "source_of_wealth_document", "complete_customer_file", "other",
+]);
+
+/** App label → Column enum. Anything already valid passes through untouched. */
+const DOCUMENT_TYPE_ALIASES: Record<string, string> = {
+  selfie: "other",
+  drivers_license: "identity_license",
+  license: "identity_license",
+  passport: "identity_passport",
+  id_card: "identity_license",
+  utility_bill: "identity_utility",
+  proof_of_address: "identity_utility",
+};
+
+const EVIDENCE_PURPOSES = new Set([
+  "proof_of_address", "business_formation", "identity_verification",
+  "tax_id_confirmation", "active_status_certificate", "signed_account_agreement",
+  "cardholder_agreement", "attestation_control_person",
+  "attestation_beneficial_ownership", "attestation_account_info_truth",
+  "attestation_terms_of_service", "ofac_screening", "adverse_media_screening",
+  "pep_screening", "complete_customer_file", "irs_form_ss4", "irs_form_990",
+  "nonprofit_other_evidence", "edd", "attestation_privacy_policy",
+]);
+
+function resolveDocumentType(raw: unknown): string {
+  const v = String(raw ?? "").trim().toLowerCase();
+  const mapped = DOCUMENT_TYPE_ALIASES[v] ?? v;
+  if (!DOCUMENT_TYPES.has(mapped)) {
+    throw new Error(`Unsupported document type "${v}"`);
+  }
+  return mapped;
+}
+
+function resolvePurposes(raw: unknown): string[] {
+  const list = (Array.isArray(raw) ? raw : [raw])
+    .map((p) => String(p ?? "").trim().toLowerCase())
+    .filter(Boolean);
+  const out = list.filter((p) => EVIDENCE_PURPOSES.has(p));
+  const bad = list.filter((p) => !EVIDENCE_PURPOSES.has(p));
+  if (bad.length) throw new Error(`Unsupported evidence purpose "${bad[0]}"`);
+  return out.length ? out : ["identity_verification"];
+}
+
+/**
  * Uploads a KYC document to Column and links it to the caller's entity as
  * verification evidence in a single multipart call.
  */
@@ -739,13 +821,16 @@ async function submitEvidence(userId: string, body: any) {
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   if (bytes.byteLength > 8 * 1024 * 1024) throw new Error("File is too large (max 8 MB)");
 
-  const documentType = String(body.documentType ?? "drivers_license").slice(0, 64);
+  const documentType = resolveDocumentType(body.documentType ?? "identity_license");
+  const purposes = resolvePurposes(body.purposes ?? body.purpose);
   const ext = mime.includes("png") ? "png" : mime.includes("pdf") ? "pdf" : "jpg";
 
   const form = new FormData();
   form.append("file", new Blob([bytes], { type: mime }), `${documentType}.${ext}`);
   form.append("evidence_type", "file");
-  form.append("purposes", String(body.purpose ?? "identity_verification"));
+  // One record per purpose, all referencing the same file — Column expects the
+  // repeated field, not a comma-joined string.
+  for (const p of purposes) form.append("purposes", p);
   form.append("document_type", documentType);
 
   const res = await column<any>(`/entities/${entity.entity_id}/documents`, {
@@ -756,11 +841,55 @@ async function submitEvidence(userId: string, body: any) {
   return { documentId: res?.id ?? null, entityId: entity.entity_id, status: res?.status ?? "submitted" };
 }
 
-/** Compliance view: exactly which required fields Column is still waiting on. */
+/**
+ * Compliance view: exactly which required fields Column is still waiting on.
+ *
+ * Column reports FOUR per-field statuses — `complete`, `missing`, `invalid`
+ * and `pending` — so we normalise the (variably-shaped) response into a flat
+ * list the UI can render without re-deriving the semantics.
+ */
+export interface ComplianceItem {
+  field: string;
+  status: "complete" | "missing" | "invalid" | "pending" | "unknown";
+  message?: string;
+}
+
+const FIELD_STATUSES = ["complete", "missing", "invalid", "pending"] as const;
+
+function normalizeCompliance(raw: any): ComplianceItem[] {
+  const out: ComplianceItem[] = [];
+  const push = (field: unknown, status: unknown, message?: unknown) => {
+    const s = String(status ?? "").trim().toLowerCase();
+    out.push({
+      field: String(field ?? "").trim() || "requirement",
+      status: (FIELD_STATUSES as readonly string[]).includes(s) ? (s as ComplianceItem["status"]) : "unknown",
+      message: message ? String(message) : undefined,
+    });
+  };
+
+  const source = raw?.requirements ?? raw?.fields ?? raw?.missing_fields ?? raw?.details ?? raw;
+  if (Array.isArray(source)) {
+    for (const r of source) {
+      if (typeof r === "string") push(r, "missing");
+      else push(r?.field ?? r?.name ?? r?.requirement, r?.status ?? r?.state, r?.description ?? r?.message);
+    }
+  } else if (source && typeof source === "object") {
+    for (const [field, val] of Object.entries(source)) {
+      if (typeof val === "string") push(field, val);
+      else if (val && typeof val === "object") {
+        push(field, (val as any).status ?? (val as any).state, (val as any).description ?? (val as any).message);
+      }
+    }
+  }
+  return out;
+}
+
 async function entityCompliance(entityId: string) {
   if (!/^[A-Za-z0-9_\-]+$/.test(entityId)) throw new Error("Invalid entity id");
-  return await column<any>(`/entities/${entityId}/compliance`);
+  const raw = await column<any>(`/entities/${entityId}/compliance`);
+  return { ...raw, items: normalizeCompliance(raw) };
 }
+
 
 
 /**
@@ -980,6 +1109,47 @@ async function adminDelete(resource: string, id: string) {
   return { deleted: { resource, id } };
 }
 
+/**
+ * Sweeps a sandbox bank account to a $0 balance so it can be deleted.
+ *
+ * Column refuses to delete an account holding funds, and refuses to delete an
+ * entity that still owns accounts — so the wipe has to run
+ * drain → delete accounts → delete entity, in that order. We push the residual
+ * balance out over ACH to an external sandbox counterparty and force
+ * settlement, because an unsettled transfer still counts against the balance.
+ */
+async function drainAccount(acct: any): Promise<{ drained: boolean; note?: string }> {
+  const bal = mapBalances(acct);
+  const cents = Math.round((bal.available ?? 0) * 100);
+  if (cents <= 0) return { drained: true };
+  try {
+    const cp = await column<any>("/counterparties", {
+      method: "POST",
+      body: { routing_number: "021000021", account_number: "9999999999", name: "SANDBOX SWEEP" },
+      idempotencyKey: `wipe-sweep-counterparty`,
+    });
+    const t = await column<any>("/transfers/ach", {
+      method: "POST",
+      body: {
+        bank_account_id: acct.id,
+        counterparty_id: cp.id,
+        type: "CREDIT",
+        amount: cents,
+        currency_code: "USD",
+        entry_class_code: "PPD",
+        description: "SWEEP",
+      },
+      idempotencyKey: `wipe-sweep-${acct.id}-${cents}`,
+    });
+    await column("/simulate/transfers/ach/settle", {
+      method: "POST", body: { ach_transfer_id: t.id },
+    }).catch(() => {});
+    return { drained: true, note: `swept ${(cents / 100).toFixed(2)} out` };
+  } catch (e) {
+    return { drained: false, note: `could not sweep balance: ${(e as Error).message}` };
+  }
+}
+
 async function adminWipe(opts: { includeWebhooks?: boolean }) {
   const listed = await adminList();
   const results: any[] = [];
@@ -991,17 +1161,176 @@ async function adminWipe(opts: { includeWebhooks?: boolean }) {
       catch (e) { results.push({ resource, id, ok: false, error: (e as Error).message }); }
     }
   };
-  // Order matters: dependants first.
+
+  // 1. Counterparties have no dependants — safe to clear first.
   await run("counterparty", listed.counterparties);
-  await run("bank-account", listed.bankAccounts);
-  await run("entity", listed.entities);
+
+  // 2. Accounts must be at $0 before Column will delete them.
+  for (const acct of listed.bankAccounts ?? []) {
+    if (!acct?.id) continue;
+    const { drained, note } = await drainAccount(acct);
+    if (!drained) {
+      results.push({ resource: "bank-account", id: acct.id, ok: false, error: note });
+      continue;
+    }
+    try {
+      await adminDelete("bank-account", acct.id);
+      results.push({ resource: "bank-account", id: acct.id, ok: true, note });
+    } catch (e) {
+      results.push({ resource: "bank-account", id: acct.id, ok: false, error: (e as Error).message, note });
+    }
+  }
+
+  // 3. Only now can the entities go — an entity with a surviving account is
+  //    rejected, so we skip those instead of firing a call we know will fail.
+  const survivingByEntity = new Set(
+    results.filter((r) => r.resource === "bank-account" && !r.ok)
+      .map((r) => (listed.bankAccounts ?? []).find((a: any) => a.id === r.id)?.entity_id)
+      .filter(Boolean),
+  );
+  for (const ent of listed.entities ?? []) {
+    if (!ent?.id) continue;
+    if (survivingByEntity.has(ent.id)) {
+      results.push({
+        resource: "entity", id: ent.id, ok: false,
+        error: "skipped: still owns an account that could not be emptied",
+      });
+      continue;
+    }
+    try { await adminDelete("entity", ent.id); results.push({ resource: "entity", id: ent.id, ok: true }); }
+    catch (e) { results.push({ resource: "entity", id: ent.id, ok: false, error: (e as Error).message }); }
+  }
+
   if (opts.includeWebhooks) await run("webhook-endpoint", listed.webhookEndpoints);
+
   // Local mirror
   await admin.from("column_transfers").delete().neq("transfer_id", "");
   await admin.from("column_bank_accounts").delete().neq("bank_account_id", "");
   await admin.from("column_entities").delete().neq("entity_id", "");
   return { wiped: results.length, results };
 }
+
+// ---------------------------------------------------------------------------
+// Webhook endpoint management, delivery inspection and event reconciliation.
+//
+// Column's list/verify/delivery paths are documented with both hyphens and
+// underscores depending on the page, so every call tries both spellings and
+// keeps whichever answers.
+// ---------------------------------------------------------------------------
+async function columnAny<T = any>(paths: string[], init: Parameters<typeof column>[1] = {}): Promise<T> {
+  let last: unknown;
+  for (const p of paths) {
+    try { return await column<T>(p, init); }
+    catch (e) {
+      last = e;
+      if ((e as ColumnError).status !== 404) throw e;
+    }
+  }
+  throw last;
+}
+
+const WEBHOOK_LIST_PATHS = ["/webhook-endpoints", "/webhook_endpoints"];
+
+async function listWebhookEndpoints() {
+  const res = await columnAny<any>(WEBHOOK_LIST_PATHS, { query: { limit: 100 } });
+  const items = pickList(res, "webhook_endpoints");
+  return items.map((h: any) => ({
+    id: h.id,
+    url: h.url,
+    description: h.description ?? null,
+    enabledEvents: h.enabled_events ?? [],
+    isDisabled: h.is_disabled ?? h.disabled ?? false,
+    createdAt: h.created_at ?? null,
+  }));
+}
+
+/**
+ * Asks Column to make a REAL delivery attempt to the endpoint with a synthetic
+ * event of the given type, and returns whatever it reports about that attempt.
+ * This is the definitive answer to "is Column even trying to reach us?".
+ */
+async function verifyWebhookEndpoint(id: string, eventType: string) {
+  if (!/^[A-Za-z0-9_\-]+$/.test(id)) throw new Error("Invalid endpoint id");
+  const type = String(eventType || "ach.outgoing_transfer.initiated");
+  // The body takes `event_type` and NOTHING else — sending a second alias
+  // field makes Column reject the whole call with `invalid_field_value`.
+  const res = await columnAny<any>(
+    [`/webhook-endpoints/${id}/verify`, `/webhook_endpoints/${id}/verify`],
+    { method: "POST", body: { event_type: type } },
+  );
+  return {
+    endpointId: id,
+    eventType: type,
+    statusCode: res?.response_status_code ?? res?.status_code ?? null,
+    responseBody: res?.response_body ?? res?.body ?? null,
+    success: res?.success ?? res?.is_success
+      ?? (typeof res?.status === "string" ? res.status.toUpperCase() === "SUCCEEDED" : null),
+    raw: res,
+  };
+}
+
+async function webhookDeliveries(id: string, limit = 25) {
+  if (!/^[A-Za-z0-9_\-]+$/.test(id)) throw new Error("Invalid endpoint id");
+  const res = await columnAny<any>(
+    [`/webhook-deliveries/endpoint/${id}`, `/webhook_deliveries/endpoint/${id}`],
+    { query: { limit: Math.min(Math.max(limit, 1), 100) } },
+  );
+  const items = pickList(res, "webhook_deliveries");
+  // A delivery is `{ event, scheduled_at, status }` — the outcome lives in
+  // `status` (SUCCEEDED / FAILED / PENDING), not in an HTTP status code.
+  return items.map((d: any, i: number) => {
+    const status = typeof d?.status === "string" ? d.status.toUpperCase() : null;
+    return {
+      id: String(d?.id ?? d?.event?.id ?? `${id}-${i}`),
+      eventId: d?.event_id ?? d?.event?.id ?? null,
+      eventType: d?.event_type ?? d?.event?.type ?? null,
+      status,
+      scheduledAt: d?.scheduled_at ?? null,
+      statusCode: d?.response_status_code ?? d?.status_code ?? null,
+      success: status ? status === "SUCCEEDED" : (d?.is_success ?? d?.success ?? null),
+      attempts: d?.attempt_count ?? d?.attempts ?? null,
+      error: d?.error_message ?? d?.error ?? null,
+      createdAt: d?.created_at ?? d?.scheduled_at ?? d?.event?.created_at ?? null,
+      responseBody: typeof d?.response_body === "string" ? d.response_body.slice(0, 500) : null,
+    };
+  });
+}
+
+
+/**
+ * Reconciliation: walks Column's own record of webhook events and flags any
+ * that never landed in our `webhook_events` table — i.e. deliveries Column
+ * eventually gave up retrying. Read-only; it reports, it doesn't replay.
+ */
+async function reconcileEvents(limit = 200) {
+  const remote = await columnAny<any[]>(["/events/webhook"], {}).then(
+    (r: any) => pickList(r, "events"),
+  ).catch(async () => await columnPaginated<any>("/events/webhook", { key: "events", max: limit }));
+
+  const capped = (remote as any[]).slice(0, limit);
+  const ids = capped.map((e) => String(e?.id ?? "")).filter(Boolean);
+  const seen = new Set<string>();
+  if (ids.length) {
+    const { data } = await admin.from("webhook_events")
+      .select("event_id").eq("provider", "column").in("event_id", ids);
+    for (const r of data ?? []) seen.add(String(r.event_id));
+  }
+  const missing = capped
+    .filter((e) => e?.id && !seen.has(String(e.id)))
+    .map((e) => ({
+      id: e.id,
+      type: e.type ?? null,
+      createdAt: e.created_at ?? null,
+    }));
+
+  return {
+    checked: capped.length,
+    recorded: capped.length - missing.length,
+    missingCount: missing.length,
+    missing: missing.slice(0, 50),
+  };
+}
+
 
 // ---------------------------------------------------------------------------
 Deno.serve(async (req) => {
@@ -1069,6 +1398,14 @@ Deno.serve(async (req) => {
         return json(await adminList());
       case "admin_register_webhook":
         return json(await registerWebhook(Array.isArray(body.events) ? body.events : undefined));
+      case "admin_webhook_endpoints":
+        return json({ endpoints: await listWebhookEndpoints() });
+      case "admin_webhook_verify":
+        return json(await verifyWebhookEndpoint(String(body.id ?? ""), String(body.eventType ?? "")));
+      case "admin_webhook_deliveries":
+        return json({ deliveries: await webhookDeliveries(String(body.id ?? ""), Number(body.limit) || 25) });
+      case "admin_reconcile_events":
+        return json(await reconcileEvents(Number(body.limit) || 200));
       case "admin_simulate_ach_return":
         return json(await simulateAchReturn(user.id, body));
       case "admin_simulate_incoming_wire":
@@ -1081,17 +1418,19 @@ Deno.serve(async (req) => {
           .select("entity_id, verification_status").eq("user_id", user.id).maybeSingle();
         if (!mine) return json({ entityId: null, verificationStatus: null, requirements: [] });
         const c = await entityCompliance(mine.entity_id);
-        const reqs = (c?.requirements ?? c?.missing_fields ?? c?.details ?? []) as unknown;
         return json({
           entityId: mine.entity_id,
-          verificationStatus: c?.verification_status ?? mine.verification_status,
-          requirements: Array.isArray(reqs) ? reqs : [],
+          verificationStatus: normalizeVerification(c?.verification_status ?? mine.verification_status),
+          // Normalised {field, status, message} carrying all four real field
+          // statuses — the UI needs to tell "invalid" apart from "missing".
+          requirements: c.items ?? [],
           raw: c,
         });
       }
 
       case "admin_compliance":
         return json(await entityCompliance(String(body.entityId ?? "")));
+
       case "admin_delete":
         return json(await adminDelete(String(body.resource ?? ""), String(body.id ?? "")));
       case "admin_wipe":

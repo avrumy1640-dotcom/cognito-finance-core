@@ -4,6 +4,7 @@ import { RefreshCw, Trash2, AlertTriangle, Webhook, Undo2, ArrowDownToLine } fro
 import { ledgerProvider } from "@/lib/ledgerProvider";
 import { AdminHeader, AdminPage } from "./AdminShell";
 import ConfirmDialog from "@/components/glass/ConfirmDialog";
+import WebhookEndpoints from "./WebhookEndpoints";
 
 type Listing = {
   entities?: Array<Record<string, unknown>>;
@@ -13,12 +14,14 @@ type Listing = {
   errors?: Record<string, string | undefined>;
 };
 
+// Webhook endpoints have their own richer section (verify + delivery log), so
+// they are deliberately absent from this simple list-and-delete table.
 const RESOURCES: Array<{ key: keyof Listing; resource: string; label: string }> = [
   { key: "entities", resource: "entity", label: "Entities" },
   { key: "bankAccounts", resource: "bank-account", label: "Bank accounts" },
   { key: "counterparties", resource: "counterparty", label: "Counterparties" },
-  { key: "webhookEndpoints", resource: "webhook-endpoint", label: "Webhook endpoints" },
 ];
+
 
 const ACH_RETURNS = ["RETURN_NSF", "RETURN_ACCOUNT_CLOSED", "RETURN_STOP_PAYMENT", "RETURN_UNAUTH"] as const;
 
@@ -198,6 +201,10 @@ const AdminProvider = () => {
           </button>
         </div>
       </section>
+
+      <WebhookEndpoints />
+
+
 
 
       {loading && <p className="text-sm text-muted-foreground">Loading…</p>}

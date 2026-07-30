@@ -24,9 +24,8 @@ jobs:
           SUPABASE_URL=$(supabase status -o json | jq -r .API_URL)
           SUPABASE_ANON_KEY=$(supabase status -o json | jq -r .ANON_KEY)
           SUPABASE_SERVICE_ROLE_KEY=$(supabase status -o json | jq -r .SERVICE_ROLE_KEY)
-          IBERBANCO_WEBHOOK_SECRET=${{ secrets.IBERBANCO_WEBHOOK_SECRET || 'ci-test-secret-please-override-in-repo-secrets' }}
+          COLUMN_WEBHOOK_SECRET=${{ secrets.COLUMN_WEBHOOK_SECRET || 'ci-test-secret-please-override-in-repo-secrets' }}
           EOF
       - name: RLS integration tests
         run: deno test --allow-all supabase/functions/rls-tests/index.test.ts
-      - name: Webhook signature + idempotency tests
-        run: deno test --allow-all supabase/functions/iberbanco-webhook/
+

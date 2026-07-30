@@ -321,9 +321,12 @@ const VerifyIdentity = () => {
       try {
         await ledgerProvider.submitEvidence({
           dataUrl: selfie,
-          documentType: "selfie",
-          purpose: "identity_verification",
+          // Our partner's document enum has no "selfie" member — a selfie is
+          // uploaded as `other` and it's the purpose that gives it meaning.
+          documentType: "other",
+          purposes: ["identity_verification"],
         });
+
       } catch (e) {
         console.warn("evidence upload failed", e);
         toast.warning("We couldn't attach your selfie", {

@@ -87,17 +87,23 @@ async function handleEvent(type: string, data: any) {
     const entityId = data?.id ?? data?.entity_id;
     if (!entityId) return "ignored: no entity id";
     const tail = type.split(".").pop() ?? "";
-    const status = data?.verification_status
-      ?? (tail === "verified" || tail === "approved" ? "verified"
-        : tail === "denied" || tail === "rejected" ? "denied"
-        : tail === "manual_review" ? "manual_review" : "pending");
+    // Column sends `verification_status` UPPERCASE (VERIFIED / PENDING /
+    // MANUAL_REVIEW / DENIED / UNVERIFIED). Lowercase it immediately: every
+    // comparison below (and everything we persist) is lowercase, so a raw
+    // uppercase value would silently match nothing.
+    const status = String(
+      data?.verification_status
+        ?? (tail === "verified" || tail === "approved" ? "verified"
+          : tail === "denied" || tail === "rejected" ? "denied"
+          : tail === "manual_review" ? "manual_review" : "pending"),
+    ).trim().toLowerCase();
 
     // Out-of-order safety: a late "pending" must not undo a decided verdict.
     const { data: current } = await admin.from("column_entities")
       .select("verification_status").eq("entity_id", entityId).maybeSingle();
     const decided = ["verified", "denied", "rejected"];
     if (current && decided.includes(String(current.verification_status ?? "").toLowerCase())
-        && !decided.includes(String(status).toLowerCase())) {
+        && !decided.includes(status)) {
       return `entity ${entityId}: ignored out-of-order "${status}" (have "${current.verification_status}")`;
     }
     const { data: row } = await admin.from("column_entities")
@@ -107,10 +113,9 @@ async function handleEvent(type: string, data: any) {
     if (row?.user_id) {
       // Mirror the partner's verdict onto our own KYC gate so access changes
       // in real time, without the user re-submitting anything.
-      const v = String(status).toLowerCase();
-      const mapped = v === "verified" ? "verified"
-        : v === "denied" || v === "rejected" ? "rejected"
-        : v === "pending" || v === "manual_review" ? "pending" : null;
+      const mapped = status === "verified" ? "verified"
+        : status === "denied" || status === "rejected" ? "rejected"
+        : status === "pending" || status === "manual_review" ? "pending" : null;
       if (mapped) {
         await admin.from("kyc_profiles")
           .update({ status: mapped, reviewed_at: new Date().toISOString() })
@@ -118,11 +123,12 @@ async function handleEvent(type: string, data: any) {
       }
       await notify(row.user_id, {
         type: "alert",
-        title: status === "verified" ? "Identity verified" : `Identity check: ${status}`,
+        title: status === "verified" ? "Identity verified" : `Identity check: ${status.replace(/_/g, " ")}`,
         body: "Your banking profile was updated by our banking partner.",
         dedupe_key: `column-entity-${entityId}-${status}`,
       });
     }
+
 
     return `entity ${entityId} → ${status}`;
   }
