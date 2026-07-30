@@ -18,6 +18,7 @@ export interface IdentityProfile {
   country: string; // ISO-2 residence
   citizenship: string; // ISO-2
   street: string;
+  line2: string;
   city: string;
   region: string;
   postal_code: string;
@@ -28,7 +29,7 @@ export interface IdentityProfile {
 
 export const EMPTY_IDENTITY: IdentityProfile = {
   first_name: "", last_name: "", date_of_birth: "", phone: "",
-  country: "", citizenship: "", street: "", city: "", region: "",
+  country: "", citizenship: "", street: "", line2: "", city: "", region: "",
   postal_code: "", occupation: "", employment_status: "", annual_income: "",
 };
 
