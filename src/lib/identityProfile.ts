@@ -59,6 +59,7 @@ export function identityFromProfileRow(row: ProfileRowish): IdentityProfile {
     country: str("country"),
     citizenship: str("citizenship") || str("country"),
     street: str("address_street"),
+    line2: str("address_line2"),
     city: str("address_city"),
     region: str("address_region"),
     postal_code: str("address_postal_code"),
