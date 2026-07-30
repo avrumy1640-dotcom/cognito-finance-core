@@ -827,6 +827,8 @@ const usd = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFracti
 
 class LimitError extends Error {
   code = "transfer_limit_exceeded";
+  /** 400, not 500 — this is a rejected request, not a server fault. */
+  status = 400;
 }
 
 /**
