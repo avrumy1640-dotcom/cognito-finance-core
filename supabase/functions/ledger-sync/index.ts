@@ -490,8 +490,9 @@ async function syncTransfers(
   const limit = Math.min(Math.max(Number(page.limit) || TX_PAGE_SIZE, 1), 500);
   const offset = Math.max(Number(page.offset) || 0, 0);
   const { data, count } = await admin
-    .from("column_transfers").select("*", { count: "exact" }).eq("user_id", userId)
+    .from("column_transfers").select("*", { count: "exact" }).in("bank_account_id", bankAccountIds)
     .order("occurred_at", { ascending: false })
+
     .range(offset, offset + limit - 1);
   const rows = data ?? [];
   return { rows, hasMore: offset + rows.length < (count ?? rows.length), total: count ?? rows.length };
