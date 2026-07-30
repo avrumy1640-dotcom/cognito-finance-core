@@ -114,8 +114,8 @@ const AddressAutocomplete = ({ label, value, onChange, onSelect, error, placehol
           onFocus={() => items.length > 0 && setOpen(true)}
           placeholder={placeholder ?? "Start typing your address"}
           className={cn(
-            "w-full p-3.5 pr-10 rounded-xl bg-secondary text-foreground text-sm border-2 outline-none transition-colors placeholder:text-muted-foreground/60",
-            error ? "border-destructive/60" : "border-transparent focus:border-primary/40",
+            "w-full py-5 px-4 pr-10 rounded-2xl bg-secondary text-foreground text-lg border-2 outline-none transition-all placeholder:text-muted-foreground/60 focus:bg-card",
+            error ? "border-destructive/60" : "border-transparent focus:border-primary/50",
           )}
         />
         {loading && (
