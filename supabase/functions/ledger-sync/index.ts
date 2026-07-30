@@ -272,9 +272,22 @@ async function ensureEntity(userId: string) {
   return row;
 }
 
+/**
+ * Column reports `verification_status` in UPPERCASE (`VERIFIED`, `PENDING`,
+ * `MANUAL_REVIEW`, `DENIED`, `UNVERIFIED`). Everything we persist and compare
+ * against is lowercase, so all ingest points funnel through here — a raw
+ * uppercase value silently failing an `=== "verified"` check is exactly the
+ * class of bug this prevents.
+ */
+export function normalizeVerification(raw: unknown): string {
+  const v = String(raw ?? "").trim().toLowerCase();
+  return v || "unverified";
+}
+
 /** Maps the provider verification verdict onto our own kyc_profiles status. */
 async function syncKycStatus(userId: string, verification?: string) {
-  const v = String(verification ?? "").toLowerCase();
+  const v = normalizeVerification(verification);
+
   const status = v === "verified" ? "verified"
     : v === "denied" || v === "rejected" ? "rejected"
     : v === "manual_review" || v === "pending" ? "pending"
