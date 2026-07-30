@@ -574,9 +574,32 @@ async function accountsFor(userId: string) {
   return data;
 }
 
+/**
+ * Resolve a source/destination account STRICTLY within the caller's own rows.
+ *
+ * `rows` is already scoped to the authenticated user, and an unrecognised
+ * selector now throws instead of silently falling back to the first account —
+ * a tampered `from`/`to` must fail loudly, never quietly debit something else.
+ */
 function pickAccount(rows: any[], which?: string) {
   if (!which) return rows[0];
-  return rows.find((r) => r.account_type === which) ?? rows.find((r) => r.bank_account_id === which) ?? rows[0];
+  const match = rows.find((r) => r.account_type === which)
+    ?? rows.find((r) => r.bank_account_id === which);
+  if (!match) throw new Error("That account isn't one of yours");
+  return match;
+}
+
+/**
+ * A counterparty id supplied by the client is only usable if the caller
+ * created it. Without this check, a tampered request body could wire money to
+ * another user's saved recipient.
+ */
+async function assertOwnCounterparty(userId: string, counterpartyId: string) {
+  const { data } = await admin.from("column_counterparties")
+    .select("counterparty_id").eq("user_id", userId)
+    .eq("counterparty_id", counterpartyId).maybeSingle();
+  if (!data) throw new Error("Unknown recipient — add the account details again");
+  return counterpartyId;
 }
 
 export interface WireAddress {
@@ -708,7 +731,8 @@ async function doTransfer(userId: string, body: any) {
   if (kind === "ach" || kind === "ach_pull") {
     const from = pickAccount(rows, body.from ?? "checking");
     const counterpartyId = body.counterpartyId
-      ?? await ensureCounterparty(userId, {
+      ? await assertOwnCounterparty(userId, String(body.counterpartyId))
+      : await ensureCounterparty(userId, {
         name: body.name ?? "External account",
         routingNumber: body.routingNumber,
         accountNumber: body.accountNumber,
@@ -733,7 +757,8 @@ async function doTransfer(userId: string, body: any) {
   if (kind === "wire") {
     const from = pickAccount(rows, body.from ?? "checking");
     const counterpartyId = body.counterpartyId
-      ?? await ensureCounterparty(userId, {
+      ? await assertOwnCounterparty(userId, String(body.counterpartyId))
+      : await ensureCounterparty(userId, {
         name: body.name ?? "Beneficiary",
         routingNumber: body.routingNumber,
         accountNumber: body.accountNumber,
@@ -1351,6 +1376,25 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+    const bearer = authHeader.slice(7).trim();
+
+    const body = await req.json().catch(() => ({}));
+
+    // Service-to-service path: the scheduled-transfer executor runs a transfer
+    // on a user's behalf. Only the service role may do this, and it may only
+    // run "transfer" — never an admin action.
+    if (bearer && bearer === SERVICE_KEY && typeof body?.onBehalfOf === "string") {
+      if (String(body?.action ?? "") !== "transfer") {
+        return json({ error: "Forbidden" }, 403);
+      }
+      const result = await doTransfer(body.onBehalfOf, body);
+      return json(result);
+    }
+    // Anyone else asking to act "on behalf of" someone is rejected outright
+    // rather than quietly downgraded to their own identity.
+    if (body?.onBehalfOf !== undefined) return json({ error: "Forbidden" }, 403);
+
+
 
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
@@ -1360,7 +1404,7 @@ Deno.serve(async (req) => {
     const user = userData?.user;
     if (!user) return json({ error: "Unauthorized" }, 401);
 
-    const body = await req.json().catch(() => ({}));
+
     const action = String(body?.action ?? "");
     // Activity feed load-more window for the mirrored transfer table.
     const page = { limit: Number(body?.limit) || undefined, offset: Number(body?.offset) || undefined };

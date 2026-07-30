@@ -108,11 +108,42 @@ Deno.serve(async (req) => {
       try {
         const amount = Number(row.amount);
         if (!Number.isFinite(amount) || amount <= 0) throw new Error("Invalid transfer amount");
-        const supportedKinds = ["internal", "external", "wire", "bill"];
-        if (!supportedKinds.includes(row.kind)) {
-          throw new Error(`Transfer type "${row.kind}" is not supported`);
+        if (row.kind !== "internal") {
+          throw new Error(
+            `Recurring "${row.kind}" transfers aren't supported yet — only transfers between your own accounts run automatically`,
+          );
         }
-        ref = makeRef();
+        const to = String(row.to_label ?? "").trim().toLowerCase();
+        if (to !== "checking" && to !== "savings") {
+          throw new Error('Destination must be "checking" or "savings"');
+        }
+        const from = String(row.from_account ?? "").trim().toLowerCase();
+        if (from === to) throw new Error("Choose two different accounts");
+
+        // Execute through the same server-side money-movement path the app
+        // uses, so ownership checks, provider calls and the mirrored ledger
+        // all behave identically. `requestId` is the occurrence key, which
+        // makes a replayed occurrence idempotent at the provider too.
+        const res = await fetch(`${supabaseUrl}/functions/v1/ledger-sync`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${serviceKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action: "transfer",
+            onBehalfOf: row.user_id,
+            kind: "book",
+            from, to, amount,
+            description: row.memo || "Scheduled transfer",
+            requestId: key,
+          }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || payload?.error) {
+          throw new Error(String(payload?.error ?? `Transfer failed (${res.status})`));
+        }
+        ref = String(payload?.transferId ?? makeRef());
         ok = true;
       } catch (err) {
         failure = err instanceof Error ? err.message : String(err);

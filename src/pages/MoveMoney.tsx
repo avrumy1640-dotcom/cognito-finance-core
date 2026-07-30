@@ -24,27 +24,29 @@ import RequireKyc from "@/components/RequireKyc";
 import { FeesTimingCard, LimitsCheckPanel } from "@/components/money/FeesTimingCard";
 import { checkLimits } from "@/lib/txPolicy";
 
-// Primary tiles kept intentionally small (Chime/Revolut pattern). Send is now
-// a hub screen with a method selector (P2P, ACH, Wire). Advanced actions
-// (Scheduled, Bill Pay, Beneficiaries) live behind the More sheet so the
-// first-time user isn't overwhelmed.
+// Primary tiles kept intentionally small (Chime/Revolut pattern). Send is a
+// hub screen with a method selector (own accounts, ACH, Wire). Advanced
+// actions (Scheduled, Bill Pay, Beneficiaries) live behind the More sheet so
+// the first-time user isn't overwhelmed.
 const primaryActions = [
-  { label: "Send", desc: "Person, bank, or wire", icon: Send, id: "send" },
-  { label: "Add Money", desc: "Wire, SEPA, or debit card", icon: Plus, id: "add" },
-  { label: "Request", desc: "Ask someone to pay you", icon: QrCode, id: "receive" },
-  { label: "More", desc: "Scheduled, bills, beneficiaries", icon: ChevronRight, id: "more" },
+  { label: "Move", desc: "Between accounts · Instant", icon: ArrowLeftRight, id: "transfer" },
+  { label: "Send", desc: "Bank transfer or wire", icon: Send, id: "send" },
+  { label: "Add Money", desc: "Pull from an external bank", icon: Plus, id: "add" },
+  { label: "More", desc: "Scheduled, bills, requests", icon: ChevronRight, id: "more" },
 ];
 
+// Every method here maps to a real rail our banking partner supports. Speed
+// and cost are stated on the tile so the choice is obvious before you tap.
 const sendMethods = [
   { label: "Between my accounts", desc: "Instant · Free", icon: ArrowLeftRight, id: "transfer" },
-  { label: "To another person", desc: "By email or phone · Instant", icon: Send, id: "send" },
   { label: "Bank transfer (ACH)", desc: "1–3 business days · Free", icon: Building2, id: "external" },
-  { label: "Wire transfer", desc: "Same-day domestic · $25 fee", icon: Globe, id: "wire" },
+  { label: "Wire transfer", desc: "Same business day · $25 fee", icon: Globe, id: "wire" },
 ];
 
 const moreActions = [
+  { label: "Receive money", desc: "Share your account details or a QR", icon: QrCode, path: "/receive" },
   { label: "Scheduled Transfers", desc: "Automate future payments", icon: CalendarClock, path: "/scheduled" },
-  { label: "Pay Bills", desc: "One-time or recurring · 1–2 days", icon: Receipt, path: null, id: "bills" as const },
+  { label: "Pay Bills", desc: "ACH credit to a biller · 1–3 days", icon: Receipt, path: null, id: "bills" as const },
   { label: "Beneficiaries", desc: "Manage saved recipients", icon: Building2, path: "/beneficiaries" },
   { label: "Payment Requests", desc: "Track incoming requests", icon: QrCode, path: "/payment-requests" },
   { label: "Direct Deposit", desc: "Get your pay sent here", icon: Building2, path: "/direct-deposit" },
@@ -55,9 +57,9 @@ const MoveMoney = () => {
   const navigate = useNavigate();
   const { action: routeAction } = useParams();
   const { canMoveMoney } = useKyc();
-  const initial = routeAction && ["transfer", "send", "external", "wire", "add", "bills"].includes(routeAction) ? routeAction : null;
+  const initial = routeAction && ["transfer", "external", "wire", "add", "bills"].includes(routeAction) ? routeAction : null;
   const [selected, setSelected] = useState<string | null>(initial);
-  const [sendPickerOpen, setSendPickerOpen] = useState(false);
+  const [sendPickerOpen, setSendPickerOpen] = useState(routeAction === "send");
   const [moreOpen, setMoreOpen] = useState(false);
 
   if (!canMoveMoney) {
@@ -72,7 +74,7 @@ const MoveMoney = () => {
     if (id === "receive") { navigate("/receive"); return; }
     if (id === "more") { setMoreOpen(true); return; }
     if (id === "send") { setSendPickerOpen(true); return; }
-    if (id === "add") { setSelected("add"); return; }
+    setSelected(id);
   };
 
   return (
@@ -191,7 +193,7 @@ const MoveMoney = () => {
 
         <AnimatePresence>
           {selected === "transfer" && <TransferSheet onClose={() => setSelected(null)} />}
-          {selected === "send" && <SendMoneySheet onClose={() => setSelected(null)} />}
+          
           {selected === "bills" && <BillPaySheet onClose={() => setSelected(null)} />}
           {selected === "external" && <ExternalTransferSheet onClose={() => setSelected(null)} />}
           {selected === "wire" && <WireSheet onClose={() => setSelected(null)} />}
@@ -368,126 +370,48 @@ const Row = ({ label, value, bold, success }: { label: string; value: string; bo
   </div>
 );
 
-const SendMoneySheet = ({ onClose }: { onClose: () => void }) => {
-  const { accounts, send, spendable } = useBank();
-  const [step, setStep] = useState<"form" | "review" | "success">("form");
-  const [recipient, setRecipient] = useState("");
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const numAmount = Number(amount);
-  const insufficient = numAmount > spendable("checking");
-
-  const confirm = () => {
-    const ok = send({ from: "checking", amount: numAmount, recipient, note });
-    if (!ok) {
-      toast.error("Payment failed", { description: "Check recipient and amount." });
-      return;
-    }
-    toast.success(`Sent $${numAmount.toFixed(2)}`, { description: `to ${recipient}` });
-    setStep("success");
-  };
-
-  return (
-    <Sheet onClose={onClose}>
-      {step === "form" && (
-        <>
-          <h2 className="text-xl font-display font-bold text-foreground mb-5">Send Money</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Recipient</label>
-              <input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="Email, phone, or name" className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Amount</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">$</span>
-                <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full p-3 pl-8 rounded-xl bg-secondary text-foreground text-2xl font-bold border-0 outline-none text-balance-display" />
-              </div>
-              {insufficient && numAmount > 0 && <p className="text-xs text-destructive mt-1">Insufficient funds</p>}
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Note</label>
-              <input value={note} onChange={(e) => setNote(e.target.value)} className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none" placeholder="What's this for? 💸" />
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-              <button onClick={() => setStep("review")} disabled={!numAmount || !recipient.trim() || insufficient} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Review</button>
-            </div>
-          </div>
-        </>
-      )}
-      {step === "review" && (() => {
-        const limitCheck = checkLimits("send", numAmount);
-        return (
-          <>
-            <h2 className="text-xl font-display font-bold text-foreground mb-5">Review Payment</h2>
-            <GlassCard className="space-y-3 mb-3">
-              <Row label="To" value={recipient} />
-              <Row label="Amount" value={`$${numAmount.toFixed(2)}`} bold />
-              <Row label="From" value="Everyday Checking" />
-              {note && <Row label="Note" value={note} />}
-            </GlassCard>
-            <div className="space-y-3 mb-5">
-              <FeesTimingCard kind="send" amount={numAmount} />
-              <LimitsCheckPanel check={limitCheck} />
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setStep("form")} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Back</button>
-              <button onClick={confirm} disabled={!limitCheck.ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send</button>
-            </div>
-          </>
-        );
-      })()}
-      {step === "success" && (
-        <SuccessView title="Money Sent" subtitle={`$${numAmount.toFixed(2)} sent to ${recipient}`} onDone={onClose} />
-      )}
-    </Sheet>
-  );
-};
-
+// Instant peer-to-peer send was removed: our banking partner has no P2P rail,
+// so the screen could never complete a payment. Money leaves the bank via ACH
+// or wire, both of which are real, connected flows.
 // Mobile check deposit and the old "AddMoneySheet" stub have been removed —
-// mobile deposit is handled in-app, and Add Money is now handled
-// by the real AddMoneyPanel component (Bank Transfer / Debit Card / ACH).
+// Add Money is handled by the real AddMoneyPanel component.
 
 
 
 const BillPaySheet = ({ onClose }: { onClose: () => void }) => {
-  const { payBill, accounts, spendable } = useBank();
+  const { payBill, spendable } = useBank();
   const [biller, setBiller] = useState("");
+  const [routing, setRouting] = useState("");
+  const [account, setAccount] = useState("");
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<"form" | "success">("form");
   const num = Number(amount);
   const insufficient = num > spendable("checking");
+  const routingValid = routing.replace(/\D/g, "").length === 9;
+  const canPay = !!num && !!biller.trim() && routingValid && !!account.trim() && !insufficient && checkLimits("bill", num).ok;
 
   const pay = () => {
-    const ok = payBill({ from: "checking", amount: num, biller });
-    if (!ok) {
-      toast.error("Payment failed");
-      return;
-    }
-    toast.success(`Paid $${num.toFixed(2)}`, { description: `to ${biller}` });
+    const ok = payBill({
+      from: "checking", amount: num, biller,
+      routingNumber: routing, accountNumber: account,
+    });
+    if (!ok) return;
     setStep("success");
   };
-
-  const suggested = ["PG&E Utilities", "Comcast Xfinity", "Verizon Wireless", "State Farm Insurance", "Rent"];
 
   return (
     <Sheet onClose={onClose}>
       {step === "form" && (
         <>
-          <h2 className="text-xl font-display font-bold text-foreground mb-5">Pay a Bill</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Biller</label>
-              <input value={biller} onChange={(e) => setBiller(e.target.value)} placeholder="Search or type biller name" className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none" />
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {suggested.map((b) => (
-                  <button key={b} onClick={() => setBiller(b)} className="text-xs px-2.5 py-1 rounded-full bg-secondary text-muted-foreground hover:text-foreground">
-                    {b}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <h2 className="text-xl font-display font-bold text-foreground mb-2">Pay a Bill</h2>
+          <p className="text-sm text-muted-foreground mb-5">
+            Sent as a standard ACH credit from Everyday Checking — the biller's routing and account number are required.
+          </p>
+          <div className="space-y-3">
+            <Field label="Biller name" value={biller} onChange={setBiller} placeholder="PG&E Utilities, Rent…" />
+            <Field label="Biller routing number" value={routing} onChange={setRouting} placeholder="9 digits" />
+            {routing && !routingValid && <p className="text-xs text-destructive -mt-1">Routing number must be 9 digits</p>}
+            <Field label="Biller account number" value={account} onChange={setAccount} placeholder="Your account with the biller" />
             <div>
               <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Amount</label>
               <div className="relative">
@@ -500,7 +424,7 @@ const BillPaySheet = ({ onClose }: { onClose: () => void }) => {
             <LimitsCheckPanel check={checkLimits("bill", num)} />
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-              <button onClick={pay} disabled={!num || !biller.trim() || insufficient || !checkLimits("bill", num).ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Pay Now</button>
+              <button onClick={pay} disabled={!canPay} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Pay Now</button>
             </div>
           </div>
         </>

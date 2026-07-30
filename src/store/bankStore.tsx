@@ -145,8 +145,10 @@ interface Ctx {
   retry: () => void;
   setTransactionCategory: (id: string, category: string) => Promise<void>;
   transfer: (args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => boolean;
-  send: (args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => boolean;
-  depositCheck: (args: { to: "checking" | "savings"; amount: number }) => boolean;
+  /**
+   * Bill pay is an ACH credit to the biller, so the biller's routing and
+   * account number are mandatory — there is no fake "pay anyone" rail.
+   */
   payBill: (args: { from: "checking" | "savings"; amount: number; biller: string; routingNumber?: string; accountNumber?: string }) => boolean;
   externalTransfer: (args: { from: "checking" | "savings"; amount: number; bank: string; routingNumber: string; accountNumber: string; memo?: string }) => boolean;
   wireTransfer: (args: WireTransferArgs) => boolean;
@@ -572,19 +574,10 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     return true;
   }, [runLiveTransfer]);
 
-  const send = useCallback((args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => {
-    toast.error("Instant peer-to-peer send isn't supported", {
-      description: "Use Bank transfer (ACH) or Wire to move money to a real account.",
-    });
-    return false;
-  }, []);
+  // Instant peer-to-peer send and mobile check deposit were removed rather
+  // than left as buttons that always error — neither rail exists here.
 
-  const depositCheck = useCallback((_args: { to: "checking" | "savings"; amount: number }) => {
-    toast.error("Mobile check deposit isn't supported", {
-      description: "Fund the account with an incoming bank transfer instead.",
-    });
-    return false;
-  }, []);
+
 
   const payBill = useCallback((args: { from: "checking" | "savings"; amount: number; biller: string; routingNumber?: string; accountNumber?: string }) => {
     if (args.amount <= 0 || !args.biller.trim()) return false;
@@ -861,8 +854,6 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     retry: () => void refreshLedger(),
     setTransactionCategory,
     transfer,
-    send,
-    depositCheck,
     payBill,
     externalTransfer,
     wireTransfer,
