@@ -44,8 +44,9 @@ const sendMethods = [
 ];
 
 const moreActions = [
+  { label: "Receive money", desc: "Share your account details or a QR", icon: QrCode, path: "/receive" },
   { label: "Scheduled Transfers", desc: "Automate future payments", icon: CalendarClock, path: "/scheduled" },
-  { label: "Pay Bills", desc: "One-time or recurring · 1–2 days", icon: Receipt, path: null, id: "bills" as const },
+  { label: "Pay Bills", desc: "ACH credit to a biller · 1–3 days", icon: Receipt, path: null, id: "bills" as const },
   { label: "Beneficiaries", desc: "Manage saved recipients", icon: Building2, path: "/beneficiaries" },
   { label: "Payment Requests", desc: "Track incoming requests", icon: QrCode, path: "/payment-requests" },
   { label: "Direct Deposit", desc: "Get your pay sent here", icon: Building2, path: "/direct-deposit" },
@@ -56,9 +57,9 @@ const MoveMoney = () => {
   const navigate = useNavigate();
   const { action: routeAction } = useParams();
   const { canMoveMoney } = useKyc();
-  const initial = routeAction && ["transfer", "send", "external", "wire", "add", "bills"].includes(routeAction) ? routeAction : null;
+  const initial = routeAction && ["transfer", "external", "wire", "add", "bills"].includes(routeAction) ? routeAction : null;
   const [selected, setSelected] = useState<string | null>(initial);
-  const [sendPickerOpen, setSendPickerOpen] = useState(false);
+  const [sendPickerOpen, setSendPickerOpen] = useState(routeAction === "send");
   const [moreOpen, setMoreOpen] = useState(false);
 
   if (!canMoveMoney) {
@@ -73,7 +74,7 @@ const MoveMoney = () => {
     if (id === "receive") { navigate("/receive"); return; }
     if (id === "more") { setMoreOpen(true); return; }
     if (id === "send") { setSendPickerOpen(true); return; }
-    if (id === "add") { setSelected("add"); return; }
+    setSelected(id);
   };
 
   return (
