@@ -408,12 +408,15 @@ async function syncTransfers(
 ) {
   if (!bankAccountIds.length) return { rows: [], hasMore: false, total: 0 };
 
+  // Scoped by ACCOUNT, not by user: a joint account's history belongs to every
+  // owner, so the watermark must consider rows first mirrored by a co-owner.
   const [{ data: newest }, { count: stalePending }] = await Promise.all([
-    admin.from("column_transfers").select("occurred_at").eq("user_id", userId)
+    admin.from("column_transfers").select("occurred_at").in("bank_account_id", bankAccountIds)
       .order("occurred_at", { ascending: false }).limit(1).maybeSingle(),
     admin.from("column_transfers").select("transfer_id", { count: "exact", head: true })
-      .eq("user_id", userId).not("status", "in", '("completed","settled","posted","returned","canceled")'),
+      .in("bank_account_id", bankAccountIds).not("status", "in", '("completed","settled","posted","returned","canceled")'),
   ]);
+
   const watermark = newest?.occurred_at ? Date.parse(newest.occurred_at as string) : null;
   const fullWalk = watermark === null || (stalePending ?? 0) > 0;
 
