@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { KycProfile, KycStatus } from "@/hooks/useKyc";
-import { ledgerProvider } from "@/lib/ledgerProvider";
+import { ledgerProvider, type ComplianceItem } from "@/lib/ledgerProvider";
 
 type DisplayState = "unverified" | "pending" | "under_review" | "verified" | "rejected";
 
