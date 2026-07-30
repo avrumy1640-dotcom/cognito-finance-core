@@ -276,11 +276,10 @@ const ScheduleForm = ({ initial, onClose, onSaved, accountsAvailable }: {
             <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Type</label>
             <select value={kind} onChange={(e) => setKind(e.target.value as TransferKind)} className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm outline-none border-0">
               <option value="internal">Between my accounts</option>
-              <option value="send">Send to a person</option>
-              <option value="external">ACH to external bank</option>
-              <option value="wire">Wire transfer</option>
-              <option value="bill">Bill payment</option>
             </select>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Recurring ACH, wire and bill payments aren't automated yet — send those from Move Money.
+            </p>
           </div>
           <div>
             <label className="text-xs text-muted-foreground font-medium mb-1.5 block">From account</label>
@@ -289,8 +288,11 @@ const ScheduleForm = ({ initial, onClose, onSaved, accountsAvailable }: {
             </select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Recipient / destination label</label>
-            <input value={toLabel} onChange={(e) => setToLabel(e.target.value)} placeholder={kind === "internal" ? "checking or savings" : "Name or account label"} className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm outline-none border-0" />
+            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">To account</label>
+            <select value={toLabel} onChange={(e) => setToLabel(e.target.value)} className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm outline-none border-0">
+              <option value="">Choose an account…</option>
+              {accountsAvailable.filter((a) => a !== fromAccount).map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
           </div>
           <div>
             <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Amount (USD)</label>
