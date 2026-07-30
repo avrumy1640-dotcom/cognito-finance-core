@@ -327,6 +327,14 @@ function buildSteps(data: Data): Step[] {
           placeholder="Start typing your address"
         />
         <TextInput
+          value={data.address_line2}
+          onChange={(v) => setField("address_line2", v)}
+          placeholder="Apt, suite or unit (optional)"
+          autoComplete="address-line2"
+          autoFocus={false}
+        />
+        <TextInput
+
           value={data.address_city}
           onChange={(v) => setField("address_city", v)}
           placeholder="City"
