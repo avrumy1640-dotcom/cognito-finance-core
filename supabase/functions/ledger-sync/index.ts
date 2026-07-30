@@ -1376,6 +1376,20 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+    const bearer = authHeader.slice(7).trim();
+
+    const body = await req.json().catch(() => ({}));
+
+    // Service-to-service path: the scheduled-transfer executor runs a transfer
+    // on a user's behalf. Only the service role may do this, and it may only
+    // run "transfer" — never an admin action.
+    if (bearer && bearer === SERVICE_KEY && typeof body?.onBehalfOf === "string") {
+      if (String(body?.action ?? "") !== "transfer") {
+        return json({ error: "Forbidden" }, 403);
+      }
+      const result = await doTransfer(body.onBehalfOf, body);
+      return json(result);
+    }
 
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
@@ -1385,7 +1399,7 @@ Deno.serve(async (req) => {
     const user = userData?.user;
     if (!user) return json({ error: "Unauthorized" }, 401);
 
-    const body = await req.json().catch(() => ({}));
+
     const action = String(body?.action ?? "");
     // Activity feed load-more window for the mirrored transfer table.
     const page = { limit: Number(body?.limit) || undefined, offset: Number(body?.offset) || undefined };
