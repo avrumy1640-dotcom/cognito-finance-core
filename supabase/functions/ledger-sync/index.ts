@@ -749,6 +749,63 @@ async function doTransfer(userId: string, body: any) {
 }
 
 /**
+ * Column's `document_type` and `purposes` are FIXED ENUMS — an arbitrary
+ * string ("selfie", "drivers_license") is rejected by the API, which is how a
+ * document upload can silently fail. We validate here, and map the few
+ * app-side labels that don't line up onto the real enum member.
+ */
+const DOCUMENT_TYPES = new Set([
+  "identity_license", "identity_passport", "identity_utility",
+  "bank_statement", "bank_transaction_report", "bank_summary_report",
+  "dda_agreement", "w9", "irs_letter", "check_attachment",
+  "monthly_statement", "daily_statement",
+  "certificate_of_business_formation", "company_bylaws_or_agreements",
+  "certificate_of_good_standing", "ownership_structure", "ein_confirmation",
+  "business_license_or_permit", "source_of_funds_document",
+  "source_of_wealth_document", "complete_customer_file", "other",
+]);
+
+/** App label → Column enum. Anything already valid passes through untouched. */
+const DOCUMENT_TYPE_ALIASES: Record<string, string> = {
+  selfie: "other",
+  drivers_license: "identity_license",
+  license: "identity_license",
+  passport: "identity_passport",
+  id_card: "identity_license",
+  utility_bill: "identity_utility",
+  proof_of_address: "identity_utility",
+};
+
+const EVIDENCE_PURPOSES = new Set([
+  "proof_of_address", "business_formation", "identity_verification",
+  "tax_id_confirmation", "active_status_certificate", "signed_account_agreement",
+  "cardholder_agreement", "attestation_control_person",
+  "attestation_beneficial_ownership", "attestation_account_info_truth",
+  "attestation_terms_of_service", "ofac_screening", "adverse_media_screening",
+  "pep_screening", "complete_customer_file", "irs_form_ss4", "irs_form_990",
+  "nonprofit_other_evidence", "edd", "attestation_privacy_policy",
+]);
+
+function resolveDocumentType(raw: unknown): string {
+  const v = String(raw ?? "").trim().toLowerCase();
+  const mapped = DOCUMENT_TYPE_ALIASES[v] ?? v;
+  if (!DOCUMENT_TYPES.has(mapped)) {
+    throw new Error(`Unsupported document type "${v}"`);
+  }
+  return mapped;
+}
+
+function resolvePurposes(raw: unknown): string[] {
+  const list = (Array.isArray(raw) ? raw : [raw])
+    .map((p) => String(p ?? "").trim().toLowerCase())
+    .filter(Boolean);
+  const out = list.filter((p) => EVIDENCE_PURPOSES.has(p));
+  const bad = list.filter((p) => !EVIDENCE_PURPOSES.has(p));
+  if (bad.length) throw new Error(`Unsupported evidence purpose "${bad[0]}"`);
+  return out.length ? out : ["identity_verification"];
+}
+
+/**
  * Uploads a KYC document to Column and links it to the caller's entity as
  * verification evidence in a single multipart call.
  */
@@ -764,13 +821,16 @@ async function submitEvidence(userId: string, body: any) {
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   if (bytes.byteLength > 8 * 1024 * 1024) throw new Error("File is too large (max 8 MB)");
 
-  const documentType = String(body.documentType ?? "drivers_license").slice(0, 64);
+  const documentType = resolveDocumentType(body.documentType ?? "identity_license");
+  const purposes = resolvePurposes(body.purposes ?? body.purpose);
   const ext = mime.includes("png") ? "png" : mime.includes("pdf") ? "pdf" : "jpg";
 
   const form = new FormData();
   form.append("file", new Blob([bytes], { type: mime }), `${documentType}.${ext}`);
   form.append("evidence_type", "file");
-  form.append("purposes", String(body.purpose ?? "identity_verification"));
+  // One record per purpose, all referencing the same file — Column expects the
+  // repeated field, not a comma-joined string.
+  for (const p of purposes) form.append("purposes", p);
   form.append("document_type", documentType);
 
   const res = await column<any>(`/entities/${entity.entity_id}/documents`, {
@@ -781,11 +841,55 @@ async function submitEvidence(userId: string, body: any) {
   return { documentId: res?.id ?? null, entityId: entity.entity_id, status: res?.status ?? "submitted" };
 }
 
-/** Compliance view: exactly which required fields Column is still waiting on. */
+/**
+ * Compliance view: exactly which required fields Column is still waiting on.
+ *
+ * Column reports FOUR per-field statuses — `complete`, `missing`, `invalid`
+ * and `pending` — so we normalise the (variably-shaped) response into a flat
+ * list the UI can render without re-deriving the semantics.
+ */
+export interface ComplianceItem {
+  field: string;
+  status: "complete" | "missing" | "invalid" | "pending" | "unknown";
+  message?: string;
+}
+
+const FIELD_STATUSES = ["complete", "missing", "invalid", "pending"] as const;
+
+function normalizeCompliance(raw: any): ComplianceItem[] {
+  const out: ComplianceItem[] = [];
+  const push = (field: unknown, status: unknown, message?: unknown) => {
+    const s = String(status ?? "").trim().toLowerCase();
+    out.push({
+      field: String(field ?? "").trim() || "requirement",
+      status: (FIELD_STATUSES as readonly string[]).includes(s) ? (s as ComplianceItem["status"]) : "unknown",
+      message: message ? String(message) : undefined,
+    });
+  };
+
+  const source = raw?.requirements ?? raw?.fields ?? raw?.missing_fields ?? raw?.details ?? raw;
+  if (Array.isArray(source)) {
+    for (const r of source) {
+      if (typeof r === "string") push(r, "missing");
+      else push(r?.field ?? r?.name ?? r?.requirement, r?.status ?? r?.state, r?.description ?? r?.message);
+    }
+  } else if (source && typeof source === "object") {
+    for (const [field, val] of Object.entries(source)) {
+      if (typeof val === "string") push(field, val);
+      else if (val && typeof val === "object") {
+        push(field, (val as any).status ?? (val as any).state, (val as any).description ?? (val as any).message);
+      }
+    }
+  }
+  return out;
+}
+
 async function entityCompliance(entityId: string) {
   if (!/^[A-Za-z0-9_\-]+$/.test(entityId)) throw new Error("Invalid entity id");
-  return await column<any>(`/entities/${entityId}/compliance`);
+  const raw = await column<any>(`/entities/${entityId}/compliance`);
+  return { ...raw, items: normalizeCompliance(raw) };
 }
+
 
 
 /**
