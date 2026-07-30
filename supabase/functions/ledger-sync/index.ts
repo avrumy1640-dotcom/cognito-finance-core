@@ -1529,6 +1529,205 @@ async function reconcileEvents(limit = 200) {
 
 
 // ---------------------------------------------------------------------------
+// Joint accounts.
+//
+// Backed by Column's real ownership model: `POST /bank-accounts/{id}/owner`
+// with an `entity_id` adds a second verified entity as an owner of the same
+// account. Our `account_owners` table mirrors that so RLS grants both humans
+// access. Nothing here can be triggered unilaterally — an owner is only added
+// after the invitee explicitly accepts a request addressed to them.
+// ---------------------------------------------------------------------------
+
+/** Throws unless the caller is the PRIMARY owner of the account. */
+async function assertPrimaryOwner(userId: string, bankAccountId: string) {
+  const { data } = await admin.from("account_owners")
+    .select("role").eq("user_id", userId).eq("bank_account_id", bankAccountId).maybeSingle();
+  if (!data) throw new Error("That account isn't one of yours");
+  if (data.role !== "primary") throw new Error("Only the primary owner can manage joint owners");
+}
+
+async function verifiedEntityFor(userId: string) {
+  const { data } = await admin.from("column_entities")
+    .select("entity_id, verification_status").eq("user_id", userId).maybeSingle();
+  if (!data?.entity_id) return null;
+  const ok = String(data.verification_status ?? "").toLowerCase();
+  return ok === "verified" || ok === "approved" ? data.entity_id as string : null;
+}
+
+async function jointList(userId: string) {
+  const mine = await ownedAccountRows(userId);
+  const ids = mine.map((a) => a.bank_account_id);
+  const [{ data: incoming }, { data: outgoing }] = await Promise.all([
+    admin.from("joint_owner_requests").select("*").eq("invitee_user_id", userId).eq("status", "pending"),
+    ids.length
+      ? admin.from("joint_owner_requests").select("*").in("bank_account_id", ids).eq("requester_user_id", userId)
+        .order("created_at", { ascending: false }).limit(50)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
+  const userIds = [...new Set([...(incoming ?? []), ...(outgoing ?? [])]
+    .flatMap((r: any) => [r.requester_user_id, r.invitee_user_id]))];
+  const { data: profs } = userIds.length
+    ? await admin.from("profiles").select("user_id, preferred_name, email").in("user_id", userIds)
+    : { data: [] as any[] };
+  const nameOf = (id: string) => {
+    const p = (profs ?? []).find((x: any) => x.user_id === id);
+    return p?.preferred_name || (p?.email ? String(p.email).split("@")[0] : "Customer");
+  };
+  const accountName = (id: string) =>
+    mine.find((a) => a.bank_account_id === id)?.description ?? "Account";
+
+  const owners = await ownersFor(ids);
+  return {
+    incoming: (incoming ?? []).map((r: any) => ({
+      id: r.id, bankAccountId: r.bank_account_id, from: nameOf(r.requester_user_id),
+      createdAt: r.created_at,
+    })),
+    outgoing: (outgoing ?? []).map((r: any) => ({
+      id: r.id, bankAccountId: r.bank_account_id, accountName: accountName(r.bank_account_id),
+      to: nameOf(r.invitee_user_id), status: r.status, createdAt: r.created_at,
+    })),
+    accounts: mine.map((a) => ({
+      id: a.bank_account_id,
+      name: a.description ?? "Account",
+      type: a.account_type,
+      myRole: a.owner_role,
+      owners: (owners.get(a.bank_account_id) ?? []).map((o) => ({
+        userId: o.userId, name: o.name, role: o.role, isMe: o.userId === userId,
+      })),
+    })),
+  };
+}
+
+async function jointRequest(userId: string, body: any) {
+  const bankAccountId = String(body?.bankAccountId ?? "");
+  const email = String(body?.email ?? "").trim().toLowerCase();
+  if (!bankAccountId) throw new Error("Choose an account");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Enter a valid email address");
+  await assertPrimaryOwner(userId, bankAccountId);
+
+  // Deliberately opaque from here on: this endpoint must never become a way to
+  // discover whether an email belongs to a customer. Every non-actionable
+  // outcome returns the SAME response as a successful send.
+  const opaque = {
+    sent: true,
+    message: `If ${email} belongs to a verified Glass Bank customer, the request is now waiting in their app for approval.`,
+  };
+
+  const { data: prof } = await admin.from("profiles")
+    .select("user_id, email").ilike("email", email).maybeSingle();
+  const inviteeId = prof?.user_id as string | undefined;
+  if (!inviteeId || inviteeId === userId) return opaque;
+  if (!(await verifiedEntityFor(inviteeId))) return opaque;
+
+  const { data: already } = await admin.from("account_owners")
+    .select("id").eq("bank_account_id", bankAccountId).eq("user_id", inviteeId).maybeSingle();
+  if (already) return opaque;
+
+  await admin.from("joint_owner_requests")
+    .upsert({
+      bank_account_id: bankAccountId,
+      requester_user_id: userId,
+      invitee_user_id: inviteeId,
+      status: "pending",
+    }, { onConflict: "bank_account_id,invitee_user_id", ignoreDuplicates: true });
+
+  try {
+    await admin.from("notifications").insert({
+      user_id: inviteeId,
+      title: "Joint account request",
+      body: "Someone invited you to become a joint owner of their account.",
+      kind: "security",
+    });
+  } catch { /* notifications table is optional */ }
+
+  return opaque;
+}
+
+async function jointRespond(userId: string, body: any) {
+  const requestId = String(body?.requestId ?? "");
+  const accept = !!body?.accept;
+  // Scoped to the INVITEE: nobody can accept a request addressed to someone else.
+  const { data: reqRow } = await admin.from("joint_owner_requests")
+    .select("*").eq("id", requestId).eq("invitee_user_id", userId).eq("status", "pending").maybeSingle();
+  if (!reqRow) throw new Error("That request is no longer available");
+
+  if (!accept) {
+    await admin.from("joint_owner_requests")
+      .update({ status: "declined", responded_at: new Date().toISOString() }).eq("id", requestId);
+    return { status: "declined" };
+  }
+
+  const entityId = await verifiedEntityFor(userId);
+  if (!entityId) throw new Error("Finish your identity verification before joining an account");
+
+  // Column is the source of truth for ownership — it must accept the new owner
+  // before we grant anyone access on our side.
+  await column<any>(`/bank-accounts/${reqRow.bank_account_id}/owner`, {
+    method: "POST",
+    body: { entity_id: entityId },
+    idempotencyKey: `joint-${reqRow.id}`,
+  });
+
+  await admin.from("account_owners").upsert({
+    bank_account_id: reqRow.bank_account_id,
+    user_id: userId,
+    entity_id: entityId,
+    role: "joint",
+  }, { onConflict: "bank_account_id,user_id" });
+
+  await admin.from("joint_owner_requests")
+    .update({ status: "accepted", responded_at: new Date().toISOString() }).eq("id", requestId);
+
+  try {
+    await admin.from("notifications").insert({
+      user_id: reqRow.requester_user_id,
+      title: "Joint owner added",
+      body: "Your joint account request was accepted.",
+      kind: "security",
+    });
+  } catch { /* optional */ }
+
+  return { status: "accepted", bankAccountId: reqRow.bank_account_id };
+}
+
+async function jointCancel(userId: string, body: any) {
+  const requestId = String(body?.requestId ?? "");
+  const { error } = await admin.from("joint_owner_requests")
+    .update({ status: "canceled", responded_at: new Date().toISOString() })
+    .eq("id", requestId).eq("requester_user_id", userId).eq("status", "pending");
+  if (error) throw new Error(error.message);
+  return { status: "canceled" };
+}
+
+async function jointRemove(userId: string, body: any) {
+  const bankAccountId = String(body?.bankAccountId ?? "");
+  const targetUserId = String(body?.userId ?? userId);
+  const { data: target } = await admin.from("account_owners")
+    .select("*").eq("bank_account_id", bankAccountId).eq("user_id", targetUserId).maybeSingle();
+  if (!target) throw new Error("That person isn't an owner of this account");
+  if (target.role === "primary") throw new Error("The primary owner can't be removed — close the account instead");
+  // Either you're removing yourself (leaving), or you're the primary owner.
+  if (targetUserId !== userId) await assertPrimaryOwner(userId, bankAccountId);
+
+  // Column documents ADDING an owner; removal is not a documented public
+  // endpoint, so we attempt it and report the outcome honestly rather than
+  // pretending the upstream change happened.
+  let providerRemoved = false;
+  let providerNote: string | null = null;
+  try {
+    await column<any>(`/bank-accounts/${bankAccountId}/owner/${target.entity_id}`, { method: "DELETE" });
+    providerRemoved = true;
+  } catch (e) {
+    providerNote = (e as Error).message;
+  }
+
+  await admin.from("account_owners").delete().eq("id", target.id);
+  return { removed: true, providerRemoved, providerNote };
+}
+
+// ---------------------------------------------------------------------------
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
