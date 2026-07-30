@@ -1637,7 +1637,7 @@ async function jointRequest(userId: string, body: any) {
       user_id: inviteeId,
       title: "Joint account request",
       body: "Someone invited you to become a joint owner of their account.",
-      kind: "security",
+      type: "security",
     });
   } catch { /* notifications table is optional */ }
 
@@ -1684,7 +1684,7 @@ async function jointRespond(userId: string, body: any) {
       user_id: reqRow.requester_user_id,
       title: "Joint owner added",
       body: "Your joint account request was accepted.",
-      kind: "security",
+      type: "security",
     });
   } catch { /* optional */ }
 
@@ -1773,7 +1773,7 @@ Deno.serve(async (req) => {
 
     // Rate limit per caller. Admin/mutating actions get a much tighter budget
     // than read-only status/sync polling.
-    const isMutating = isAdminAction || ["provision", "transfer", "submit_evidence"].includes(action);
+    const isMutating = isAdminAction || ["provision", "transfer", "submit_evidence", "joint_request", "joint_respond", "joint_cancel", "joint_remove"].includes(action);
     const rl = rateLimit(`ledger:${user.id}:${isMutating ? "write" : "read"}`, isMutating ? 10 : 60);
     if (!rl.allowed) return tooManyRequests(rl.retryAfter, corsHeaders);
 
