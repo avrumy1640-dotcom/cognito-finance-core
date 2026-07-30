@@ -318,6 +318,9 @@ function buildSteps(data: Data): Step[] {
           onChange={(v) => setField("address_street", v)}
           onSelect={(s) => {
             setField("address_street", s.street || s.label);
+            // Keep any unit the user already typed; only adopt the parsed one
+            // when the unit field is still empty.
+            if (s.unit && !data.address_line2.trim()) setField("address_line2", s.unit);
             if (s.city) setField("address_city", s.city);
             if (s.region) setField("address_region", s.region);
             if (s.postal_code) setField("address_postal_code", s.postal_code);
