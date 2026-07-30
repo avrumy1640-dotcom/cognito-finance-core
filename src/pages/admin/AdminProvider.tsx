@@ -202,6 +202,10 @@ const AdminProvider = () => {
         </div>
       </section>
 
+      <WebhookEndpoints />
+
+
+
 
       {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
