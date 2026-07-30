@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import DateOfBirthField from "@/components/form/DateOfBirthField";
+
 
 /* ============================================================================
  * Onboarding — reducer-driven state machine.
