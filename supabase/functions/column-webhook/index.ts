@@ -45,10 +45,13 @@ const cents = (n: unknown) => (typeof n === "number" ? n : 0);
  */
 const STATUS_RANK: Record<string, number> = {
   initiated: 0, scheduled: 0, pending: 1, pending_submission: 1,
-  manual_review: 2, submitted: 2,
+  hold: 1, pending_return: 1,
+  manual_review: 2, submitted: 2, acknowledged: 2,
   completed: 3, settled: 3, posted: 3,
   returned: 4, dishonored: 4, contested: 4, canceled: 4, cancelled: 4,
-  rejected: 4, failed: 4,
+  rejected: 4, failed: 4, nsf: 4,
+  // A return that was itself dishonoured/contested is later than the return.
+  return_dishonored: 5, return_contested: 5,
 };
 const rankOf = (s: string) => STATUS_RANK[s] ?? 1;
 
@@ -72,6 +75,22 @@ async function userForBankAccount(bankAccountId?: string) {
   return data?.user_id ?? null;
 }
 
+/**
+ * Every user entitled to see activity on this account. On a joint account the
+ * `column_bank_accounts.user_id` creator is only ONE of the owners, so
+ * notifying that column alone silently drops the co-owner off every alert.
+ */
+async function ownersOfBankAccount(bankAccountId?: string): Promise<string[]> {
+  if (!bankAccountId) return [];
+  const ids = new Set<string>();
+  const { data: owners } = await admin.from("account_owners")
+    .select("user_id").eq("bank_account_id", bankAccountId);
+  for (const o of owners ?? []) if (o?.user_id) ids.add(o.user_id);
+  const creator = await userForBankAccount(bankAccountId);
+  if (creator) ids.add(creator);
+  return [...ids];
+}
+
 async function notify(userId: string | null, args: { type: string; title: string; body?: string; dedupe_key: string }) {
   if (!userId) return;
   try {
@@ -79,24 +98,45 @@ async function notify(userId: string | null, args: { type: string; title: string
   } catch { /* notification delivery must never fail a webhook */ }
 }
 
+/** Fan a notification out to every owner, keeping dedupe keys per-user. */
+async function notifyOwners(
+  bankAccountId: string | undefined,
+  args: { type: string; title: string; body?: string; dedupe_key: string },
+) {
+  for (const uid of await ownersOfBankAccount(bankAccountId)) {
+    await notify(uid, { ...args, dedupe_key: `${args.dedupe_key}-${uid}` });
+  }
+}
+
+
 
 async function handleEvent(type: string, data: any) {
   // --- entity / identity verification ------------------------------------
-  // `identity.verification.*` carries the same verdict shape as `entity.*`.
+  // Column's real event names are `identity.verification.<verdict>`
+  // (verified / pending / manual_review / denied) plus lifecycle events such
+  // as `entity.updated`. Both carry the entity payload.
   if (type.startsWith("entity.") || type.startsWith("identity.")) {
-    const entityId = data?.id ?? data?.entity_id;
+    // On `identity.verification.*` the `id` can be the VERIFICATION object's
+    // id, not the entity's — prefer the explicit entity pointers so we don't
+    // update zero rows and silently drop the verdict.
+    const entityId = data?.entity_id ?? data?.person_entity_id
+      ?? data?.business_entity_id ?? data?.id;
     if (!entityId) return "ignored: no entity id";
     const tail = type.split(".").pop() ?? "";
+    const fromTail = tail === "verified" || tail === "approved" ? "verified"
+      : tail === "denied" || tail === "rejected" ? "denied"
+      : tail === "manual_review" || tail === "review" ? "manual_review"
+      : tail === "pending" ? "pending"
+      // `entity.created` / `entity.updated` are not verdicts. Guessing
+      // "pending" here would downgrade an already-verified customer.
+      : null;
+    const raw = data?.verification_status ?? fromTail;
+    if (!raw) return `entity ${entityId}: no verdict in "${type}", ignored`;
     // Column sends `verification_status` UPPERCASE (VERIFIED / PENDING /
     // MANUAL_REVIEW / DENIED / UNVERIFIED). Lowercase it immediately: every
     // comparison below (and everything we persist) is lowercase, so a raw
     // uppercase value would silently match nothing.
-    const status = String(
-      data?.verification_status
-        ?? (tail === "verified" || tail === "approved" ? "verified"
-          : tail === "denied" || tail === "rejected" ? "denied"
-          : tail === "manual_review" ? "manual_review" : "pending"),
-    ).trim().toLowerCase();
+    const status = String(raw).trim().toLowerCase();
 
     // Out-of-order safety: a late "pending" must not undo a decided verdict.
     const { data: current } = await admin.from("column_entities")
@@ -141,8 +181,7 @@ async function handleEvent(type: string, data: any) {
     const t = data ?? {};
     const transferId = t.id ?? t.transfer_id ?? "unknown";
     const accId = t.bank_account_id ?? t.sender_bank_account_id;
-    const userId = await userForBankAccount(accId);
-    await notify(userId, {
+    await notifyOwners(accId, {
       type: "alert",
       title: "Recipient bank details changed",
       body: t.change_code
@@ -209,15 +248,18 @@ async function handleEvent(type: string, data: any) {
       }, { onConflict: "transfer_id" });
     }
 
+    // Fan out to every owner: on a joint account both parties must see that
+    // money moved, not just whoever's id happens to sit on the mirror row.
+    const notifyAcc = accId ?? t.receiver_bank_account_id ?? t.sender_bank_account_id;
     if (["returned", "rejected", "failed", "canceled", "cancelled"].includes(status)) {
-      await notify(userId, {
+      await notifyOwners(notifyAcc, {
         type: "alert",
         title: `Transfer ${status}: $${(cents(t.amount) / 100).toFixed(2)}`,
         body: t.return_reason ?? t.reason ?? `${kind.toUpperCase()} transfer was ${status}.`,
         dedupe_key: `column-transfer-${transferId}-${status}`,
       });
     } else if (["completed", "settled", "posted"].includes(status)) {
-      await notify(userId, {
+      await notifyOwners(notifyAcc, {
         type: "transfer",
         title: `${isCredit ? "Money in" : "Money out"}: $${(cents(t.amount) / 100).toFixed(2)}`,
         body: t.description ?? `${kind.toUpperCase()} transfer ${status}`,
@@ -234,9 +276,9 @@ async function handleEvent(type: string, data: any) {
   // customer's Documents screen shows the bank's own statement, not ours.
   if (type.startsWith("reporting.")) {
     const r = data ?? {};
-    const accId = r.statement_subject_id ?? r.bank_account_id;
+    const accId = r.statement_subject_id ?? r.statement_subject ?? r.bank_account_id;
     if (!r.id || !accId) return "ignored: report without a subject account";
-    if (!type.includes("monthly_statement")) return `reporting event ${type} ignored`;
+    if (!type.includes("statement")) return `reporting event ${type} ignored`;
 
     await admin.from("account_statements").upsert({
       bank_account_id: String(accId),
@@ -250,8 +292,7 @@ async function handleEvent(type: string, data: any) {
       raw: r,
     }, { onConflict: "report_id" });
 
-    const userId = await userForBankAccount(String(accId));
-    await notify(userId, {
+    await notifyOwners(String(accId), {
       type: "alert",
       title: "Your monthly statement is ready",
       body: r.to_date ? `Statement period ending ${r.to_date} is available in Documents.` : "A new statement is available in Documents.",
@@ -264,35 +305,41 @@ async function handleEvent(type: string, data: any) {
   if (type.startsWith("bank_account.") || type.startsWith("account.")) {
     const accId = data?.id ?? data?.bank_account_id;
     if (!accId) return "ignored: no account id";
-    const overdrawn = type.includes("overdraft") || data?.is_overdrawn === true;
+    // `bank_account.overdraft_released` means the overdraft ENDED. Matching on
+    // the substring "overdraft" marked the account overdrawn on the very event
+    // that cleared it, leaving a permanent false alert.
+    const released = type.includes("overdraft_released") || type.includes("overdraft.released");
+    const overdrawn = typeof data?.is_overdrawn === "boolean"
+      ? data.is_overdrawn
+      : released ? false : type.includes("overdraft");
     const frozen = type.includes("frozen") || data?.is_frozen === true;
     // Column's account object reports a `status` string; `is_closed` is not a
     // real field, so trust `status` first and only then the event name.
     const raw = String(data?.status ?? "").trim().toLowerCase();
     const status = raw || (data?.is_closed || type.includes("closed") ? "closed" : frozen ? "frozen" : "open");
-    const { data: row } = await admin.from("column_bank_accounts").update({
-      balances: data?.balances ?? {},
-      is_overdrawn: overdrawn,
-      status,
-    }).eq("bank_account_id", accId).select("user_id").maybeSingle();
+    const update: Record<string, unknown> = { is_overdrawn: overdrawn, status };
+    // An event without balances (e.g. a freeze notice) must not blank out the
+    // balances we already hold.
+    if (data?.balances && Object.keys(data.balances).length) update.balances = data.balances;
+    await admin.from("column_bank_accounts").update(update).eq("bank_account_id", accId);
 
-    if (overdrawn && row?.user_id) {
-      await notify(row.user_id, {
+    if (overdrawn) {
+      await notifyOwners(String(accId), {
         type: "alert",
         title: "Your account is overdrawn",
         body: "Add funds to bring your balance back above zero.",
         dedupe_key: `column-overdraft-${accId}-${new Date().toISOString().slice(0, 10)}`,
       });
     }
-    if (frozen && row?.user_id) {
-      await notify(row.user_id, {
+    if (frozen) {
+      await notifyOwners(String(accId), {
         type: "alert",
         title: "Your account has been frozen",
         body: "Money movement is paused while our banking partner reviews the account. Contact support for help.",
         dedupe_key: `column-frozen-${accId}`,
       });
     }
-    return `account ${accId} → ${status}${overdrawn ? " (overdrawn)" : ""}`;
+    return `account ${accId} → ${status}${overdrawn ? " (overdrawn)" : released ? " (overdraft cleared)" : ""}`;
   }
 
 

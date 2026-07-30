@@ -448,11 +448,17 @@ async function refreshAccounts(userId: string) {
   for (const r of rows) {
     try {
       const live = await column<any>(`/bank-accounts/${r.bank_account_id}`);
+      const status = accountStatus(live);
+      const isOverdrawn = live.is_overdrawn === true
+        || balanceField(live.balances ?? {}, "available") < 0;
       await admin.from("column_bank_accounts").update({
         balances: live.balances ?? {},
-        status: accountStatus(live),
+        status,
+        is_overdrawn: isOverdrawn,
       }).eq("id", r.id);
-      out.push({ ...r, balances: live.balances ?? {} });
+      // Return the LIVE values, not the row we read a moment before the update
+      // — otherwise the snapshot renders a status we just proved to be stale.
+      out.push({ ...r, balances: live.balances ?? {}, status, is_overdrawn: isOverdrawn });
     } catch {
       out.push(r);
     }
@@ -615,7 +621,12 @@ async function snapshot(
         type: a.account_type ?? "checking",
         accountNumber: a.account_number_masked ?? "••••0000",
         routingNumber: a.routing_number ?? "",
-        status: a.status === "open" ? "Active" : "Closed",
+        // Column's real states are open / closed / frozen. Collapsing anything
+        // that isn't "open" into "Closed" hid a frozen account from the customer.
+        status: a.status === "open" ? "Active"
+          : a.status === "frozen" ? "Frozen"
+          : a.status === "closed" ? "Closed"
+          : String(a.status ?? "Unknown").replace(/^\w/, (c: string) => c.toUpperCase()),
         isOverdrawn: a.is_overdrawn ?? false,
         isJoint: owners.length > 1,
         myRole: (a as any).owner_role ?? "primary",
@@ -698,26 +709,30 @@ async function ensureCounterparty(userId: string, args: {
   if (routing.length !== 9) throw new Error("Routing number must be 9 digits");
   if (!account) throw new Error("Account number is required");
 
-  const name = args.name?.slice(0, 64) || "Counterparty";
+  // Column allows 127 characters on `name`; only the first 35 make it into a
+  // domestic wire message, but truncating our own copy loses information.
+  const name = args.name?.slice(0, 127) || "Counterparty";
 
   // Wires are OFAC-screened on the beneficiary, so Column requires a full
   // beneficiary address. ACH counterparties do not.
-  let wireBlock: Record<string, unknown> | undefined;
+  //
+  // The address is a TOP-LEVEL `address` object on the counterparty
+  // (`line_1` / `city` / `state` / `postal_code` / `country_code`). There is no
+  // `wire { beneficiary_address }` block in Column's API — sending one meant
+  // the beneficiary address never reached Column at all.
+  let addressBlock: Record<string, unknown> | undefined;
   if (args.wire) {
     const a = args.address ?? {};
     const missing = ["line1", "city", "state", "postalCode"].filter((k) => !String((a as any)[k] ?? "").trim());
     if (missing.length) {
       throw new Error("Wire recipients need a full beneficiary address (street, city, state, ZIP)");
     }
-    wireBlock = {
-      beneficiary_name: name,
-      beneficiary_address: {
-        line_1: String(a.line1).slice(0, 100),
-        city: String(a.city).slice(0, 60),
-        state: String(a.state).toUpperCase().slice(0, 3),
-        postal_code: String(a.postalCode).slice(0, 12),
-        country_code: (a.countryCode || "US").toUpperCase().slice(0, 2),
-      },
+    addressBlock = {
+      line_1: String(a.line1).slice(0, 100),
+      city: String(a.city).slice(0, 60),
+      state: String(a.state).toUpperCase().slice(0, 3),
+      postal_code: String(a.postalCode).slice(0, 12),
+      country_code: (a.countryCode || "US").toUpperCase().slice(0, 2),
     };
   }
 
@@ -729,16 +744,19 @@ async function ensureCounterparty(userId: string, args: {
       .maybeSingle();
     cachedId = cached?.counterparty_id ?? null;
   } catch { /* mirror table optional */ }
-  // A cached ACH-only counterparty has no wire block, so re-create for wires.
+  // A cached ACH-only counterparty carries no address, so re-create for wires.
   if (cachedId && !args.wire) return cachedId;
 
   const cp = await column<any>("/counterparties", {
     method: "POST",
     body: {
       routing_number: routing,
+      // Domestic ABA routing number — `bic` / `other` are the international
+      // variants and would change how Column resolves the institution.
+      routing_number_type: "aba",
       account_number: account,
       name,
-      ...(wireBlock ? { wire: wireBlock } : {}),
+      ...(addressBlock ? { address: addressBlock, legal_type: "individual" } : {}),
     },
     idempotencyKey: `counterparty-${userId}-${routing}-${account.slice(-4)}-${args.wire ? "wire" : "ach"}`,
   });
@@ -821,14 +839,24 @@ function windowStart(window: "daily" | "monthly") {
   return new Date(local.getTime() + offsetMs).toISOString();
 }
 
-/** Cents already used against a limit, from real settled + pending history. */
+/**
+ * Cents already used against a limit, from real settled + pending history.
+ *
+ * Scoped by ACCOUNT, not by `column_transfers.user_id`. That column is
+ * overwritten by whichever owner last ran a sync, so on a joint account it is
+ * not a stable attribution — scoping the usage window by the accounts the
+ * caller actually owns is both stable and the correct regulatory unit (the
+ * limit belongs to the account, not to whoever tapped Send).
+ */
 async function usedCents(userId: string, kind: LimitKind, limit: ServerLimit) {
+  const owned = (await ownedAccountRows(userId)).map((r) => r.bank_account_id);
+  if (!owned.length) return 0;
   // Book legs are mirrored twice (in + out); count only the debit leg.
   const direction = kind === "ach_pull" ? "credit" : "debit";
   const type = kind === "book" ? "book" : kind === "wire" ? "wire" : "ach";
   const { data } = await admin.from("column_transfers")
     .select("amount_cents")
-    .eq("user_id", userId)
+    .in("bank_account_id", owned)
     .eq("transfer_type", type)
     .eq("direction", direction)
     .gte("occurred_at", windowStart(limit.window))
@@ -920,6 +948,10 @@ async function doTransfer(userId: string, body: any) {
         counterparty_id: counterpartyId,
         type, amount, currency_code: "USD",
         entry_class_code: "PPD",
+        // Column marks `same_day` as required on ACH creation. Standard
+        // (next-day) settlement is what the UI promises, so send it explicitly
+        // instead of relying on an undocumented default.
+        same_day: false,
         // `description` is our own 255-char reference. The 10-character field
         // the RECEIVER sees on their statement is `company_entry_description`
         // — truncating `description` to 10 was throwing away the real memo.
@@ -1203,16 +1235,47 @@ async function registerWebhook(events?: string[]) {
   const match = existing.find((h) => String(h.url ?? "") === url);
   if (match) return { created: false, endpoint: match, url };
 
-  const created = await column<any>("/webhook-endpoints", {
+  // Sandbox: subscribe to everything so no callback is ever missed. Column has
+  // historically accepted the "*" wildcard, but rejects it on some accounts in
+  // favour of an explicit list — so fall back rather than leaving the project
+  // with no receiver at all.
+  const WILDCARD_FALLBACK = [
+    "identity.verification.verified",
+    "identity.verification.pending",
+    "identity.verification.denied",
+    "identity.verification.manual_review",
+    "bank_account.created",
+    "bank_account.updated",
+    "bank_account.overdrafted",
+    "bank_account.overdraft_released",
+    "ach.outgoing_transfer.completed",
+    "ach.outgoing_transfer.returned",
+    "ach.incoming_transfer.completed",
+    "ach.incoming_transfer.returned",
+    "ach.incoming_transfer.settled",
+    "book.transfer.completed",
+    "wire.outgoing_transfer.completed",
+    "wire.incoming_transfer.completed",
+    "reporting.bank_account_monthly_statement.completed",
+  ];
+
+  const post = (enabled: string[]) => column<any>("/webhook-endpoints", {
     method: "POST",
-    body: {
-      url,
-      description: "Glass Bank sandbox receiver",
-      // Sandbox: subscribe to everything so no callback is ever missed.
-      enabled_events: events?.length ? events : ["*"],
-    },
-    idempotencyKey: `webhook-endpoint-${url}`,
+    body: { url, description: "Glass Bank sandbox receiver", enabled_events: enabled },
+    idempotencyKey: `webhook-endpoint-${url}-${enabled.length === 1 ? "all" : "list"}`,
   });
+
+  let created: any;
+  if (events?.length) {
+    created = await post(events);
+  } else {
+    try {
+      created = await post(["*"]);
+    } catch (e) {
+      console.warn("wildcard webhook subscription rejected, using explicit list", (e as Error).message);
+      created = await post(WILDCARD_FALLBACK);
+    }
+  }
   return { created: true, endpoint: created, url };
 }
 
@@ -1245,7 +1308,9 @@ async function simulateAchReturn(userId: string, body: any) {
       amount,
       currency_code: "USD",
       entry_class_code: "PPD",
+      same_day: false,
       description: "SIMRTN",
+      company_entry_description: "SIMRTN",
     },
     idempotencyKey: `sim-return-${userId}-${magic}-${crypto.randomUUID()}`,
   });
@@ -1356,7 +1421,12 @@ async function drainAccount(acct: any): Promise<{ drained: boolean; note?: strin
   try {
     const cp = await column<any>("/counterparties", {
       method: "POST",
-      body: { routing_number: "021000021", account_number: "9999999999", name: "SANDBOX SWEEP" },
+      body: {
+        routing_number: "021000021",
+        routing_number_type: "aba",
+        account_number: "9999999999",
+        name: "SANDBOX SWEEP",
+      },
       idempotencyKey: `wipe-sweep-counterparty`,
     });
     const t = await column<any>("/transfers/ach", {
@@ -1368,7 +1438,9 @@ async function drainAccount(acct: any): Promise<{ drained: boolean; note?: strin
         amount: cents,
         currency_code: "USD",
         entry_class_code: "PPD",
+        same_day: false,
         description: "SWEEP",
+        company_entry_description: "SWEEP",
       },
       idempotencyKey: `wipe-sweep-${acct.id}-${cents}`,
     });
@@ -1434,9 +1506,15 @@ async function adminWipe(opts: { includeWebhooks?: boolean }) {
 
   if (opts.includeWebhooks) await run("webhook-endpoint", listed.webhookEndpoints);
 
-  // Local mirror
+  // Local mirror, cleared child-first so nothing survives pointing at an id
+  // Column has already recycled. `account_owners` in particular is the access
+  // list — a stale row there would grant a user rights on a re-created account.
   await admin.from("column_transfers").delete().neq("transfer_id", "");
+  await admin.from("account_statements").delete().neq("report_id", "");
+  await admin.from("joint_owner_requests").delete().neq("bank_account_id", "");
+  await admin.from("account_owners").delete().neq("bank_account_id", "");
   await admin.from("column_bank_accounts").delete().neq("bank_account_id", "");
+  await admin.from("column_counterparties").delete().neq("counterparty_id", "");
   await admin.from("column_entities").delete().neq("entity_id", "");
   return { wiped: results.length, results };
 }
@@ -1781,7 +1859,11 @@ async function jointRemove(userId: string, body: any) {
 
 /** Mirrors one settlement-report object into `account_statements`. */
 export async function upsertStatement(report: any, bankAccountId?: string) {
-  const accountId = bankAccountId ?? report?.statement_subject_id ?? report?.bank_account_id;
+  // The settlement-report object names the account `statement_subject`; the
+  // LIST endpoint filters on `statement_subject_id`. Accept both spellings —
+  // reading only one of them left the account id null on real payloads.
+  const accountId = bankAccountId ?? report?.statement_subject_id
+    ?? report?.statement_subject ?? report?.bank_account_id;
   if (!accountId || !report?.id) return null;
   const { data } = await admin.from("account_statements").upsert({
     bank_account_id: String(accountId),
@@ -1811,13 +1893,21 @@ async function listStatements(userId: string) {
 
   for (const id of ids) {
     try {
+      // No `type` filter on the request: Column documents the settlement-report
+      // types as bank_account_summary / bank_account_transaction /
+      // bank_account_daily_statement / loan_daily_summary, so passing
+      // "bank_account_monthly_statement" as an enum risks the whole call being
+      // rejected. Filter locally instead, and accept every statement flavour
+      // the partner actually produces for this account.
       const reports = await columnPaginated<any>("/reporting", {
         key: "settlement_reports",
         max: 60,
-        query: { statement_subject_id: id, type: "bank_account_monthly_statement" },
+        query: { statement_subject_id: id },
       });
       for (const r of reports) {
         if (String(r?.status ?? "").toLowerCase() !== "completed") continue;
+        if (!String(r?.type ?? "").toLowerCase().includes("statement")) continue;
+        if (!r?.pdf_document_id && !r?.csv_document_id) continue;
         await upsertStatement(r, id);
       }
     } catch (e) {
