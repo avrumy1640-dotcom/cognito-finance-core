@@ -574,19 +574,10 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
     return true;
   }, [runLiveTransfer]);
 
-  const send = useCallback((args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => {
-    toast.error("Instant peer-to-peer send isn't supported", {
-      description: "Use Bank transfer (ACH) or Wire to move money to a real account.",
-    });
-    return false;
-  }, []);
+  // Instant peer-to-peer send and mobile check deposit were removed rather
+  // than left as buttons that always error — neither rail exists here.
 
-  const depositCheck = useCallback((_args: { to: "checking" | "savings"; amount: number }) => {
-    toast.error("Mobile check deposit isn't supported", {
-      description: "Fund the account with an incoming bank transfer instead.",
-    });
-    return false;
-  }, []);
+
 
   const payBill = useCallback((args: { from: "checking" | "savings"; amount: number; biller: string; routingNumber?: string; accountNumber?: string }) => {
     if (args.amount <= 0 || !args.biller.trim()) return false;
