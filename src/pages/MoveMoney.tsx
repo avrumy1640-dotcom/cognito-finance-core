@@ -191,7 +191,7 @@ const MoveMoney = () => {
 
         <AnimatePresence>
           {selected === "transfer" && <TransferSheet onClose={() => setSelected(null)} />}
-          {selected === "send" && <SendMoneySheet onClose={() => setSelected(null)} />}
+          
           {selected === "bills" && <BillPaySheet onClose={() => setSelected(null)} />}
           {selected === "external" && <ExternalTransferSheet onClose={() => setSelected(null)} />}
           {selected === "wire" && <WireSheet onClose={() => setSelected(null)} />}
