@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, MapPin } from "lucide-react";
+import { AlertCircle, Loader2, MapPin, SearchX } from "lucide-react";
 import { searchAddresses, type AddressSuggestion } from "@/lib/addressAutocomplete";
 import { cn } from "@/lib/utils";
 
@@ -124,20 +124,54 @@ const AddressAutocomplete = ({ label, value, onChange, onSelect, error, placehol
       </div>
       {error && <p className="text-[11px] text-destructive mt-1.5 font-medium">{error}</p>}
 
+      {!error && loading && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground flex items-center gap-1.5" aria-live="polite">
+          <Loader2 size={11} className="animate-spin" />
+          Searching addresses…
+        </p>
+      )}
+
       {!error && !loading && status !== "idle" && value.trim().length >= 3 && (
-        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-          <p className="text-[11px] text-muted-foreground">
-            {status === "failed"
-              ? "Address lookup is unavailable right now."
-              : "No matches yet — try a shorter search, or enter it manually."}
-          </p>
-          <button
-            type="button"
-            onClick={() => void runSearch(value.trim(), { biasCountry: false })}
-            className="text-[11px] font-semibold text-primary hover:underline"
-          >
-            Search again
-          </button>
+        <div
+          aria-live="polite"
+          className={cn(
+            "mt-1.5 rounded-lg border px-3 py-2 flex items-start gap-2",
+            status === "failed" ? "border-destructive/30 bg-destructive/5" : "border-border bg-secondary/40",
+          )}
+        >
+          {status === "failed" ? (
+            <AlertCircle size={13} className="text-destructive mt-0.5 shrink-0" />
+          ) : (
+            <SearchX size={13} className="text-muted-foreground mt-0.5 shrink-0" />
+          )}
+          <div className="min-w-0">
+            <p className="text-[11px] text-foreground font-medium leading-snug">
+              {status === "failed" ? "Address lookup is unavailable right now." : "No matching addresses found."}
+            </p>
+            <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+              {status === "failed"
+                ? "You can retry, or just fill in the fields below manually."
+                : "Try a shorter search (street and city), widen the search, or enter it manually."}
+            </p>
+            <div className="mt-1.5 flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={() => void runSearch(value.trim())}
+                className="text-[11px] font-semibold text-primary hover:underline"
+              >
+                Search again
+              </button>
+              {country && (
+                <button
+                  type="button"
+                  onClick={() => void runSearch(value.trim(), { biasCountry: false })}
+                  className="text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Search worldwide
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
