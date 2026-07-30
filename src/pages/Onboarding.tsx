@@ -17,6 +17,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import DateOfBirthField from "@/components/form/DateOfBirthField";
+import AddressAutocomplete from "@/components/form/AddressAutocomplete";
+
 
 
 /* ============================================================================
@@ -308,11 +310,19 @@ function buildSteps(data: Data): Step[] {
         : "Complete your street, city, state or region, and postal code.",
     render: ({ data, setField, submit }) => (
       <div className="space-y-3">
-        <TextInput
+        <AddressAutocomplete
+          label="Street address"
           value={data.address_street}
           onChange={(v) => setField("address_street", v)}
-          placeholder="Street address"
-          autoComplete="street-address"
+          onSelect={(s) => {
+            setField("address_street", s.street || s.label);
+            if (s.city) setField("address_city", s.city);
+            if (s.region) setField("address_region", s.region);
+            if (s.postal_code) setField("address_postal_code", s.postal_code);
+            if (s.country) setField("country", s.country);
+          }}
+          country={data.country || undefined}
+          placeholder="Start typing your address"
         />
         <TextInput
           value={data.address_city}
@@ -321,6 +331,7 @@ function buildSteps(data: Data): Step[] {
           autoComplete="address-level2"
           autoFocus={false}
         />
+
         <div className="grid grid-cols-2 gap-3">
           <TextInput
             value={data.address_region}
