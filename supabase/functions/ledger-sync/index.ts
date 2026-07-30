@@ -636,11 +636,11 @@ const toCents = (n: unknown) => {
 };
 
 async function accountsFor(userId: string) {
-  const { data } = await admin.from("column_bank_accounts")
-    .select("*").eq("user_id", userId).order("created_at");
-  if (!data?.length) throw new Error("No account yet — finish verification first");
-  return data;
+  const rows = await ownedAccountRows(userId);
+  if (!rows.length) throw new Error("No account yet — finish verification first");
+  return rows;
 }
+
 
 /**
  * Resolve a source/destination account STRICTLY within the caller's own rows.
