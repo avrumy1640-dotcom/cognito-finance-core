@@ -35,11 +35,12 @@ const primaryActions = [
   { label: "More", desc: "Scheduled, bills, beneficiaries", icon: ChevronRight, id: "more" },
 ];
 
+// Every method here maps to a real rail our banking partner supports. Speed
+// and cost are stated on the tile so the choice is obvious before you tap.
 const sendMethods = [
   { label: "Between my accounts", desc: "Instant · Free", icon: ArrowLeftRight, id: "transfer" },
-  { label: "To another person", desc: "By email or phone · Instant", icon: Send, id: "send" },
   { label: "Bank transfer (ACH)", desc: "1–3 business days · Free", icon: Building2, id: "external" },
-  { label: "Wire transfer", desc: "Same-day domestic · $25 fee", icon: Globe, id: "wire" },
+  { label: "Wire transfer", desc: "Same business day · $25 fee", icon: Globe, id: "wire" },
 ];
 
 const moreActions = [
