@@ -93,6 +93,8 @@ export const LABELS: Record<keyof IdentityProfile, string> = {
   country: "Country of residence",
   citizenship: "Citizenship",
   street: "Street address",
+  line2: "Apt, suite or unit",
+
   city: "City",
   region: "State / region",
   postal_code: "Postal code",
