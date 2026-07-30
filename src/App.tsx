@@ -55,6 +55,8 @@ import Credit from "./pages/Credit";
 import RequireAdmin from "./components/RequireAdmin";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminProvider from "./pages/admin/AdminProvider";
+import EarlyDirectDepositGuide from "./pages/blog/EarlyDirectDepositGuide";
+import RouteSeo from "@/components/RouteSeo";
 
 const queryClient = new QueryClient();
 
@@ -85,9 +87,11 @@ const App = () => (
           <Sonner />
           <AppLock />
           <BrowserRouter>
+            <RouteSeo />
             <Routes>
               <Route path="/intro" element={<Intro />} />
               <Route path="/welcome" element={<Welcome />} />
+              <Route path="/blog/early-direct-deposit-guide" element={<EarlyDirectDepositGuide />} />
               <Route path="/login" element={<SignIn />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/verify-email" element={<VerifyEmail />} />

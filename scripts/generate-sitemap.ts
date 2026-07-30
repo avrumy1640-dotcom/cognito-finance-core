@@ -14,6 +14,8 @@ interface SitemapEntry {
 // Only public, unauthenticated routes. Everything else is behind auth/KYC gates.
 const entries: SitemapEntry[] = [
   { path: "/welcome", changefreq: "monthly", priority: "1.0" },
+  { path: "/intro", changefreq: "monthly", priority: "0.8" },
+  { path: "/blog/early-direct-deposit-guide", changefreq: "monthly", priority: "0.7" },
   { path: "/login", changefreq: "yearly", priority: "0.4" },
   { path: "/signup", changefreq: "yearly", priority: "0.6" },
 ];

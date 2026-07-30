@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import GlassCard from "@/components/glass/GlassCard";
 import { FAQ_SECTIONS as faqData } from "@/content/faq";
+import JsonLd from "@/components/JsonLd";
 import {
   ArrowLeft,
   Search,
@@ -54,6 +55,20 @@ const HelpCenter = () => {
 
   return (
     <div className="min-h-dvh bg-background">
+      <JsonLd
+        id="ld-help-faq"
+        data={{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: faqData.flatMap((section) =>
+            section.items.map((item) => ({
+              "@type": "Question",
+              name: item.q,
+              acceptedAnswer: { "@type": "Answer", text: item.a },
+            })),
+          ),
+        }}
+      />
       <div className="px-5 sm:px-6 lg:px-0 pt-10 sm:pt-12 space-y-5 pb-10">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="h-11 w-11 rounded-full bg-secondary flex items-center justify-center">

@@ -14,7 +14,7 @@ const Welcome = () => {
   }, [loading, session, navigate]);
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col px-8 py-10">
+    <main className="min-h-dvh bg-background flex flex-col px-8 py-10">
       <Seo
         title="Glass Bank — Banking, beautifully clear"
         description="Open a Glass Bank account: instant transfers, smart cards, savings goals, and spending insights in one beautifully clear app."
@@ -85,7 +85,7 @@ const Welcome = () => {
           By continuing you agree to our Terms of Service and Privacy Policy.
         </p>
       </motion.div>
-    </div>
+    </main>
   );
 };
 
