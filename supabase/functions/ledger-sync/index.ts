@@ -757,7 +757,8 @@ async function doTransfer(userId: string, body: any) {
   if (kind === "wire") {
     const from = pickAccount(rows, body.from ?? "checking");
     const counterpartyId = body.counterpartyId
-      ?? await ensureCounterparty(userId, {
+      ? await assertOwnCounterparty(userId, String(body.counterpartyId))
+      : await ensureCounterparty(userId, {
         name: body.name ?? "Beneficiary",
         routingNumber: body.routingNumber,
         accountNumber: body.accountNumber,
