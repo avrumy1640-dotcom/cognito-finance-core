@@ -225,6 +225,16 @@ async function ensureEntity(userId: string) {
   const incomeDigits = String(profile?.annual_income ?? "").replace(/[^0-9]/g, "");
   const income = incomeDigits ? [Number(incomeDigits)] : undefined;
 
+  // Column requires YYYY-MM-DD. Accept ISO or MM/DD/YYYY defensively.
+  const toIsoDob = (v?: string | null): string => {
+    const s = String(v ?? "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const m = /^(\d{2})[/-](\d{2})[/-](\d{4})$/.exec(s);
+    if (m) return `${m[3]}-${m[1]}-${m[2]}`;
+    return "1990-01-01";
+  };
+
+
   // Sandbox entity. We deliberately do NOT forward a real SSN; the sandbox
   // accepts the documented test SSN and returns a verified person.
   // `pep_status` is required by Column's person payload; we do not ask the
