@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import DateOfBirthField from "@/components/form/DateOfBirthField";
+
 
 /* ============================================================================
  * Onboarding — reducer-driven state machine.
@@ -99,12 +101,6 @@ const EMPLOYMENT: { id: string; label: string }[] = [
   { id: "homemaker", label: "Homemaker" },
   { id: "unemployed", label: "Unemployed" },
 ];
-/** Latest DOB that still makes someone 18. */
-const maxDobString = () => {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - 18);
-  return d.toISOString().slice(0, 10);
-};
 const ageFrom = (v: string) => {
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return NaN;
@@ -237,15 +233,13 @@ function buildSteps(data: Data): Step[] {
       return null;
     },
     render: ({ data, setField, submit }) => (
-      <TextInput
-        type="date"
-        max={maxDobString()}
+      <DateOfBirthField
         value={data.date_of_birth}
         onChange={(v) => setField("date_of_birth", v)}
         onEnter={submit}
-        autoComplete="bday"
       />
     ),
+
   });
 
   list.push({
