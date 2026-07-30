@@ -237,15 +237,13 @@ function buildSteps(data: Data): Step[] {
       return null;
     },
     render: ({ data, setField, submit }) => (
-      <TextInput
-        type="date"
-        max={maxDobString()}
+      <DateOfBirthField
         value={data.date_of_birth}
         onChange={(v) => setField("date_of_birth", v)}
         onEnter={submit}
-        autoComplete="bday"
       />
     ),
+
   });
 
   list.push({
