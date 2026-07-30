@@ -1584,6 +1584,17 @@ Deno.serve(async (req) => {
     }
 
     switch (action) {
+      case "joint_list":
+        return json(await jointList(user.id));
+      case "joint_request":
+        return json(await jointRequest(user.id, body));
+      case "joint_respond":
+        return json(await jointRespond(user.id, body));
+      case "joint_cancel":
+        return json(await jointCancel(user.id, body));
+      case "joint_remove":
+        return json(await jointRemove(user.id, body));
+
       case "status": {
         const { data: entity } = await admin
           .from("column_entities").select("entity_id, verification_status")
