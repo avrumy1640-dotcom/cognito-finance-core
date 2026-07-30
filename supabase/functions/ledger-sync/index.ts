@@ -1109,6 +1109,47 @@ async function adminDelete(resource: string, id: string) {
   return { deleted: { resource, id } };
 }
 
+/**
+ * Sweeps a sandbox bank account to a $0 balance so it can be deleted.
+ *
+ * Column refuses to delete an account holding funds, and refuses to delete an
+ * entity that still owns accounts — so the wipe has to run
+ * drain → delete accounts → delete entity, in that order. We push the residual
+ * balance out over ACH to an external sandbox counterparty and force
+ * settlement, because an unsettled transfer still counts against the balance.
+ */
+async function drainAccount(acct: any): Promise<{ drained: boolean; note?: string }> {
+  const bal = mapBalances(acct);
+  const cents = Math.round((bal.available ?? 0) * 100);
+  if (cents <= 0) return { drained: true };
+  try {
+    const cp = await column<any>("/counterparties", {
+      method: "POST",
+      body: { routing_number: "021000021", account_number: "9999999999", name: "SANDBOX SWEEP" },
+      idempotencyKey: `wipe-sweep-counterparty`,
+    });
+    const t = await column<any>("/transfers/ach", {
+      method: "POST",
+      body: {
+        bank_account_id: acct.id,
+        counterparty_id: cp.id,
+        type: "CREDIT",
+        amount: cents,
+        currency_code: "USD",
+        entry_class_code: "PPD",
+        description: "SWEEP",
+      },
+      idempotencyKey: `wipe-sweep-${acct.id}-${cents}`,
+    });
+    await column("/simulate/transfers/ach/settle", {
+      method: "POST", body: { ach_transfer_id: t.id },
+    }).catch(() => {});
+    return { drained: true, note: `swept ${(cents / 100).toFixed(2)} out` };
+  } catch (e) {
+    return { drained: false, note: `could not sweep balance: ${(e as Error).message}` };
+  }
+}
+
 async function adminWipe(opts: { includeWebhooks?: boolean }) {
   const listed = await adminList();
   const results: any[] = [];
@@ -1120,17 +1161,165 @@ async function adminWipe(opts: { includeWebhooks?: boolean }) {
       catch (e) { results.push({ resource, id, ok: false, error: (e as Error).message }); }
     }
   };
-  // Order matters: dependants first.
+
+  // 1. Counterparties have no dependants — safe to clear first.
   await run("counterparty", listed.counterparties);
-  await run("bank-account", listed.bankAccounts);
-  await run("entity", listed.entities);
+
+  // 2. Accounts must be at $0 before Column will delete them.
+  for (const acct of listed.bankAccounts ?? []) {
+    if (!acct?.id) continue;
+    const { drained, note } = await drainAccount(acct);
+    if (!drained) {
+      results.push({ resource: "bank-account", id: acct.id, ok: false, error: note });
+      continue;
+    }
+    try {
+      await adminDelete("bank-account", acct.id);
+      results.push({ resource: "bank-account", id: acct.id, ok: true, note });
+    } catch (e) {
+      results.push({ resource: "bank-account", id: acct.id, ok: false, error: (e as Error).message, note });
+    }
+  }
+
+  // 3. Only now can the entities go — an entity with a surviving account is
+  //    rejected, so we skip those instead of firing a call we know will fail.
+  const survivingByEntity = new Set(
+    results.filter((r) => r.resource === "bank-account" && !r.ok)
+      .map((r) => (listed.bankAccounts ?? []).find((a: any) => a.id === r.id)?.entity_id)
+      .filter(Boolean),
+  );
+  for (const ent of listed.entities ?? []) {
+    if (!ent?.id) continue;
+    if (survivingByEntity.has(ent.id)) {
+      results.push({
+        resource: "entity", id: ent.id, ok: false,
+        error: "skipped: still owns an account that could not be emptied",
+      });
+      continue;
+    }
+    try { await adminDelete("entity", ent.id); results.push({ resource: "entity", id: ent.id, ok: true }); }
+    catch (e) { results.push({ resource: "entity", id: ent.id, ok: false, error: (e as Error).message }); }
+  }
+
   if (opts.includeWebhooks) await run("webhook-endpoint", listed.webhookEndpoints);
+
   // Local mirror
   await admin.from("column_transfers").delete().neq("transfer_id", "");
   await admin.from("column_bank_accounts").delete().neq("bank_account_id", "");
   await admin.from("column_entities").delete().neq("entity_id", "");
   return { wiped: results.length, results };
 }
+
+// ---------------------------------------------------------------------------
+// Webhook endpoint management, delivery inspection and event reconciliation.
+//
+// Column's list/verify/delivery paths are documented with both hyphens and
+// underscores depending on the page, so every call tries both spellings and
+// keeps whichever answers.
+// ---------------------------------------------------------------------------
+async function columnAny<T = any>(paths: string[], init: Parameters<typeof column>[1] = {}): Promise<T> {
+  let last: unknown;
+  for (const p of paths) {
+    try { return await column<T>(p, init); }
+    catch (e) {
+      last = e;
+      if ((e as ColumnError).status !== 404) throw e;
+    }
+  }
+  throw last;
+}
+
+const WEBHOOK_LIST_PATHS = ["/webhook-endpoints", "/webhook_endpoints"];
+
+async function listWebhookEndpoints() {
+  const res = await columnAny<any>(WEBHOOK_LIST_PATHS, { query: { limit: 100 } });
+  const items = pickList(res, "webhook_endpoints");
+  return items.map((h: any) => ({
+    id: h.id,
+    url: h.url,
+    description: h.description ?? null,
+    enabledEvents: h.enabled_events ?? [],
+    isDisabled: h.is_disabled ?? h.disabled ?? false,
+    createdAt: h.created_at ?? null,
+  }));
+}
+
+/**
+ * Asks Column to make a REAL delivery attempt to the endpoint with a synthetic
+ * event of the given type, and returns whatever it reports about that attempt.
+ * This is the definitive answer to "is Column even trying to reach us?".
+ */
+async function verifyWebhookEndpoint(id: string, eventType: string) {
+  if (!/^[A-Za-z0-9_\-]+$/.test(id)) throw new Error("Invalid endpoint id");
+  const type = String(eventType || "ach.outgoing_transfer.initiated");
+  const res = await columnAny<any>(
+    [`/webhook-endpoints/${id}/verify`, `/webhook_endpoints/${id}/verify`],
+    { method: "POST", body: { event_type: type, type } },
+  );
+  return {
+    endpointId: id,
+    eventType: type,
+    statusCode: res?.response_status_code ?? res?.status_code ?? null,
+    responseBody: res?.response_body ?? res?.body ?? null,
+    success: res?.success ?? res?.is_success ?? null,
+    raw: res,
+  };
+}
+
+async function webhookDeliveries(id: string, limit = 25) {
+  if (!/^[A-Za-z0-9_\-]+$/.test(id)) throw new Error("Invalid endpoint id");
+  const res = await columnAny<any>(
+    [`/webhook-deliveries/endpoint/${id}`, `/webhook_deliveries/endpoint/${id}`],
+    { query: { limit: Math.min(Math.max(limit, 1), 100) } },
+  );
+  const items = pickList(res, "webhook_deliveries");
+  return items.map((d: any) => ({
+    id: d.id,
+    eventId: d.event_id ?? d.event?.id ?? null,
+    eventType: d.event_type ?? d.event?.type ?? null,
+    statusCode: d.response_status_code ?? d.status_code ?? null,
+    success: d.is_success ?? d.success ?? null,
+    attempts: d.attempt_count ?? d.attempts ?? null,
+    error: d.error_message ?? d.error ?? null,
+    createdAt: d.created_at ?? null,
+    responseBody: typeof d.response_body === "string" ? d.response_body.slice(0, 500) : null,
+  }));
+}
+
+/**
+ * Reconciliation: walks Column's own record of webhook events and flags any
+ * that never landed in our `webhook_events` table — i.e. deliveries Column
+ * eventually gave up retrying. Read-only; it reports, it doesn't replay.
+ */
+async function reconcileEvents(limit = 200) {
+  const remote = await columnAny<any[]>(["/events/webhook"], {}).then(
+    (r: any) => pickList(r, "events"),
+  ).catch(async () => await columnPaginated<any>("/events/webhook", { key: "events", max: limit }));
+
+  const capped = (remote as any[]).slice(0, limit);
+  const ids = capped.map((e) => String(e?.id ?? "")).filter(Boolean);
+  const seen = new Set<string>();
+  if (ids.length) {
+    const { data } = await admin.from("webhook_events")
+      .select("event_id").eq("provider", "column").in("event_id", ids);
+    for (const r of data ?? []) seen.add(String(r.event_id));
+  }
+  const missing = capped
+    .filter((e) => e?.id && !seen.has(String(e.id)))
+    .map((e) => ({
+      id: e.id,
+      type: e.type ?? null,
+      createdAt: e.created_at ?? null,
+    }));
+
+  return {
+    checked: capped.length,
+    recorded: capped.length - missing.length,
+    missingCount: missing.length,
+    missing: missing.slice(0, 50),
+  };
+}
+
 
 // ---------------------------------------------------------------------------
 Deno.serve(async (req) => {
