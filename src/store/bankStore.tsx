@@ -145,8 +145,10 @@ interface Ctx {
   retry: () => void;
   setTransactionCategory: (id: string, category: string) => Promise<void>;
   transfer: (args: { from: "checking" | "savings"; to: "checking" | "savings"; amount: number; memo?: string }) => boolean;
-  send: (args: { from: "checking" | "savings"; amount: number; recipient: string; note?: string }) => boolean;
-  depositCheck: (args: { to: "checking" | "savings"; amount: number }) => boolean;
+  /**
+   * Bill pay is an ACH credit to the biller, so the biller's routing and
+   * account number are mandatory — there is no fake "pay anyone" rail.
+   */
   payBill: (args: { from: "checking" | "savings"; amount: number; biller: string; routingNumber?: string; accountNumber?: string }) => boolean;
   externalTransfer: (args: { from: "checking" | "savings"; amount: number; bank: string; routingNumber: string; accountNumber: string; memo?: string }) => boolean;
   wireTransfer: (args: WireTransferArgs) => boolean;
