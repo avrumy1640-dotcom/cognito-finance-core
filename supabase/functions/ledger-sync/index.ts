@@ -219,6 +219,12 @@ async function ensureEntity(userId: string) {
   const last = kyc?.legal_last_name || profileName.slice(1).join(" ") || "Tester";
   const email = profile?.email || undefined;
 
+  // Column's person `income` is an ARRAY of numbers (whole dollars) so a range
+  // can be expressed — a bare number is rejected. We collect a single figure
+  // during onboarding, so we send a one-element array.
+  const incomeDigits = String(profile?.annual_income ?? "").replace(/[^0-9]/g, "");
+  const income = incomeDigits ? [Number(incomeDigits)] : undefined;
+
   // Sandbox entity. We deliberately do NOT forward a real SSN; the sandbox
   // accepts the documented test SSN and returns a verified person.
   // `pep_status` is required by Column's person payload; we do not ask the
@@ -231,6 +237,8 @@ async function ensureEntity(userId: string) {
     date_of_birth: (profile?.date_of_birth as string | undefined)
       ?? (kyc?.date_of_birth as string | undefined) ?? "1990-01-01",
     pep_status: "not_checked",
+    ...(income ? { income } : {}),
+    ...(profile?.occupation ? { occupation: String(profile.occupation).slice(0, 64) } : {}),
     address: {
       line_1: profile?.address_street || kyc?.street || "1 Market St",
       city: profile?.address_city || kyc?.city || "San Francisco",
@@ -249,10 +257,14 @@ async function ensureEntity(userId: string) {
     user_id: userId,
     entity_id: created.id,
     entity_type: "person",
-    verification_status: created.verification_status ?? "unverified",
+    // Column returns this UPPERCASE (VERIFIED / PENDING / MANUAL_REVIEW /
+    // DENIED / UNVERIFIED). We normalise to lowercase on the way in so every
+    // comparison in this app — and in the webhook handler — is case-stable.
+    verification_status: normalizeVerification(created.verification_status),
     details: created,
   }).select().single();
   if (error) throw new Error(error.message);
+
 
   // Mirror the provider's verification verdict back onto the KYC record so the
   // app's gating reflects the real upstream decision.
