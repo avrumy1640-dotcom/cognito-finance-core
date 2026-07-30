@@ -574,9 +574,32 @@ async function accountsFor(userId: string) {
   return data;
 }
 
+/**
+ * Resolve a source/destination account STRICTLY within the caller's own rows.
+ *
+ * `rows` is already scoped to the authenticated user, and an unrecognised
+ * selector now throws instead of silently falling back to the first account —
+ * a tampered `from`/`to` must fail loudly, never quietly debit something else.
+ */
 function pickAccount(rows: any[], which?: string) {
   if (!which) return rows[0];
-  return rows.find((r) => r.account_type === which) ?? rows.find((r) => r.bank_account_id === which) ?? rows[0];
+  const match = rows.find((r) => r.account_type === which)
+    ?? rows.find((r) => r.bank_account_id === which);
+  if (!match) throw new Error("That account isn't one of yours");
+  return match;
+}
+
+/**
+ * A counterparty id supplied by the client is only usable if the caller
+ * created it. Without this check, a tampered request body could wire money to
+ * another user's saved recipient.
+ */
+async function assertOwnCounterparty(userId: string, counterpartyId: string) {
+  const { data } = await admin.from("column_counterparties")
+    .select("counterparty_id").eq("user_id", userId)
+    .eq("counterparty_id", counterpartyId).maybeSingle();
+  if (!data) throw new Error("Unknown recipient — add the account details again");
+  return counterpartyId;
 }
 
 export interface WireAddress {
