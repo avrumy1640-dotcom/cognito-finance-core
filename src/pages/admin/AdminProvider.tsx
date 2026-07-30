@@ -4,6 +4,7 @@ import { RefreshCw, Trash2, AlertTriangle, Webhook, Undo2, ArrowDownToLine } fro
 import { ledgerProvider } from "@/lib/ledgerProvider";
 import { AdminHeader, AdminPage } from "./AdminShell";
 import ConfirmDialog from "@/components/glass/ConfirmDialog";
+import WebhookEndpoints from "./WebhookEndpoints";
 
 type Listing = {
   entities?: Array<Record<string, unknown>>;
