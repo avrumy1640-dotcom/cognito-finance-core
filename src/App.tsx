@@ -42,6 +42,7 @@ import Settings from "./pages/Settings";
 import Support from "./pages/Support";
 import SupportTicket from "./pages/SupportTicket";
 import Beneficiaries from "./pages/Beneficiaries";
+import JointAccounts from "./pages/JointAccounts";
 import PaymentRequests from "./pages/PaymentRequests";
 import ScheduledTransfers from "./pages/ScheduledTransfers";
 import DirectDeposit from "./pages/DirectDeposit";
@@ -127,6 +128,7 @@ const App = () => (
               <Route path="/settings" element={<Guarded><Settings /></Guarded>} />
               <Route path="/support" element={<Guarded><Support /></Guarded>} />
               <Route path="/support/:id" element={<Guarded><SupportTicket /></Guarded>} />
+              <Route path="/joint-accounts" element={<Banking><JointAccounts /></Banking>} />
               <Route path="/beneficiaries" element={<Banking><Beneficiaries /></Banking>} />
               <Route path="/payment-requests" element={<Banking><PaymentRequests /></Banking>} />
               <Route path="/direct-deposit" element={<Banking><DirectDeposit /></Banking>} />
