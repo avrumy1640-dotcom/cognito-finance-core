@@ -12,5 +12,9 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /verify-email
+Disallow: /mfa-challenge
+Disallow: /reset-password
+Disallow: /.lovable/
 
 Sitemap: https://financial.norvenhealth.com/sitemap.xml

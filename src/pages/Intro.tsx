@@ -593,7 +593,7 @@ const Intro = () => {
   const Icon = slide.icon;
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-background">
+    <main className="relative flex min-h-dvh flex-col overflow-hidden bg-background">
       <Seo
         title="Glass Bank — Save, spend and build credit"
         description="See what Glass Bank does: automatic savings goals, direct deposit up to 2 days early, credit building, cashback rewards and a no-fee overdraft cushion."
@@ -697,7 +697,7 @@ const Intro = () => {
           Log in
         </button>
       </div>
-    </div>
+    </main>
   );
 };
 
