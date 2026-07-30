@@ -578,9 +578,10 @@ async function snapshot(
   }
 
   const ids = accounts.map((a) => a.bank_account_id);
-  const { rows: transfers, hasMore, total } = await syncTransfers(userId, ids, {
-    limit: opts.limit, offset: opts.offset,
-  });
+  const [{ rows: transfers, hasMore, total }, ownerMap] = await Promise.all([
+    syncTransfers(userId, ids, { limit: opts.limit, offset: opts.offset }),
+    ownersFor(ids),
+  ]);
 
   return {
     provisioned: true,
@@ -591,16 +592,23 @@ async function snapshot(
       entityId: entity.entity_id,
       verificationStatus: entity.verification_status,
     },
-    accounts: accounts.map((a) => ({
-      id: a.bank_account_id,
-      name: a.description ?? "Everyday Checking",
-      type: a.account_type ?? "checking",
-      accountNumber: a.account_number_masked ?? "••••0000",
-      routingNumber: a.routing_number ?? "",
-      status: a.status === "open" ? "Active" : "Closed",
-      isOverdrawn: a.is_overdrawn ?? false,
-      ...mapBalances(a),
-    })),
+    accounts: accounts.map((a) => {
+      const owners = ownerMap.get(a.bank_account_id) ?? [];
+      return {
+        id: a.bank_account_id,
+        name: a.description ?? "Everyday Checking",
+        type: a.account_type ?? "checking",
+        accountNumber: a.account_number_masked ?? "••••0000",
+        routingNumber: a.routing_number ?? "",
+        status: a.status === "open" ? "Active" : "Closed",
+        isOverdrawn: a.is_overdrawn ?? false,
+        isJoint: owners.length > 1,
+        myRole: (a as any).owner_role ?? "primary",
+        owners: owners.map((o) => ({ userId: o.userId, name: o.name, role: o.role, isMe: o.userId === userId })),
+        ...mapBalances(a),
+      };
+    }),
+
     transactions: transfers.map((t: any) => ({
       id: t.transfer_id,
       merchant: t.description ?? "Transfer",
