@@ -349,7 +349,63 @@ async function createAccount(userId: string, entityId: string, kind: "checking" 
     balances: acct.balances ?? {},
   }).select().single();
   if (error) throw new Error(error.message);
+  // The creator is the PRIMARY owner. `account_owners` — not
+  // `column_bank_accounts.user_id` — is the authority on who may touch an
+  // account, so every new account must land there in the same breath.
+  await admin.from("account_owners").upsert({
+    bank_account_id: acct.id, user_id: userId, entity_id: entityId, role: "primary",
+  }, { onConflict: "bank_account_id,user_id" });
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Ownership resolution.
+//
+// Every read and every debit resolves accounts through `account_owners`, which
+// carries both the account's creator (role "primary") and any accepted joint
+// owner. Nothing in this file may fall back to `column_bank_accounts.user_id`
+// alone — that column is only the creator, not the access list.
+// ---------------------------------------------------------------------------
+export interface OwnedAccount extends Record<string, any> {
+  owner_role: "primary" | "joint";
+}
+
+async function ownedAccountRows(userId: string): Promise<OwnedAccount[]> {
+  const { data: links } = await admin.from("account_owners")
+    .select("bank_account_id, role").eq("user_id", userId);
+  const ids = (links ?? []).map((l: any) => l.bank_account_id);
+  if (!ids.length) return [];
+  const roleBy = new Map((links ?? []).map((l: any) => [l.bank_account_id, l.role]));
+  const { data } = await admin.from("column_bank_accounts")
+    .select("*").in("bank_account_id", ids).order("created_at");
+  return (data ?? []).map((r: any) => ({ ...r, owner_role: roleBy.get(r.bank_account_id) ?? "primary" }))
+    // Own accounts first so a bare "checking" selector always means MY checking.
+    .sort((a, b) => (a.owner_role === "primary" ? 0 : 1) - (b.owner_role === "primary" ? 0 : 1));
+}
+
+/** Owner roster for a set of accounts, with display names for the UI. */
+async function ownersFor(bankAccountIds: string[]) {
+  if (!bankAccountIds.length) return new Map<string, any[]>();
+  const { data: links } = await admin.from("account_owners")
+    .select("bank_account_id, user_id, role").in("bank_account_id", bankAccountIds);
+  const userIds = [...new Set((links ?? []).map((l: any) => l.user_id))];
+  const { data: profs } = userIds.length
+    ? await admin.from("profiles").select("user_id, preferred_name, email").in("user_id", userIds)
+    : { data: [] as any[] };
+  const profBy = new Map((profs ?? []).map((p: any) => [p.user_id, p]));
+  const out = new Map<string, any[]>();
+  for (const l of links ?? []) {
+    const p = profBy.get(l.user_id);
+    const list = out.get(l.bank_account_id) ?? [];
+    list.push({
+      userId: l.user_id,
+      role: l.role,
+      name: p?.preferred_name || (p?.email ? String(p.email).split("@")[0] : "Owner"),
+      email: p?.email ?? null,
+    });
+    out.set(l.bank_account_id, list);
+  }
+  return out;
 }
 
 async function ensureBankAccount(userId: string, entityId: string) {
@@ -372,10 +428,9 @@ async function ensureBankAccount(userId: string, entityId: string) {
 
 
 async function refreshAccounts(userId: string) {
-  const { data: rows } = await admin
-    .from("column_bank_accounts").select("*").eq("user_id", userId).order("created_at");
+  const rows = await ownedAccountRows(userId);
   const out: any[] = [];
-  for (const r of rows ?? []) {
+  for (const r of rows) {
     try {
       const live = await column<any>(`/bank-accounts/${r.bank_account_id}`);
       await admin.from("column_bank_accounts").update({
@@ -389,6 +444,7 @@ async function refreshAccounts(userId: string) {
   }
   return out;
 }
+
 
 const TX_PAGE_SIZE = 50;
 
