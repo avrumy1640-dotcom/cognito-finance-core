@@ -205,17 +205,25 @@ const KycStatusCard = ({
       </div>
 
       {requirements.length > 0 && (
-        <div className="rounded-2xl bg-background/60 p-3.5 space-y-1.5">
-          <p className="text-xs font-semibold">Still needed by our banking partner</p>
-          <ul className="space-y-1">
-            {requirements.map((r) => (
-              <li key={r} className="text-xs opacity-80 flex gap-2">
-                <span aria-hidden>•</span><span>{r}</span>
-              </li>
-            ))}
+        <div className="rounded-2xl bg-background/60 p-3.5 space-y-2">
+          <p className="text-xs font-semibold">What our banking partner still needs</p>
+          <ul className="space-y-1.5">
+            {requirements.map((r) => {
+              const c = REQUIREMENT_COPY[r.status];
+              return (
+                <li key={`${r.field}-${r.status}`} className="text-xs flex items-start gap-2">
+                  <c.Icon size={12} className={`mt-0.5 shrink-0 ${c.className}`} />
+                  <span className="flex-1">
+                    <span className="font-medium">{prettyField(r.field)}</span>
+                    <span className="opacity-75"> — {r.message || c.label}</span>
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
+
 
       {/* Progress rail */}
       <div className="flex items-center gap-2">
