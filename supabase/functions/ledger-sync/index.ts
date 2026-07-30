@@ -1624,13 +1624,20 @@ async function jointRequest(userId: string, body: any) {
     .select("id").eq("bank_account_id", bankAccountId).eq("user_id", inviteeId).maybeSingle();
   if (already) return opaque;
 
-  await admin.from("joint_owner_requests")
-    .upsert({
-      bank_account_id: bankAccountId,
-      requester_user_id: userId,
-      invitee_user_id: inviteeId,
-      status: "pending",
-    }, { onConflict: "bank_account_id,invitee_user_id", ignoreDuplicates: true });
+  // A pending request is deduped by a PARTIAL unique index, which upsert can't
+  // target — so check first and let the index be the backstop on a race.
+  const { data: pending } = await admin.from("joint_owner_requests")
+    .select("id").eq("bank_account_id", bankAccountId)
+    .eq("invitee_user_id", inviteeId).eq("status", "pending").maybeSingle();
+  if (pending) return opaque;
+
+  const { error: insErr } = await admin.from("joint_owner_requests").insert({
+    bank_account_id: bankAccountId,
+    requester_user_id: userId,
+    invitee_user_id: inviteeId,
+    status: "pending",
+  });
+  if (insErr && !/duplicate key/i.test(insErr.message)) throw new Error(insErr.message);
 
   try {
     await admin.from("notifications").insert({
