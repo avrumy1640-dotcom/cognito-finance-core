@@ -452,42 +452,39 @@ const SendMoneySheet = ({ onClose }: { onClose: () => void }) => {
 
 
 const BillPaySheet = ({ onClose }: { onClose: () => void }) => {
-  const { payBill, accounts, spendable } = useBank();
+  const { payBill, spendable } = useBank();
   const [biller, setBiller] = useState("");
+  const [routing, setRouting] = useState("");
+  const [account, setAccount] = useState("");
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<"form" | "success">("form");
   const num = Number(amount);
   const insufficient = num > spendable("checking");
+  const routingValid = routing.replace(/\D/g, "").length === 9;
+  const canPay = !!num && !!biller.trim() && routingValid && !!account.trim() && !insufficient && checkLimits("bill", num).ok;
 
   const pay = () => {
-    const ok = payBill({ from: "checking", amount: num, biller });
-    if (!ok) {
-      toast.error("Payment failed");
-      return;
-    }
-    toast.success(`Paid $${num.toFixed(2)}`, { description: `to ${biller}` });
+    const ok = payBill({
+      from: "checking", amount: num, biller,
+      routingNumber: routing, accountNumber: account,
+    });
+    if (!ok) return;
     setStep("success");
   };
-
-  const suggested = ["PG&E Utilities", "Comcast Xfinity", "Verizon Wireless", "State Farm Insurance", "Rent"];
 
   return (
     <Sheet onClose={onClose}>
       {step === "form" && (
         <>
-          <h2 className="text-xl font-display font-bold text-foreground mb-5">Pay a Bill</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Biller</label>
-              <input value={biller} onChange={(e) => setBiller(e.target.value)} placeholder="Search or type biller name" className="w-full p-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none" />
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {suggested.map((b) => (
-                  <button key={b} onClick={() => setBiller(b)} className="text-xs px-2.5 py-1 rounded-full bg-secondary text-muted-foreground hover:text-foreground">
-                    {b}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <h2 className="text-xl font-display font-bold text-foreground mb-2">Pay a Bill</h2>
+          <p className="text-sm text-muted-foreground mb-5">
+            Sent as a standard ACH credit from Everyday Checking — the biller's routing and account number are required.
+          </p>
+          <div className="space-y-3">
+            <Field label="Biller name" value={biller} onChange={setBiller} placeholder="PG&E Utilities, Rent…" />
+            <Field label="Biller routing number" value={routing} onChange={setRouting} placeholder="9 digits" />
+            {routing && !routingValid && <p className="text-xs text-destructive -mt-1">Routing number must be 9 digits</p>}
+            <Field label="Biller account number" value={account} onChange={setAccount} placeholder="Your account with the biller" />
             <div>
               <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Amount</label>
               <div className="relative">
@@ -500,7 +497,7 @@ const BillPaySheet = ({ onClose }: { onClose: () => void }) => {
             <LimitsCheckPanel check={checkLimits("bill", num)} />
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
-              <button onClick={pay} disabled={!num || !biller.trim() || insufficient || !checkLimits("bill", num).ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Pay Now</button>
+              <button onClick={pay} disabled={!canPay} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Pay Now</button>
             </div>
           </div>
         </>
