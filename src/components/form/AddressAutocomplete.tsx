@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, MapPin } from "lucide-react";
 import { searchAddresses, type AddressSuggestion } from "@/lib/addressAutocomplete";
 import { cn } from "@/lib/utils";
@@ -24,29 +24,53 @@ const AddressAutocomplete = ({ label, value, onChange, onSelect, error, placehol
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(-1);
+  const [status, setStatus] = useState<"idle" | "empty" | "failed">("idle");
   const skipRef = useRef(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const ctrlRef = useRef<AbortController | null>(null);
+
+  const runSearch = useCallback(
+    async (q: string, opts?: { biasCountry?: boolean }) => {
+      ctrlRef.current?.abort();
+      const ctrl = new AbortController();
+      ctrlRef.current = ctrl;
+      setLoading(true);
+      try {
+        const res = await searchAddresses(q, {
+          signal: ctrl.signal,
+          country: opts?.biasCountry === false ? undefined : country,
+        });
+        if (ctrl.signal.aborted) return;
+        setItems(res);
+        setActive(-1);
+        setOpen(res.length > 0);
+        setStatus(res.length > 0 ? "idle" : "empty");
+      } catch (e) {
+        if ((e as DOMException)?.name === "AbortError") return;
+        // Every lookup provider failed — manual entry still works.
+        setItems([]);
+        setOpen(false);
+        setStatus("failed");
+      } finally {
+        if (!ctrl.signal.aborted) setLoading(false);
+      }
+    },
+    [country],
+  );
 
   useEffect(() => {
     if (skipRef.current) { skipRef.current = false; return; }
     const q = value.trim();
-    if (q.length < 3) { setItems([]); setLoading(false); setOpen(false); return; }
-    const ctrl = new AbortController();
-    setLoading(true);
-    const t = setTimeout(async () => {
-      try {
-        const res = await searchAddresses(q, { signal: ctrl.signal, country });
-        setItems(res);
-        setActive(-1);
-        setOpen(res.length > 0);
-      } catch {
-        /* network/aborted — manual entry still works */
-      } finally {
-        setLoading(false);
-      }
-    }, 350);
-    return () => { clearTimeout(t); ctrl.abort(); };
-  }, [value, country]);
+    if (q.length < 3) {
+      ctrlRef.current?.abort();
+      setItems([]); setLoading(false); setOpen(false); setStatus("idle");
+      return;
+    }
+    const t = setTimeout(() => { void runSearch(q); }, 350);
+    return () => clearTimeout(t);
+  }, [value, runSearch]);
+
+  useEffect(() => () => ctrlRef.current?.abort(), []);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -61,6 +85,7 @@ const AddressAutocomplete = ({ label, value, onChange, onSelect, error, placehol
     onSelect(s);
     setOpen(false);
     setItems([]);
+    setStatus("idle");
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -98,6 +123,23 @@ const AddressAutocomplete = ({ label, value, onChange, onSelect, error, placehol
         )}
       </div>
       {error && <p className="text-[11px] text-destructive mt-1.5 font-medium">{error}</p>}
+
+      {!error && !loading && status !== "idle" && value.trim().length >= 3 && (
+        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+          <p className="text-[11px] text-muted-foreground">
+            {status === "failed"
+              ? "Address lookup is unavailable right now."
+              : "No matches yet — try a shorter search, or enter it manually."}
+          </p>
+          <button
+            type="button"
+            onClick={() => void runSearch(value.trim(), { biasCountry: false })}
+            className="text-[11px] font-semibold text-primary hover:underline"
+          >
+            Search again
+          </button>
+        </div>
+      )}
 
       {open && items.length > 0 && (
         <ul

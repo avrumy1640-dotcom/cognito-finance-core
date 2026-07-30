@@ -268,7 +268,11 @@ async function ensureEntity(userId: string) {
     ...(profile?.occupation ? { occupation: String(profile.occupation).slice(0, 64) } : {}),
     address: {
       line_1: profile?.address_street || kyc?.street || "1 Market St",
-      ...(profile?.address_line2 ? { line_2: String(profile.address_line2).slice(0, 255) } : {}),
+      // line_2 is optional at Column. Whitespace-only values are treated as
+      // absent so we never send an empty string (Column rejects blank line_2).
+      ...(String(profile?.address_line2 ?? "").trim()
+        ? { line_2: String(profile.address_line2).trim().slice(0, 255) }
+        : {}),
       city: profile?.address_city || kyc?.city || "San Francisco",
       state: profile?.address_region || kyc?.region || "CA",
       postal_code: profile?.address_postal_code || kyc?.postal_code || "94105",

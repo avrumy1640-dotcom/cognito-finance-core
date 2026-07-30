@@ -318,6 +318,9 @@ function buildSteps(data: Data): Step[] {
           onChange={(v) => setField("address_street", v)}
           onSelect={(s) => {
             setField("address_street", s.street || s.label);
+            // Keep any unit the user already typed; only adopt the parsed one
+            // when the unit field is still empty.
+            if (s.unit && !data.address_line2.trim()) setField("address_line2", s.unit);
             if (s.city) setField("address_city", s.city);
             if (s.region) setField("address_region", s.region);
             if (s.postal_code) setField("address_postal_code", s.postal_code);
@@ -642,7 +645,7 @@ const Onboarding = () => {
         country: d.country || null,
         citizenship: d.citizenship || d.country || null,
         address_street: d.address_street || null,
-        address_line2: d.address_line2 || null,
+        address_line2: d.address_line2.trim() || null,
         address_city: d.address_city || null,
         address_region: d.address_region || null,
         address_postal_code: d.address_postal_code || null,
@@ -675,7 +678,7 @@ const Onboarding = () => {
         citizenship: d.citizenship || d.country,
         preferred_currency: "USD",
         address_street: d.address_street,
-        address_line2: d.address_line2 || null,
+        address_line2: d.address_line2.trim() || null,
         address_city: d.address_city,
         address_region: d.address_region,
         address_postal_code: d.address_postal_code,
