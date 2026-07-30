@@ -234,8 +234,10 @@ async function ensureEntity(userId: string) {
     last_name: last,
     email,
     ssn: "123456789",
-    date_of_birth: (profile?.date_of_birth as string | undefined)
-      ?? (kyc?.date_of_birth as string | undefined) ?? "1990-01-01",
+    date_of_birth: toIsoDob(
+      (profile?.date_of_birth as string | undefined) ?? (kyc?.date_of_birth as string | undefined),
+    ),
+
     pep_status: "not_checked",
     ...(income ? { income } : {}),
     ...(profile?.occupation ? { occupation: String(profile.occupation).slice(0, 64) } : {}),
