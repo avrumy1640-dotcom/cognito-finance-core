@@ -28,6 +28,30 @@ interface Props {
 
 const UNDER_REVIEW_AFTER_MIN = 5;
 
+/**
+ * Our banking partner reports four distinct statuses per required field, and
+ * they call for four different customer actions. Collapsing them all into
+ * "missing" tells someone to re-supply a detail they already gave when the
+ * real problem is that it needs correcting — or that nothing is needed at all.
+ */
+const REQUIREMENT_COPY: Record<
+  ComplianceItem["status"],
+  { Icon: typeof ShieldAlert; label: string; className: string }
+> = {
+  complete: { Icon: ShieldCheck, label: "Received and accepted", className: "text-success" },
+  missing: { Icon: ShieldAlert, label: "We still need this from you", className: "text-warning-foreground" },
+  invalid: { Icon: AlertTriangle, label: "This needs to be corrected and re-submitted", className: "text-destructive" },
+  pending: { Icon: Clock, label: "Being checked — nothing needed from you", className: "text-primary" },
+  unknown: { Icon: Search, label: "Under review", className: "text-muted-foreground" },
+};
+
+/** `date_of_birth` → "Date of birth". */
+const prettyField = (field: string) => {
+  const s = field.replace(/[._-]+/g, " ").trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "Requirement";
+};
+
+
 const fmtElapsed = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
   if (s < 60) return `${s}s ago`;
