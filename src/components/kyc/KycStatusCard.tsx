@@ -70,8 +70,11 @@ const KycStatusCard = ({
       : "unverified";
 
   // What our banking partner still needs, straight from their compliance
-  // endpoint — so a stuck application says exactly what's missing.
-  const [requirements, setRequirements] = useState<string[]>([]);
+  // endpoint — so a stuck application says exactly what's missing. The partner
+  // reports four distinct per-field statuses and they mean different things to
+  // the customer: `invalid` needs correcting, `missing` needs providing, and
+  // `pending` needs nothing at all but patience.
+  const [requirements, setRequirements] = useState<ComplianceItem[]>([]);
   useEffect(() => {
     if (display === "verified" || display === "unverified") { setRequirements([]); return; }
     let cancelled = false;
@@ -79,18 +82,12 @@ const KycStatusCard = ({
       try {
         const res = await ledgerProvider.myCompliance();
         if (cancelled) return;
-        const list = (res.requirements ?? [])
-          .map((r) => {
-            if (typeof r === "string") return r;
-            const o = r as Record<string, unknown>;
-            return String(o.description ?? o.message ?? o.field ?? o.name ?? "");
-          })
-          .filter(Boolean);
-        setRequirements(list);
+        setRequirements((res.requirements ?? []).filter((r) => r.status !== "complete"));
       } catch { /* the status card must render even if compliance is unreachable */ }
     })();
     return () => { cancelled = true; };
   }, [display, status]);
+
 
   useEffect(() => {
     if (display !== "pending" && display !== "under_review") return;
