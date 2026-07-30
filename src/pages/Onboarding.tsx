@@ -17,6 +17,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import DateOfBirthField from "@/components/form/DateOfBirthField";
+import AddressAutocomplete from "@/components/form/AddressAutocomplete";
+
 
 
 /* ============================================================================
