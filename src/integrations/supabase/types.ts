@@ -759,6 +759,7 @@ export type Database = {
         Row: {
           account_type: string | null
           address_city: string | null
+          address_line2: string | null
           address_postal_code: string | null
           address_region: string | null
           address_street: string | null
@@ -788,6 +789,7 @@ export type Database = {
         Insert: {
           account_type?: string | null
           address_city?: string | null
+          address_line2?: string | null
           address_postal_code?: string | null
           address_region?: string | null
           address_street?: string | null
@@ -817,6 +819,7 @@ export type Database = {
         Update: {
           account_type?: string | null
           address_city?: string | null
+          address_line2?: string | null
           address_postal_code?: string | null
           address_region?: string | null
           address_street?: string | null

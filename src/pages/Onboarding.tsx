@@ -49,6 +49,7 @@ interface Data {
   country: string;
   citizenship: string;
   address_street: string;
+  address_line2: string;
   address_city: string;
   address_region: string;
   address_postal_code: string;
@@ -71,6 +72,7 @@ const EMPTY: Data = {
   country: "",
   citizenship: "",
   address_street: "",
+  address_line2: "",
   address_city: "",
   address_region: "",
   address_postal_code: "",
@@ -325,6 +327,14 @@ function buildSteps(data: Data): Step[] {
           placeholder="Start typing your address"
         />
         <TextInput
+          value={data.address_line2}
+          onChange={(v) => setField("address_line2", v)}
+          placeholder="Apt, suite or unit (optional)"
+          autoComplete="address-line2"
+          autoFocus={false}
+        />
+        <TextInput
+
           value={data.address_city}
           onChange={(v) => setField("address_city", v)}
           placeholder="City"
@@ -572,6 +582,7 @@ const Onboarding = () => {
           country: prof.country || "",
           citizenship: prof.citizenship || "",
           address_street: prof.address_street || "",
+          address_line2: prof.address_line2 || "",
           address_city: prof.address_city || "",
           address_region: prof.address_region || "",
           address_postal_code: prof.address_postal_code || "",
@@ -631,6 +642,7 @@ const Onboarding = () => {
         country: d.country || null,
         citizenship: d.citizenship || d.country || null,
         address_street: d.address_street || null,
+        address_line2: d.address_line2 || null,
         address_city: d.address_city || null,
         address_region: d.address_region || null,
         address_postal_code: d.address_postal_code || null,
@@ -663,6 +675,7 @@ const Onboarding = () => {
         citizenship: d.citizenship || d.country,
         preferred_currency: "USD",
         address_street: d.address_street,
+        address_line2: d.address_line2 || null,
         address_city: d.address_city,
         address_region: d.address_region,
         address_postal_code: d.address_postal_code,

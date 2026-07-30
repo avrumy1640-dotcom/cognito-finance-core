@@ -18,6 +18,7 @@ export interface IdentityProfile {
   country: string; // ISO-2 residence
   citizenship: string; // ISO-2
   street: string;
+  line2: string;
   city: string;
   region: string;
   postal_code: string;
@@ -28,7 +29,7 @@ export interface IdentityProfile {
 
 export const EMPTY_IDENTITY: IdentityProfile = {
   first_name: "", last_name: "", date_of_birth: "", phone: "",
-  country: "", citizenship: "", street: "", city: "", region: "",
+  country: "", citizenship: "", street: "", line2: "", city: "", region: "",
   postal_code: "", occupation: "", employment_status: "", annual_income: "",
 };
 
@@ -59,6 +60,7 @@ export function identityFromProfileRow(row: ProfileRowish): IdentityProfile {
     country: str("country"),
     citizenship: str("citizenship") || str("country"),
     street: str("address_street"),
+    line2: str("address_line2"),
     city: str("address_city"),
     region: str("address_region"),
     postal_code: str("address_postal_code"),
@@ -91,6 +93,8 @@ export const LABELS: Record<keyof IdentityProfile, string> = {
   country: "Country of residence",
   citizenship: "Citizenship",
   street: "Street address",
+  line2: "Apt, suite or unit",
+
   city: "City",
   region: "State / region",
   postal_code: "Postal code",
