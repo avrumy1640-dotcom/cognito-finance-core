@@ -1387,6 +1387,14 @@ Deno.serve(async (req) => {
         return json(await adminList());
       case "admin_register_webhook":
         return json(await registerWebhook(Array.isArray(body.events) ? body.events : undefined));
+      case "admin_webhook_endpoints":
+        return json({ endpoints: await listWebhookEndpoints() });
+      case "admin_webhook_verify":
+        return json(await verifyWebhookEndpoint(String(body.id ?? ""), String(body.eventType ?? "")));
+      case "admin_webhook_deliveries":
+        return json({ deliveries: await webhookDeliveries(String(body.id ?? ""), Number(body.limit) || 25) });
+      case "admin_reconcile_events":
+        return json(await reconcileEvents(Number(body.limit) || 200));
       case "admin_simulate_ach_return":
         return json(await simulateAchReturn(user.id, body));
       case "admin_simulate_incoming_wire":
@@ -1399,17 +1407,19 @@ Deno.serve(async (req) => {
           .select("entity_id, verification_status").eq("user_id", user.id).maybeSingle();
         if (!mine) return json({ entityId: null, verificationStatus: null, requirements: [] });
         const c = await entityCompliance(mine.entity_id);
-        const reqs = (c?.requirements ?? c?.missing_fields ?? c?.details ?? []) as unknown;
         return json({
           entityId: mine.entity_id,
-          verificationStatus: c?.verification_status ?? mine.verification_status,
-          requirements: Array.isArray(reqs) ? reqs : [],
+          verificationStatus: normalizeVerification(c?.verification_status ?? mine.verification_status),
+          // Normalised {field, status, message} carrying all four real field
+          // statuses — the UI needs to tell "invalid" apart from "missing".
+          requirements: c.items ?? [],
           raw: c,
         });
       }
 
       case "admin_compliance":
         return json(await entityCompliance(String(body.entityId ?? "")));
+
       case "admin_delete":
         return json(await adminDelete(String(body.resource ?? ""), String(body.id ?? "")));
       case "admin_wipe":
