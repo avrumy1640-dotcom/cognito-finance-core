@@ -25,9 +25,9 @@ const VERIFY_EVENTS = [
   "book.transfer.completed",
 ] as const;
 
-const statusTone = (code: number | null, ok: boolean | null) => {
-  if (ok === true || (code && code >= 200 && code < 300)) return "text-success";
-  if (code || ok === false) return "text-destructive";
+const statusTone = (ok: boolean | null) => {
+  if (ok === true) return "text-success";
+  if (ok === false) return "text-destructive";
   return "text-muted-foreground";
 };
 
@@ -60,7 +60,11 @@ const WebhookEndpoints = () => {
     try {
       const res = await ledgerProvider.adminWebhookVerify(id, eventType);
       const ok = res.success === true || (res.statusCode !== null && res.statusCode < 300);
-      const detail = `HTTP ${res.statusCode ?? "—"}${res.responseBody ? ` · ${res.responseBody.slice(0, 160)}` : ""}`;
+      const detail = [
+        res.statusCode !== null ? `HTTP ${res.statusCode}` : null,
+        res.responseBody?.slice(0, 160),
+        ok ? "Provider accepted the delivery" : null,
+      ].filter(Boolean).join(" · ") || "Delivery attempted — see the log below";
       if (ok) toast.success("Delivery attempted successfully", { id: t, description: detail });
       else toast.error("Delivery attempt failed", { id: t, description: detail });
       void showLog(id);
@@ -190,8 +194,9 @@ const WebhookEndpoints = () => {
                     <span className="text-muted-foreground truncate">
                       {d.createdAt ? new Date(d.createdAt).toLocaleString() : "—"} · {d.eventType ?? "event"}
                     </span>
-                    <span className={`shrink-0 ${statusTone(d.statusCode, d.success)}`}>
-                      HTTP {d.statusCode ?? "—"}{d.attempts ? ` · ${d.attempts} attempt(s)` : ""}
+                    <span className={`shrink-0 ${statusTone(d.success)}`}>
+                      {d.status ?? (d.statusCode ? `HTTP ${d.statusCode}` : "—")}
+                      {d.attempts ? ` · ${d.attempts} attempt(s)` : ""}
                       {d.error ? ` · ${d.error.slice(0, 60)}` : ""}
                     </span>
                   </div>
