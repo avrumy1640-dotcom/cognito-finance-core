@@ -447,10 +447,35 @@ async function ensureBankAccount(userId: string, entityId: string) {
 }
 
 
+/**
+ * Real deposit instructions (full account number + routing number) straight
+ * from the provider. These are the ONLY numbers a customer may hand to an
+ * outside bank — nothing here is ever synthesised locally. Cached briefly so a
+ * chatty client can't multiply provider calls.
+ */
+const NUMBER_CACHE = new Map<string, { at: number; value: { accountNumber: string; routingNumber: string } | null }>();
+const NUMBER_TTL_MS = 10 * 60 * 1000;
+
+async function depositNumbersFor(bankAccountId: string) {
+  const hit = NUMBER_CACHE.get(bankAccountId);
+  if (hit && Date.now() - hit.at < NUMBER_TTL_MS) return hit.value;
+  let value: { accountNumber: string; routingNumber: string } | null = null;
+  try {
+    const list = await column<any>(`/bank-accounts/${bankAccountId}/account-numbers`);
+    const n = (list?.account_numbers ?? list?.data ?? [])[0];
+    if (n?.account_number) {
+      value = { accountNumber: String(n.account_number), routingNumber: String(n.routing_number ?? "") };
+    }
+  } catch { /* deposit details are best-effort; the UI shows a retry */ }
+  NUMBER_CACHE.set(bankAccountId, { at: Date.now(), value });
+  return value;
+}
+
 async function refreshAccounts(userId: string) {
   const rows = await ownedAccountRows(userId);
   const out: any[] = [];
   for (const r of rows) {
+    const numbers = await depositNumbersFor(r.bank_account_id);
     try {
       const live = await column<any>(`/bank-accounts/${r.bank_account_id}`);
       const status = accountStatus(live);
@@ -463,9 +488,9 @@ async function refreshAccounts(userId: string) {
       }).eq("id", r.id);
       // Return the LIVE values, not the row we read a moment before the update
       // — otherwise the snapshot renders a status we just proved to be stale.
-      out.push({ ...r, balances: live.balances ?? {}, status, is_overdrawn: isOverdrawn });
+      out.push({ ...r, numbers, balances: live.balances ?? {}, status, is_overdrawn: isOverdrawn });
     } catch {
-      out.push(r);
+      out.push({ ...r, numbers });
     }
   }
   return out;
@@ -604,10 +629,18 @@ async function snapshot(
   }
 
   const ids = accounts.map((a) => a.bank_account_id);
-  const [{ rows: transfers, hasMore, total }, ownerMap] = await Promise.all([
+  const [{ rows: transfers, hasMore, total }, ownerMap, { data: holderProfile }] = await Promise.all([
     syncTransfers(userId, ids, { limit: opts.limit, offset: opts.offset }),
     ownersFor(ids),
+    admin.from("profiles").select("preferred_name, email, business_name").eq("user_id", userId).maybeSingle(),
   ]);
+  const { data: kycRow } = await admin.from("kyc_profiles")
+    .select("legal_first_name, legal_last_name").eq("user_id", userId).maybeSingle();
+  const holderName = [kycRow?.legal_first_name, kycRow?.legal_last_name].filter(Boolean).join(" ")
+    || holderProfile?.business_name
+    || holderProfile?.preferred_name
+    || holderProfile?.email
+    || "Account holder";
 
   return {
     provisioned: true,
@@ -636,6 +669,17 @@ async function snapshot(
         isJoint: owners.length > 1,
         myRole: (a as any).owner_role ?? "primary",
         owners: owners.map((o) => ({ userId: o.userId, name: o.name, role: o.role, isMe: o.userId === userId })),
+        // Real deposit instructions, or null when the provider hasn't minted an
+        // account number yet — the UI must never invent one.
+        depositDetails: a.numbers
+          ? {
+            accountNumber: a.numbers.accountNumber,
+            routingNumber: a.numbers.routingNumber || (a.routing_number ?? ""),
+            holderName,
+            currency: "USD",
+            reference: a.numbers.accountNumber,
+          }
+          : null,
         ...mapBalances(a),
       };
     }),

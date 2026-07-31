@@ -271,13 +271,8 @@ export function generateLedger(userId: string, holderName: string, email?: strin
     pendingAmount: 0,
     status: "Active",
     openedDate: isoDaysAgo(420),
-    depositDetails: {
-      accountNumber: chkNumber,
-      iban: `US29GLSS${chkNumber}0000`,
-      holderName,
-      currency: "USD",
-      reference: chkNumber,
-    },
+    // Deposit instructions are provider-issued only — see mergeProviderIntoLedger.
+    depositDetails: { accountNumber: "", iban: "", holderName, currency: "USD", reference: "" },
   };
 
   const savings: DemoAccount = {
@@ -293,13 +288,7 @@ export function generateLedger(userId: string, holderName: string, email?: strin
     openedDate: isoDaysAgo(400),
     apy: 4.35,
     interestEarned: round2(180 + rng() * 320),
-    depositDetails: {
-      accountNumber: savNumber,
-      iban: `US29GLSS${savNumber}0000`,
-      holderName,
-      currency: "USD",
-      reference: savNumber,
-    },
+    depositDetails: { accountNumber: "", iban: "", holderName, currency: "USD", reference: "" },
   };
 
   // The local store no longer fabricates money. Accounts open at zero and the

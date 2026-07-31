@@ -10,7 +10,7 @@
 // balances and the activity feed.
 import { useState } from "react";
 import { toast } from "sonner";
-import { Copy, Check, Landmark, CreditCard, Building2, Zap } from "lucide-react";
+import { Copy, Check, Landmark, CreditCard, Building2, Zap, AlertCircle, RefreshCw } from "lucide-react";
 import GlassCard from "@/components/glass/GlassCard";
 import { useBank } from "@/store/bankStore";
 
@@ -82,7 +82,7 @@ const AddMoneyPanel = ({ onDone }: { onDone: () => void }) => {
         )}
       </div>
 
-      {tab === "bank" && <BankTransferIn details={details} />}
+      {tab === "bank" && <BankTransferIn details={details ? { ...details, routingNumber: acc.routingNumber } : undefined} />}
       {tab === "card" && <InstantLoad target={target} accountName={acc.name} onDone={onDone} label="Debit card" method="Debit card load" />}
       {tab === "ach" && <InstantLoad target={target} accountName={acc.name} onDone={onDone} label="External bank" method="ACH pull" />}
 
@@ -98,10 +98,41 @@ const AddMoneyPanel = ({ onDone }: { onDone: () => void }) => {
 
 // ---- 1. Bank Transfer In (Wire / SEPA) -----------------------------------
 
+/**
+ * Deposit instructions come from the banking partner. When the partner hasn't
+ * issued an account number yet we say so plainly and offer a retry — we never
+ * display a placeholder number a customer could hand to another bank.
+ */
+const DepositDetailsUnavailable = () => {
+  const { refreshLedger } = useBank();
+  const [busy, setBusy] = useState(false);
+  return (
+    <GlassCard className="space-y-3">
+      <div className="flex items-start gap-2.5">
+        <AlertCircle size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+        <div>
+          <p className="text-sm text-foreground font-semibold mb-1">Deposit details not available yet</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Your bank isn't showing an account number for this account yet. This usually clears within a few minutes of
+            the account opening. Use another funding option in the meantime.
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={async () => { setBusy(true); await refreshLedger({ silent: true }); setBusy(false); }}
+        disabled={busy}
+        className="w-full py-2.5 rounded-xl bg-secondary text-foreground text-xs font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50"
+      >
+        <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> {busy ? "Checking…" : "Check again"}
+      </button>
+    </GlassCard>
+  );
+};
+
 const BankTransferIn = ({
   details,
 }: {
-  details?: { accountNumber: string; iban: string; holderName: string; currency: string; reference: string };
+  details?: { accountNumber: string; iban: string; holderName: string; currency: string; reference: string; routingNumber?: string };
 }) => {
   const [copied, setCopied] = useState<string | null>(null);
   const copy = async (value: string, key: string) => {
@@ -117,18 +148,17 @@ const BankTransferIn = ({
   };
 
   if (!details?.accountNumber) {
-    return (
-      <GlassCard>
-        <p className="text-sm text-foreground font-semibold mb-1">Deposit details loading</p>
-        <p className="text-xs text-muted-foreground">Your deposit details appear here once your account finishes loading.</p>
-      </GlassCard>
-    );
+    return <DepositDetailsUnavailable />;
   }
+
 
   const currencyIsEur = details.currency.toUpperCase().includes("EUR");
   const rows: Array<{ label: string; value: string; key: string; mono?: boolean }> = [
     { label: "Beneficiary", value: details.holderName || "—", key: "Beneficiary" },
     { label: currencyIsEur ? "IBAN" : "Account number", value: details.iban || details.accountNumber, key: currencyIsEur ? "IBAN" : "Account number", mono: true },
+    ...(currencyIsEur || !details.routingNumber
+      ? []
+      : [{ label: "Routing number (ABA)", value: details.routingNumber, key: "Routing number", mono: true }]),
     { label: "Currency", value: details.currency, key: "Currency" },
     { label: "Reference", value: details.reference, key: "Reference", mono: true },
   ];

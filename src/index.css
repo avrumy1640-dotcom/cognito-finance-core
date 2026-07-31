@@ -262,6 +262,47 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
+  /* ---- Bottom-sheet safe areas -------------------------------------------
+     The floating bottom nav (mobile only) is ~4.5rem tall measured from the
+     viewport bottom. Sheets must never place content — least of all their
+     primary action — underneath it. */
+  .sheet-panel {
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sheet-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    margin-left: -1.25rem;
+    margin-right: -1.25rem;
+    padding: 0.75rem 1.25rem calc(0.25rem + env(safe-area-inset-bottom, 0px));
+    background: hsl(var(--card));
+    border-top: 1px solid hsl(var(--border) / 0.6);
+  }
+
+  /* Centred / bottom-anchored dialogs that aren't full sheets. */
+  .sheet-gap {
+    margin-bottom: 0;
+  }
+
+  @media (max-width: 1023px) {
+    .sheet-panel {
+      padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+    }
+    /* The action bar stays pinned to the sheet's bottom edge, but its own
+       padding lifts the buttons clear of the floating nav — so the bar's
+       surface covers the strip behind the nav instead of leaving a gap. */
+    .sheet-actions {
+      padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+    }
+    .sheet-gap {
+      margin-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    }
+  }
+
+
+
   .hide-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
