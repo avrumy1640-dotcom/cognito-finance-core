@@ -29,14 +29,11 @@ const ReceiveMoney = () => {
   const [copied, setCopied] = useState<string | null>(null);
 
   const acc = accounts[account];
-  // Prefer the account deposit details (populated on sync). Fall back
-  // to the local placeholder when the account hasn't been hydrated yet.
+  // Deposit instructions are issued by the banking partner. If they haven't
+  // arrived yet we show nothing rather than a fabricated account number.
   const details = acc.depositDetails;
-  const fullAccountNumber = useMemo(() => {
-    if (details?.accountNumber) return details.accountNumber;
-    const tail = acc.accountNumber.replace(/[^0-9]/g, "");
-    return tail.length >= 10 ? tail : `100${tail.padStart(7, "0")}`;
-  }, [acc.accountNumber, details]);
+  const fullAccountNumber = details?.accountNumber || "";
+  const hasDetails = Boolean(fullAccountNumber);
   const iban = details?.iban || "";
   const beneficiaryName = details?.holderName || user?.email || "Glass Bank customer";
   const currency = details?.currency || "USD";
@@ -46,7 +43,7 @@ const ReceiveMoney = () => {
     const lines = [
       `Send money to ${beneficiaryName} at Glass Bank`,
       iban ? `IBAN: ${iban}` : `Account: ${fullAccountNumber}`,
-      iban ? `Currency: ${currency}` : `Routing: ${acc.routingNumber}`,
+      iban ? `Currency: ${currency}` : `Routing (ABA): ${acc.routingNumber}`,
       `Reference (required): ${details?.reference || fullAccountNumber}`,
     ];
     if (amount) lines.push(`Amount: ${currency} ${Number(amount).toFixed(2)}`);
@@ -54,17 +51,12 @@ const ReceiveMoney = () => {
     return lines.join("\n");
   }, [acc, fullAccountNumber, amount, note, beneficiaryName, iban, currency, details]);
 
-  const qrPayload = useMemo(() => {
-    const params = new URLSearchParams({
-      account: fullAccountNumber,
-      routing: routeLine,
-      reference: details?.reference || fullAccountNumber,
-    });
-    if (amount) params.set("amount", Number(amount).toFixed(2));
-    if (note) params.set("note", note);
-    if (user?.email) params.set("to", user.email);
-    return `glassbank://pay?${params.toString()}`;
-  }, [fullAccountNumber, routeLine, amount, note, user, details]);
+  // The QR simply carries these deposit instructions as plain text: any phone
+  // camera can read it, and the sender types them into their own bank. There
+  // is no proprietary "scan to pay" network behind it, so we don't pretend
+  // there is.
+  const qrPayload = shareText;
+
 
   const copy = async (value: string, key: string) => {
     try {
