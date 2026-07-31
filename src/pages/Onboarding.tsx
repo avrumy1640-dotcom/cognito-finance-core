@@ -18,6 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import DateOfBirthField from "@/components/form/DateOfBirthField";
 import AddressAutocomplete from "@/components/form/AddressAutocomplete";
+import { invalidateGateCache } from "@/lib/gateCache";
+
 
 
 
@@ -700,7 +702,10 @@ const Onboarding = () => {
       return;
     }
     if (stepKey) localStorage.removeItem(stepKey);
+    // Onboarding state is cached for routing gates — force a re-read.
+    invalidateGateCache(`gates:${user.id}`);
     dispatch({ type: "DONE" });
+
     setTimeout(() => navigate("/profile/verify", { replace: true }), 1400);
   }, [user, state.data, stepKey, navigate]);
 
