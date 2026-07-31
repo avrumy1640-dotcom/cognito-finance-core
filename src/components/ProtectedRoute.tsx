@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { cachedFetch, peekCached, subscribeGateCache } from "@/lib/gateCache";
 
 interface Props {
   children: ReactNode;
@@ -10,41 +11,55 @@ interface Props {
   requireKyc?: boolean;
 }
 
-type CheckState = "pending" | "ok" | "required";
+interface Gates {
+  mfaRequired: boolean;
+  onboarded: boolean;
+  hasKyc: boolean;
+}
+
+const keyFor = (userId: string) => `gates:${userId}`;
+
+async function loadGates(userId: string): Promise<Gates> {
+  const [{ data: mfa }, { data: prof }, { data: kyc }] = await Promise.all([
+    supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+    supabase.from("profiles").select("onboarded_at").eq("user_id", userId).maybeSingle(),
+    supabase.from("kyc_profiles").select("status").eq("user_id", userId).maybeSingle(),
+  ]);
+  return {
+    mfaRequired: mfa?.nextLevel === "aal2" && mfa.currentLevel === "aal1",
+    onboarded: !!prof?.onboarded_at,
+    // Demo environment: any submitted verification resolves to approved.
+    hasKyc: !!kyc,
+  };
+}
 
 const ProtectedRoute = ({ children, requireKyc = false }: Props) => {
   const { session, user, loading } = useAuth();
   const location = useLocation();
-  const [mfaCheck, setMfaCheck] = useState<CheckState>("pending");
-  const [onboardCheck, setOnboardCheck] = useState<CheckState>("pending");
-  const [kycCheck, setKycCheck] = useState<CheckState>("pending");
-  const [checkedPath, setCheckedPath] = useState<string | null>(null);
+  const userId = user?.id ?? null;
+  // Gate answers are session-scoped, not route-scoped: resolve them once per
+  // signed-in user and reuse across navigations instead of blocking every
+  // route change on three round-trips.
+  const [gates, setGates] = useState<Gates | null>(() =>
+    userId ? peekCached<Gates>(keyFor(userId)) ?? null : null,
+  );
+
+  useEffect(() => subscribeGateCache(() => {
+    if (userId) setGates(peekCached<Gates>(keyFor(userId)) ?? null);
+  }), [userId]);
 
   useEffect(() => {
-    if (!session || !user) {
-      setMfaCheck("pending"); setOnboardCheck("pending"); setKycCheck("pending");
-      setCheckedPath(null);
-      return;
-    }
+    if (!session || !userId) { setGates(null); return; }
+    const cached = peekCached<Gates>(keyFor(userId));
+    if (cached) { setGates(cached); return; }
     let cancelled = false;
-    (async () => {
-      const [{ data: mfa }, { data: prof }, { data: kyc }] = await Promise.all([
-        supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-        supabase.from("profiles").select("onboarded_at").eq("user_id", user.id).maybeSingle(),
-        supabase.from("kyc_profiles").select("status").eq("user_id", user.id).maybeSingle(),
-      ]);
-      if (cancelled) return;
-      if (mfa?.nextLevel === "aal2" && mfa.currentLevel === "aal1") setMfaCheck("required");
-      else setMfaCheck("ok");
-      setOnboardCheck(prof?.onboarded_at ? "ok" : "required");
-      // Demo environment: any submitted verification resolves to approved.
-      setKycCheck(kyc ? "ok" : "required");
-      setCheckedPath(location.pathname);
-    })();
+    void cachedFetch(keyFor(userId), () => loadGates(userId)).then((g) => {
+      if (!cancelled) setGates(g);
+    });
     return () => { cancelled = true; };
-  }, [session, user, location.pathname]);
+  }, [session, userId]);
 
-  if (loading || (session && (checkedPath !== location.pathname || mfaCheck === "pending" || onboardCheck === "pending" || kycCheck === "pending"))) {
+  if (loading || (session && !gates)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
@@ -59,11 +74,11 @@ const ProtectedRoute = ({ children, requireKyc = false }: Props) => {
     return <Navigate to={seenIntro ? "/welcome" : "/intro"} replace state={{ from: location.pathname }} />;
   }
 
-  if (mfaCheck === "required") {
+  if (gates?.mfaRequired) {
     return <Navigate to="/mfa-challenge" replace state={{ from: location.pathname }} />;
   }
 
-  if (onboardCheck === "required" && location.pathname !== "/onboarding") {
+  if (gates && !gates.onboarded && location.pathname !== "/onboarding") {
     return <Navigate to="/onboarding" replace />;
   }
 
@@ -73,7 +88,8 @@ const ProtectedRoute = ({ children, requireKyc = false }: Props) => {
   // KycStatusCard.
   if (
     requireKyc &&
-    kycCheck === "required" &&
+    gates &&
+    !gates.hasKyc &&
     location.pathname !== "/profile/verify" &&
     location.pathname !== "/onboarding"
   ) {
