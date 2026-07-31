@@ -342,7 +342,10 @@ const VerifyIdentity = () => {
 
     setSubmitting(false);
     clearDraft();
+    // A new KYC row changes the routing gate answer too.
+    if (user?.id) invalidateGateCache(`gates:${user.id}`);
     await refresh();
+
   };
 
 
