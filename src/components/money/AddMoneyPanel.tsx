@@ -117,13 +117,9 @@ const BankTransferIn = ({
   };
 
   if (!details?.accountNumber) {
-    return (
-      <GlassCard>
-        <p className="text-sm text-foreground font-semibold mb-1">Deposit details loading</p>
-        <p className="text-xs text-muted-foreground">Your deposit details appear here once your account finishes loading.</p>
-      </GlassCard>
-    );
+    return <DepositDetailsUnavailable />;
   }
+
 
   const currencyIsEur = details.currency.toUpperCase().includes("EUR");
   const rows: Array<{ label: string; value: string; key: string; mono?: boolean }> = [
