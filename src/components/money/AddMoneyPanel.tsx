@@ -82,7 +82,7 @@ const AddMoneyPanel = ({ onDone }: { onDone: () => void }) => {
         )}
       </div>
 
-      {tab === "bank" && <BankTransferIn details={details} />}
+      {tab === "bank" && <BankTransferIn details={details ? { ...details, routingNumber: acc.routingNumber } : undefined} />}
       {tab === "card" && <InstantLoad target={target} accountName={acc.name} onDone={onDone} label="Debit card" method="Debit card load" />}
       {tab === "ach" && <InstantLoad target={target} accountName={acc.name} onDone={onDone} label="External bank" method="ACH pull" />}
 
