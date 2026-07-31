@@ -44,9 +44,13 @@ const ProtectedRoute = ({ children, requireKyc = false }: Props) => {
     userId ? peekCached<Gates>(keyFor(userId)) ?? null : null,
   );
 
-  useEffect(() => subscribeGateCache(() => {
-    if (userId) setGates(peekCached<Gates>(keyFor(userId)) ?? null);
-  }), [userId]);
+  useEffect(() => {
+    const unsub = subscribeGateCache(() => {
+      if (userId) setGates(peekCached<Gates>(keyFor(userId)) ?? null);
+    });
+    return () => { unsub(); };
+  }, [userId]);
+
 
   useEffect(() => {
     if (!session || !userId) { setGates(null); return; }
