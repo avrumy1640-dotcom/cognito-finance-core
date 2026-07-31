@@ -632,10 +632,15 @@ async function snapshot(
   const [{ rows: transfers, hasMore, total }, ownerMap, { data: holderProfile }] = await Promise.all([
     syncTransfers(userId, ids, { limit: opts.limit, offset: opts.offset }),
     ownersFor(ids),
-    admin.from("profiles").select("first_name, last_name, preferred_name, email").eq("user_id", userId).maybeSingle(),
+    admin.from("profiles").select("preferred_name, email, business_name").eq("user_id", userId).maybeSingle(),
   ]);
-  const holderName = [holderProfile?.first_name, holderProfile?.last_name].filter(Boolean).join(" ")
-    || holderProfile?.preferred_name || holderProfile?.email || "Account holder";
+  const { data: kycRow } = await admin.from("kyc_profiles")
+    .select("legal_first_name, legal_last_name").eq("user_id", userId).maybeSingle();
+  const holderName = [kycRow?.legal_first_name, kycRow?.legal_last_name].filter(Boolean).join(" ")
+    || holderProfile?.business_name
+    || holderProfile?.preferred_name
+    || holderProfile?.email
+    || "Account holder";
 
   return {
     provisioned: true,
