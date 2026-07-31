@@ -11,6 +11,8 @@ import {
   MessageSquare,
   Download,
   Check,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
@@ -21,12 +23,13 @@ type AccountKey = "checking" | "savings";
 
 const ReceiveMoney = () => {
   const navigate = useNavigate();
-  const { accounts } = useBank();
+  const { accounts, refreshLedger } = useBank();
   const { user } = useAuth();
   const [account, setAccount] = useState<AccountKey>("checking");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
 
   const acc = accounts[account];
   // Deposit instructions are issued by the banking partner. If they haven't
@@ -37,7 +40,6 @@ const ReceiveMoney = () => {
   const iban = details?.iban || "";
   const beneficiaryName = details?.holderName || user?.email || "Glass Bank customer";
   const currency = details?.currency || "USD";
-  const routeLine = iban || acc.routingNumber;
 
   const shareText = useMemo(() => {
     const lines = [
@@ -125,15 +127,39 @@ const ReceiveMoney = () => {
           </div>
         </motion.div>
 
-        <GlassCard className="flex flex-col items-center gap-3 py-6">
-          <div className="p-4 bg-background rounded-2xl border border-border">
-            <QRCodeSVG id="receive-qr" value={qrPayload} size={180} level="M" />
-          </div>
-          <p className="text-xs text-muted-foreground text-center max-w-[240px]">
-            Scan with any Glass Bank app to send funds directly to this account.
-          </p>
-        </GlassCard>
+        {hasDetails ? (
+          <GlassCard className="flex flex-col items-center gap-3 py-6">
+            <div className="p-4 bg-background rounded-2xl border border-border">
+              <QRCodeSVG id="receive-qr" value={qrPayload} size={180} level="M" />
+            </div>
+            <p className="text-xs text-muted-foreground text-center max-w-[260px] leading-relaxed">
+              Scan with any phone camera to read your deposit details — account number, routing number and reference.
+              The sender enters them in their own bank; this isn't a one-tap payment link.
+            </p>
+          </GlassCard>
+        ) : (
+          <GlassCard className="space-y-3">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-foreground mb-1">Deposit details not available yet</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Your bank hasn't issued an account number for {acc.name} yet. It usually appears within a few minutes
+                  of the account opening.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={async () => { setChecking(true); await refreshLedger({ silent: true }); setChecking(false); }}
+              disabled={checking}
+              className="w-full py-2.5 rounded-xl bg-secondary text-foreground text-xs font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={checking ? "animate-spin" : ""} /> {checking ? "Checking…" : "Check again"}
+            </button>
+          </GlassCard>
+        )}
 
+        {hasDetails && (
         <GlassCard className="space-y-3">
           <DetailRow
             label="Beneficiary"
@@ -173,6 +199,7 @@ const ReceiveMoney = () => {
             copied={copied === "reference"}
           />
         </GlassCard>
+        )}
 
         <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
           The sender must include the reference exactly as shown — that's how the deposit gets credited to your account.
@@ -210,13 +237,15 @@ const ReceiveMoney = () => {
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={share}
-            className="py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2"
+            disabled={!hasDetails}
+            className="py-3 rounded-xl disabled:opacity-50 bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2"
           >
             <Share2 size={16} /> Share details
           </button>
           <button
             onClick={downloadQr}
-            className="py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-2"
+            disabled={!hasDetails}
+            className="py-3 rounded-xl disabled:opacity-50 bg-secondary text-foreground text-sm font-semibold flex items-center justify-center gap-2"
           >
             <Download size={16} /> Save QR
           </button>
