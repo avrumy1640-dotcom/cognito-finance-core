@@ -283,7 +283,7 @@ const TransactionDetail = () => {
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full bg-background rounded-t-3xl p-5 pb-8 space-y-4 max-h-[88vh] overflow-y-auto"
+              className="w-full bg-background rounded-t-3xl p-5 space-y-4 max-h-[88vh] overflow-y-auto sheet-panel"
             >
               <div className="flex items-center justify-between">
                 <div>
