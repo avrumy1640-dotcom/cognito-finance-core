@@ -473,28 +473,29 @@ async function depositNumbersFor(bankAccountId: string) {
 
 async function refreshAccounts(userId: string) {
   const rows = await ownedAccountRows(userId);
-  const out: any[] = [];
-  for (const r of rows) {
-    const numbers = await depositNumbersFor(r.bank_account_id);
-    try {
-      const live = await column<any>(`/bank-accounts/${r.bank_account_id}`);
-      const status = accountStatus(live);
-      const isOverdrawn = live.is_overdrawn === true
-        || balanceField(live.balances ?? {}, "available") < 0;
-      await admin.from("column_bank_accounts").update({
-        balances: live.balances ?? {},
-        status,
-        is_overdrawn: isOverdrawn,
-      }).eq("id", r.id);
-      // Return the LIVE values, not the row we read a moment before the update
-      // — otherwise the snapshot renders a status we just proved to be stale.
-      out.push({ ...r, numbers, balances: live.balances ?? {}, status, is_overdrawn: isOverdrawn });
-    } catch {
-      out.push({ ...r, numbers });
-    }
-  }
-  return out;
+  // Every account is independent, and within an account the balance read and
+  // the deposit-number read are independent too — so this is one round-trip
+  // deep instead of 2 x N sequential provider calls.
+  return await Promise.all(rows.map(async (r: any) => {
+    const [numbers, live] = await Promise.all([
+      depositNumbersFor(r.bank_account_id),
+      column<any>(`/bank-accounts/${r.bank_account_id}`).catch(() => null),
+    ]);
+    if (!live) return { ...r, numbers };
+    const status = accountStatus(live);
+    const isOverdrawn = live.is_overdrawn === true
+      || balanceField(live.balances ?? {}, "available") < 0;
+    await admin.from("column_bank_accounts").update({
+      balances: live.balances ?? {},
+      status,
+      is_overdrawn: isOverdrawn,
+    }).eq("id", r.id);
+    // Return the LIVE values, not the row we read a moment before the update
+    // — otherwise the snapshot renders a status we just proved to be stale.
+    return { ...r, numbers, balances: live.balances ?? {}, status, is_overdrawn: isOverdrawn };
+  }));
 }
+
 
 
 const TX_PAGE_SIZE = 50;
