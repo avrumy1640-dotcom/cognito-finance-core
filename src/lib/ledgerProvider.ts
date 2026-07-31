@@ -33,6 +33,17 @@ export interface ProviderAccount {
   available: number;
   current: number;
   pending: number;
+  /**
+   * Real deposit instructions from the provider. `null` when the provider has
+   * not minted an account number yet — never synthesised client-side.
+   */
+  depositDetails?: {
+    accountNumber: string;
+    routingNumber: string;
+    holderName: string;
+    currency: string;
+    reference: string;
+  } | null;
   /** True when more than one entity owns the account at the provider. */
   isJoint?: boolean;
   myRole?: "primary" | "joint";
@@ -326,7 +337,16 @@ export function mergeProviderIntoLedger(ledger: DemoLedger, snap: ProviderSnapsh
       ...a,
       name: live.name || a.name,
       accountNumber: live.accountNumber || a.accountNumber,
-      routingNumber: live.routingNumber || a.routingNumber,
+      routingNumber: live.depositDetails?.routingNumber || live.routingNumber || a.routingNumber,
+      // Deposit instructions come from the provider only. When they aren't
+      // available yet we blank them out rather than show a made-up number.
+      depositDetails: {
+        accountNumber: live.depositDetails?.accountNumber ?? "",
+        iban: "",
+        holderName: live.depositDetails?.holderName ?? a.depositDetails.holderName,
+        currency: live.depositDetails?.currency ?? "USD",
+        reference: live.depositDetails?.reference ?? "",
+      },
       availableBalance: live.available,
       currentBalance: live.current,
       pendingAmount: live.pending,
