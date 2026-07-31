@@ -119,7 +119,7 @@ const MoveMoney = () => {
             >
               <motion.div
                 initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
-                className="w-full max-w-md bg-card rounded-3xl border border-border p-5 space-y-3"
+                className="w-full max-w-md bg-card rounded-3xl border border-border p-5 space-y-3 sheet-gap max-h-[72vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div>
@@ -157,7 +157,7 @@ const MoveMoney = () => {
             >
               <motion.div
                 initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
-                className="w-full max-w-md bg-card rounded-3xl border border-border p-5 space-y-3"
+                className="w-full max-w-md bg-card rounded-3xl border border-border p-5 space-y-3 sheet-gap max-h-[72vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div>
@@ -222,7 +222,7 @@ const Sheet = ({ children, onClose }: { children: React.ReactNode; onClose: () =
       exit={{ y: "100%" }}
       transition={{ type: "spring", damping: 32, stiffness: 320 }}
       onClick={(e) => e.stopPropagation()}
-      className="absolute bottom-0 left-0 right-0 bg-card rounded-t-3xl p-5 max-h-[90vh] overflow-y-auto safe-bottom"
+      className="absolute bottom-0 left-0 right-0 bg-card rounded-t-3xl p-5 max-h-[90vh] overflow-y-auto sheet-panel"
     >
       <div className="w-10 h-1 rounded-full bg-border mx-auto mb-5" />
       {children}
@@ -315,7 +315,7 @@ const TransferSheet = ({ onClose }: { onClose: () => void }) => {
                 placeholder="Add a note"
               />
             </div>
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 sheet-actions">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
               <button
                 onClick={() => setStep("review")}
@@ -344,7 +344,7 @@ const TransferSheet = ({ onClose }: { onClose: () => void }) => {
               <FeesTimingCard kind="internal" amount={numAmount} />
               <LimitsCheckPanel check={limitCheck} />
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 sheet-actions">
               <button onClick={() => setStep("form")} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Back</button>
               <button onClick={handleConfirm} disabled={!limitCheck.ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Confirm</button>
             </div>
@@ -422,7 +422,7 @@ const BillPaySheet = ({ onClose }: { onClose: () => void }) => {
             </div>
             <FeesTimingCard kind="bill" amount={num} />
             <LimitsCheckPanel check={checkLimits("bill", num)} />
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 sheet-actions">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
               <button onClick={pay} disabled={!canPay} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Pay Now</button>
             </div>
@@ -476,7 +476,7 @@ const ExternalTransferSheet = ({ onClose }: { onClose: () => void }) => {
             </div>
             <FeesTimingCard kind="external" amount={num} />
             <LimitsCheckPanel check={checkLimits("external", num)} />
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 sheet-actions">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
               <button
                 onClick={submit}
@@ -563,7 +563,7 @@ const WireSheet = ({ onClose }: { onClose: () => void }) => {
             </div>
             <FeesTimingCard kind="wire" amount={num} />
             <LimitsCheckPanel check={checkLimits("wire", num)} />
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 sheet-actions">
               <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-secondary text-foreground text-sm font-semibold">Cancel</button>
               <button onClick={submit} disabled={!num || !name || !routing || !account || !addressComplete || !checkLimits("wire", num).ok} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">Send Wire</button>
             </div>
