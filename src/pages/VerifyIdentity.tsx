@@ -31,6 +31,8 @@ import { useKyc } from "@/hooks/useKyc";
 import { ledgerProvider } from "@/lib/ledgerProvider";
 import { SANDBOX_KYC, SANDBOX_OUTCOMES } from "@/lib/sandboxKyc";
 import { loadIdentityProfile } from "@/lib/identityProfile";
+import { invalidateGateCache } from "@/lib/gateCache";
+
 
 const ID_TYPE_MAP = { passport: 1, national_id: 2, drivers_license: 3 } as const;
 
