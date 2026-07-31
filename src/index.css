@@ -290,13 +290,17 @@
     .sheet-panel {
       padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
     }
+    /* The action bar stays pinned to the sheet's bottom edge, but its own
+       padding lifts the buttons clear of the floating nav — so the bar's
+       surface covers the strip behind the nav instead of leaving a gap. */
     .sheet-actions {
-      bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
     }
     .sheet-gap {
       margin-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
     }
   }
+
 
 
   .hide-scrollbar {
