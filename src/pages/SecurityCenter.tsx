@@ -572,7 +572,7 @@ const SecurityCenter = () => {
 
       {passcodeModal && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center">
-          <div className="w-full sm:max-w-sm bg-card rounded-t-3xl sm:rounded-3xl p-5 space-y-4 sheet-panel">
+          <div className="w-full sm:max-w-sm bg-card rounded-t-3xl sm:rounded-3xl px-5 pt-5 space-y-4 sheet-panel">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-foreground">Set app passcode</h2>
               <button onClick={() => setPasscodeModal(false)} aria-label="Close"><X size={18} className="text-muted-foreground" /></button>

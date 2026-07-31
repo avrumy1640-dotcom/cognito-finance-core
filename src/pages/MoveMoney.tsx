@@ -222,7 +222,7 @@ const Sheet = ({ children, onClose }: { children: React.ReactNode; onClose: () =
       exit={{ y: "100%" }}
       transition={{ type: "spring", damping: 32, stiffness: 320 }}
       onClick={(e) => e.stopPropagation()}
-      className="absolute bottom-0 left-0 right-0 bg-card rounded-t-3xl p-5 max-h-[90vh] overflow-y-auto sheet-panel"
+      className="absolute bottom-0 left-0 right-0 bg-card rounded-t-3xl px-5 pt-5 max-h-[90vh] overflow-y-auto sheet-panel"
     >
       <div className="w-10 h-1 rounded-full bg-border mx-auto mb-5" />
       {children}

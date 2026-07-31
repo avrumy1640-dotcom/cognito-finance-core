@@ -21,7 +21,7 @@ const ExportPreviewModal = ({ result, onClose }: Props) => {
       <motion.div
         initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-card rounded-3xl p-5 max-h-[90vh] overflow-y-auto sheet-panel sheet-gap"
+        className="w-full max-w-md bg-card rounded-3xl px-5 pt-5 max-h-[90vh] overflow-y-auto sheet-panel sheet-gap"
       >
         <div className="flex items-start justify-between mb-4">
           <div>
