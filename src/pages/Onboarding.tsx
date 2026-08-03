@@ -44,6 +44,23 @@ type AccountType = "personal" | "business";
 interface Data {
   account_type: AccountType | "";
   business_name: string;
+  business_dba: string;
+  business_ein: string;
+  business_ein_pending: boolean;
+  business_legal_type: string;
+  business_industry: string;
+  business_website: string;
+  business_description: string;
+  business_inc_date: string;
+  business_inc_state: string;
+  business_address_street: string;
+  business_address_line2: string;
+  business_address_city: string;
+  business_address_region: string;
+  business_address_postal_code: string;
+  business_address_country: string;
+  owner_title: string;
+  owner_ownership: string;
   first_name: string;
   last_name: string;
   date_of_birth: string;
@@ -67,6 +84,23 @@ interface Data {
 const EMPTY: Data = {
   account_type: "",
   business_name: "",
+  business_dba: "",
+  business_ein: "",
+  business_ein_pending: false,
+  business_legal_type: "",
+  business_industry: "",
+  business_website: "",
+  business_description: "",
+  business_inc_date: "",
+  business_inc_state: "",
+  business_address_street: "",
+  business_address_line2: "",
+  business_address_city: "",
+  business_address_region: "",
+  business_address_postal_code: "",
+  business_address_country: "US",
+  owner_title: "",
+  owner_ownership: "",
   first_name: "",
   last_name: "",
   date_of_birth: "",
@@ -86,6 +120,55 @@ const EMPTY: Data = {
   tos: false,
   privacy: false,
 };
+
+/** Column's permitted `legal_type` values for a business entity. */
+const LEGAL_TYPES: { id: string; label: string }[] = [
+  { id: "llc", label: "LLC" },
+  { id: "corporation", label: "Corporation" },
+  { id: "sole-proprietorship", label: "Sole proprietorship" },
+  { id: "general-partnership", label: "General partnership" },
+  { id: "limited-partnership", label: "Limited partnership" },
+  { id: "professional-association", label: "Professional association" },
+  { id: "non-profit", label: "Non-profit" },
+  { id: "trust", label: "Trust" },
+  { id: "spv", label: "Special purpose vehicle" },
+  { id: "other", label: "Other" },
+];
+
+const INDUSTRIES: string[] = [
+  "Software & technology", "Professional services", "Retail & e-commerce",
+  "Construction & trades", "Healthcare", "Real estate", "Restaurants & food",
+  "Transportation & logistics", "Media & creative", "Education",
+  "Financial services", "Manufacturing", "Non-profit", "Other",
+];
+
+/** Auto-formats keystrokes into MM/DD/YYYY. */
+function formatMdy(raw: string): string {
+  const d = raw.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
+/** MM/DD/YYYY -> YYYY-MM-DD, or "" when incomplete/invalid. */
+function mdyToIso(v: string): string {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(v.trim());
+  if (!m) return "";
+  const [, mm, dd, yyyy] = m;
+  const month = Number(mm), day = Number(dd), year = Number(yyyy);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return "";
+  if (year < 1800 || year > new Date().getFullYear()) return "";
+  const dt = new Date(`${yyyy}-${mm}-${dd}T00:00:00Z`);
+  if (Number.isNaN(dt.getTime()) || dt.getTime() > Date.now()) return "";
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** ISO -> MM/DD/YYYY for hydrating a saved value back into the field. */
+function isoToMdy(v: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ""));
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : "";
+}
+
 
 const COUNTRIES: [string, string, string][] = [
   ["US", "United States", "🇺🇸"], ["CA", "Canada", "🇨🇦"], ["GB", "United Kingdom", "🇬🇧"],
@@ -182,25 +265,256 @@ function buildSteps(data: Data): Step[] {
       id: "business_name",
       kicker: kicker("Business"),
       title: "What's your business called?",
-      subtitle: "Use the exact legal name on your registration.",
+      subtitle: "Use the exact legal name on your registration. Add a DBA only if you trade under a different name.",
       validate: (d) => (d.business_name.trim().length > 1 ? null : "Enter your legal business name."),
       render: ({ data, setField, submit }) => (
-        <TextInput
-          value={data.business_name}
-          onChange={(v) => setField("business_name", v)}
-          onEnter={submit}
-          placeholder="Acme, Inc."
-          autoComplete="organization"
+        <div className="space-y-3">
+          <TextInput
+            value={data.business_name}
+            onChange={(v) => setField("business_name", v)}
+            placeholder="Legal business name — Acme, Inc."
+            autoComplete="organization"
+          />
+          <TextInput
+            value={data.business_dba}
+            onChange={(v) => setField("business_dba", v)}
+            onEnter={submit}
+            placeholder="Doing business as (optional)"
+            autoFocus={false}
+          />
+        </div>
+      ),
+    });
+
+    list.push({
+      id: "business_legal_type",
+      kicker: kicker("Structure"),
+      title: "How is the business structured?",
+      subtitle: "This must match your formation documents.",
+      validate: (d) => (d.business_legal_type ? null : "Choose your business structure."),
+      render: ({ data, setField }) => (
+        <ChoiceList
+          items={LEGAL_TYPES}
+          value={data.business_legal_type}
+          onChange={(v) => setField("business_legal_type", v)}
         />
+      ),
+    });
+
+    list.push({
+      id: "business_ein",
+      kicker: kicker("Tax ID"),
+      title: "What's the business EIN?",
+      subtitle: "Nine digits from your IRS letter. Sole proprietors may use their SSN.",
+      validate: (d) => {
+        if (d.business_ein_pending) return null;
+        const digits = d.business_ein.replace(/\D/g, "");
+        return digits.length === 9 ? null : "Enter the 9-digit EIN, or tell us it's still pending.";
+      },
+      render: ({ data, setField, submit }) => (
+        <div className="space-y-3">
+          <TextInput
+            value={data.business_ein}
+            onChange={(v) => {
+              const digits = v.replace(/\D/g, "").slice(0, 9);
+              setField("business_ein", digits.length > 2 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits);
+              if (digits.length) setField("business_ein_pending", false);
+            }}
+            onEnter={submit}
+            placeholder="12-3456789"
+            inputMode="numeric"
+            autoComplete="off"
+          />
+          <CheckRow
+            checked={data.business_ein_pending}
+            onChange={(on) => {
+              setField("business_ein_pending", on);
+              if (on) setField("business_ein", "");
+            }}
+            label="We've applied for an EIN but haven't received it yet"
+            desc="We'll open the account in a limited state until the EIN arrives."
+          />
+        </div>
+      ),
+    });
+
+    list.push({
+      id: "business_industry",
+      kicker: kicker("Industry"),
+      title: "What industry is the business in?",
+      validate: (d) => (d.business_industry ? null : "Choose the closest industry."),
+      render: ({ data, setField }) => (
+        <ChoiceList
+          items={INDUSTRIES.map((i) => ({ id: i, label: i }))}
+          value={data.business_industry}
+          onChange={(v) => setField("business_industry", v)}
+        />
+      ),
+    });
+
+    list.push({
+      id: "business_about",
+      kicker: kicker("About"),
+      title: "What does the business do?",
+      subtitle: "A plain-English description of your products, customers, and how you make money.",
+      validate: (d) =>
+        d.business_description.trim().length >= 20
+          ? null
+          : "Describe the business in at least a sentence (20+ characters).",
+      render: ({ data, setField, submit }) => (
+        <div className="space-y-3">
+          <TextArea
+            value={data.business_description}
+            onChange={(v) => setField("business_description", v)}
+            placeholder="We sell handmade furniture online to customers across the US."
+          />
+          <TextInput
+            value={data.business_website}
+            onChange={(v) => setField("business_website", v)}
+            onEnter={submit}
+            placeholder="Website (optional) — acme.com"
+            autoComplete="url"
+            autoFocus={false}
+          />
+        </div>
+      ),
+    });
+
+    list.push({
+      id: "business_incorporation",
+      kicker: kicker("Formation"),
+      title: "When and where was it formed?",
+      subtitle: "The date and state on your registration.",
+      validate: (d) => {
+        if (!mdyToIso(d.business_inc_date)) return "Enter the formation date as MM/DD/YYYY.";
+        if (d.business_inc_state.trim().length < 2) return "Enter the state or region of incorporation.";
+        return null;
+      },
+      render: ({ data, setField, submit }) => (
+        <div className="space-y-3">
+          <TextInput
+            value={data.business_inc_date}
+            onChange={(v) => setField("business_inc_date", formatMdy(v))}
+            placeholder="MM/DD/YYYY"
+            inputMode="numeric"
+          />
+          <TextInput
+            value={data.business_inc_state}
+            onChange={(v) => setField("business_inc_state", v)}
+            onEnter={submit}
+            placeholder="State of incorporation — DE"
+            autoFocus={false}
+          />
+        </div>
+      ),
+    });
+
+    list.push({
+      id: "business_address",
+      kicker: kicker("Business address"),
+      title: "Where is the business located?",
+      subtitle: "Your registered or principal place of business — not a PO box.",
+      validate: (d) =>
+        d.business_address_street.trim().length > 2 &&
+        d.business_address_city.trim().length > 1 &&
+        d.business_address_region.trim().length > 0 &&
+        d.business_address_postal_code.trim().length > 2
+          ? null
+          : "Complete the business street, city, state or region, and postal code.",
+      render: ({ data, setField, submit }) => (
+        <div className="space-y-3">
+          <AddressAutocomplete
+            label="Business street address"
+            value={data.business_address_street}
+            onChange={(v) => setField("business_address_street", v)}
+            onSelect={(s) => {
+              setField("business_address_street", s.street || s.label);
+              if (s.unit && !data.business_address_line2.trim()) setField("business_address_line2", s.unit);
+              if (s.city) setField("business_address_city", s.city);
+              if (s.region) setField("business_address_region", s.region);
+              if (s.postal_code) setField("business_address_postal_code", s.postal_code);
+              if (s.country) setField("business_address_country", s.country);
+            }}
+            country={data.business_address_country || undefined}
+            placeholder="Start typing the business address"
+          />
+          <TextInput
+            value={data.business_address_line2}
+            onChange={(v) => setField("business_address_line2", v)}
+            placeholder="Suite or unit (optional)"
+            autoComplete="address-line2"
+            autoFocus={false}
+          />
+          <TextInput
+            value={data.business_address_city}
+            onChange={(v) => setField("business_address_city", v)}
+            placeholder="City"
+            autoFocus={false}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <TextInput
+              value={data.business_address_region}
+              onChange={(v) => setField("business_address_region", v)}
+              placeholder="State / region"
+              autoFocus={false}
+            />
+            <TextInput
+              value={data.business_address_postal_code}
+              onChange={(v) => setField("business_address_postal_code", v)}
+              onEnter={submit}
+              placeholder="Postal code"
+              autoFocus={false}
+            />
+          </div>
+        </div>
+      ),
+    });
+
+    list.push({
+      id: "owner_role",
+      kicker: kicker("Ownership"),
+      title: "Your role in the business",
+      subtitle:
+        "Our banking partner requires a control person — the individual who can bind the business — plus each owner of 25% or more.",
+      validate: (d) => {
+        if (d.owner_title.trim().length < 2) return "Enter your title in the business.";
+        const pct = Number(d.owner_ownership);
+        if (!Number.isFinite(pct) || pct < 0 || pct > 100) return "Enter your ownership between 0 and 100%.";
+        return null;
+      },
+      render: ({ data, setField, submit }) => (
+        <div className="space-y-3">
+          <TextInput
+            value={data.owner_title}
+            onChange={(v) => setField("owner_title", v)}
+            placeholder="Chief Executive Officer"
+          />
+          <TextInput
+            value={data.owner_ownership}
+            onChange={(v) => setField("owner_ownership", v.replace(/[^0-9]/g, "").slice(0, 3))}
+            onEnter={submit}
+            placeholder="Ownership %"
+            inputMode="numeric"
+            autoFocus={false}
+          />
+          <p className="text-xs text-muted-foreground px-1">
+            Next we'll collect your personal details — required for you to be verified as the
+            control person on the business account.
+          </p>
+        </div>
       ),
     });
   }
 
+
   list.push({
     id: "name",
-    kicker: kicker("Name"),
-    title: "What's your legal name?",
-    subtitle: "Match your government-issued ID exactly — we use this to open your account.",
+    kicker: kicker(isBusiness ? "Control person" : "Name"),
+    title: isBusiness ? "Now, your legal name" : "What's your legal name?",
+    subtitle: isBusiness
+      ? "You're being added to the business as its control person, so we verify you personally too. Match your government-issued ID exactly."
+      : "Match your government-issued ID exactly — we use this to open your account.",
+
     validate: (d) =>
       d.first_name.trim().length > 0 && d.last_name.trim().length > 0
         ? null
@@ -303,8 +617,11 @@ function buildSteps(data: Data): Step[] {
   list.push({
     id: "address",
     kicker: kicker("Address"),
-    title: "What's your address?",
-    subtitle: "Where you receive mail today.",
+    title: isBusiness ? "What's your home address?" : "What's your address?",
+    subtitle: isBusiness
+      ? "Your personal residential address — separate from the business address."
+      : "Where you receive mail today.",
+
     validate: (d) =>
       d.address_street.trim().length > 2 &&
       d.address_city.trim().length > 1 &&
@@ -385,17 +702,19 @@ function buildSteps(data: Data): Step[] {
   list.push({
     id: "occupation",
     kicker: kicker("Work"),
-    title: isBusiness ? "What does your business do?" : "What do you do for work?",
+    title: isBusiness ? "What's your role outside the business?" : "What do you do for work?",
+    subtitle: isBusiness ? "Your own occupation — we already have the company's industry." : undefined,
     validate: (d) => (d.occupation.trim().length > 1 ? null : "Enter your occupation."),
     render: ({ data, setField, submit }) => (
       <TextInput
         value={data.occupation}
         onChange={(v) => setField("occupation", v)}
         onEnter={submit}
-        placeholder={isBusiness ? "Retail, SaaS, Consulting…" : "Software Engineer"}
+        placeholder={isBusiness ? "Founder & CEO" : "Software Engineer"}
       />
     ),
   });
+
 
   list.push({
     id: "income",
@@ -566,11 +885,10 @@ const Onboarding = () => {
     if (!user) return;
     let cancelled = false;
     (async () => {
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const [{ data: prof }, { data: biz }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle(),
+        supabase.from("business_profiles").select("*").eq("user_id", user.id).maybeSingle(),
+      ]);
       if (cancelled) return;
 
       let hydrated: Partial<Data> = {};
@@ -600,6 +918,31 @@ const Onboarding = () => {
           privacy: !!prof.privacy_accepted_at,
         };
       }
+      if (biz) {
+        hydrated = {
+          ...hydrated,
+          business_name: biz.legal_name || hydrated.business_name || "",
+          business_dba: biz.dba_name || "",
+          business_ein: biz.ein || "",
+          business_ein_pending: !!biz.ein_pending,
+          business_legal_type: biz.legal_type || "",
+          business_industry: biz.industry || "",
+          business_website: biz.website || "",
+          business_description: biz.description || "",
+          business_inc_date: isoToMdy(biz.date_of_incorporation || ""),
+          business_inc_state: biz.state_of_incorporation || "",
+          business_address_street: biz.address_street || "",
+          business_address_line2: biz.address_line2 || "",
+          business_address_city: biz.address_city || "",
+          business_address_region: biz.address_region || "",
+          business_address_postal_code: biz.address_postal_code || "",
+          business_address_country: biz.address_country || "US",
+          owner_title: biz.owner_title || "",
+          owner_ownership:
+            biz.owner_ownership_percentage == null ? "" : String(biz.owner_ownership_percentage),
+        };
+      }
+
 
       // Resume where they were.
       const stored = stepKey ? Number(localStorage.getItem(stepKey) || "0") : 0;
@@ -632,35 +975,73 @@ const Onboarding = () => {
     dispatch({ type: "SET_FIELD", key, value });
   }, []);
 
-  const saveDraft = useCallback(async (d: Data) => {
-    if (!user) return;
-    // Best-effort partial save; ignore errors so a network blip doesn't block progress.
-    await supabase.from("profiles").upsert(
+  /**
+   * Business entity details live in their own table — Column treats the
+   * business and the control person as two distinct entities, so we persist
+   * them separately rather than smearing company fields onto `profiles`.
+   */
+  const saveBusiness = useCallback(async (d: Data) => {
+    if (!user || d.account_type !== "business") return;
+    await supabase.from("business_profiles").upsert(
       {
         user_id: user.id,
-        email: user.email,
-        account_type: d.account_type || null,
-        business_name: d.business_name || null,
-        preferred_name: `${d.first_name} ${d.last_name}`.trim() || null,
-        date_of_birth: d.date_of_birth || null,
-        phone: d.phone || null,
-        country: d.country || null,
-        citizenship: d.citizenship || d.country || null,
-        address_street: d.address_street || null,
-        address_line2: d.address_line2.trim() || null,
-        address_city: d.address_city || null,
-        address_region: d.address_region || null,
-        address_postal_code: d.address_postal_code || null,
-        occupation: d.occupation || null,
-        employment_status: d.employment_status || null,
-        annual_income: d.annual_income || null,
-        source_of_funds: d.source_of_funds || null,
-        tax_country: d.country || null,
-        tax_id_number: d.tax_id_number || null,
+        legal_name: d.business_name || null,
+        dba_name: d.business_dba.trim() || null,
+        ein: d.business_ein_pending ? null : d.business_ein.replace(/\D/g, "") || null,
+        ein_pending: d.business_ein_pending,
+        legal_type: d.business_legal_type || null,
+        industry: d.business_industry || null,
+        website: d.business_website.trim() || null,
+        description: d.business_description.trim() || null,
+        date_of_incorporation: mdyToIso(d.business_inc_date) || null,
+        state_of_incorporation: d.business_inc_state.trim() || null,
+        country_of_incorporation: d.business_address_country || "US",
+        address_street: d.business_address_street || null,
+        address_line2: d.business_address_line2.trim() || null,
+        address_city: d.business_address_city || null,
+        address_region: d.business_address_region || null,
+        address_postal_code: d.business_address_postal_code || null,
+        address_country: d.business_address_country || "US",
+        owner_title: d.owner_title.trim() || null,
+        owner_ownership_percentage: d.owner_ownership === "" ? null : Number(d.owner_ownership),
       },
       { onConflict: "user_id" },
     );
   }, [user]);
+
+  const saveDraft = useCallback(async (d: Data) => {
+    if (!user) return;
+    // Best-effort partial save; ignore errors so a network blip doesn't block progress.
+    await Promise.all([
+      supabase.from("profiles").upsert(
+        {
+          user_id: user.id,
+          email: user.email,
+          account_type: d.account_type || null,
+          business_name: d.business_name || null,
+          preferred_name: `${d.first_name} ${d.last_name}`.trim() || null,
+          date_of_birth: d.date_of_birth || null,
+          phone: d.phone || null,
+          country: d.country || null,
+          citizenship: d.citizenship || d.country || null,
+          address_street: d.address_street || null,
+          address_line2: d.address_line2.trim() || null,
+          address_city: d.address_city || null,
+          address_region: d.address_region || null,
+          address_postal_code: d.address_postal_code || null,
+          occupation: d.occupation || null,
+          employment_status: d.employment_status || null,
+          annual_income: d.annual_income || null,
+          source_of_funds: d.source_of_funds || null,
+          tax_country: d.country || null,
+          tax_id_number: d.tax_id_number || null,
+        },
+        { onConflict: "user_id" },
+      ),
+      saveBusiness(d),
+    ]);
+  }, [user, saveBusiness]);
+
 
   const finish = useCallback(async () => {
     if (!user) return;
@@ -701,13 +1082,15 @@ const Onboarding = () => {
       toast.error(error.message);
       return;
     }
+    await saveBusiness(d);
     if (stepKey) localStorage.removeItem(stepKey);
+
     // Onboarding state is cached for routing gates — force a re-read.
     invalidateGateCache(`gates:${user.id}`);
     dispatch({ type: "DONE" });
 
     setTimeout(() => navigate("/profile/verify", { replace: true }), 1400);
-  }, [user, state.data, stepKey, navigate]);
+  }, [user, state.data, stepKey, navigate, saveBusiness]);
 
   // The ONE and only advance handler. Called from Continue click or Enter key.
   const submit = useCallback(() => {
@@ -956,6 +1339,52 @@ const TextInput = ({
     </div>
   );
 };
+
+const TextArea = ({
+  value, onChange, placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) => (
+  <textarea
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    placeholder={placeholder}
+    rows={4}
+    className="w-full p-4 rounded-2xl bg-secondary text-foreground text-base border-2 border-transparent outline-none focus:border-primary/50 focus:bg-card transition-all placeholder:text-muted-foreground/60 resize-none"
+  />
+);
+
+const CheckRow = ({
+  checked, onChange, label, desc,
+}: {
+  checked: boolean;
+  onChange: (on: boolean) => void;
+  label: string;
+  desc?: string;
+}) => (
+  <label
+    className={`w-full flex items-start gap-3 p-4 rounded-2xl text-left border-2 transition-all cursor-pointer ${
+      checked ? "border-primary bg-primary/5" : "border-border/60 bg-card"
+    }`}
+  >
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className="sr-only"
+      aria-label={label}
+    />
+    <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center mt-0.5 shrink-0 ${checked ? "border-primary bg-primary" : "border-border"}`}>
+      {checked && <Check size={12} className="text-primary-foreground" strokeWidth={3} />}
+    </span>
+    <span className="flex-1">
+      <span className="block text-sm font-medium text-foreground">{label}</span>
+      {desc && <span className="block text-xs text-muted-foreground mt-0.5">{desc}</span>}
+    </span>
+  </label>
+);
 
 const ChoiceList = ({
   items, value, onChange,
