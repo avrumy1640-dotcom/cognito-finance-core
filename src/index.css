@@ -301,6 +301,37 @@
     }
   }
 
+  /* ---- Desktop action-button sizing --------------------------------------
+     Primary actions are full-width on mobile (thumb reach), but stretching a
+     solid button across a 1024px content column looks broken on desktop. From
+     the lg breakpoint we cap solid actions and centre them. Opt out on any
+     element with `.btn-full` (e.g. list rows styled as buttons). */
+  @media (min-width: 1024px) {
+    main button.w-full.bg-primary:not(.btn-full),
+    main a.w-full.bg-primary:not(.btn-full),
+    main button.w-full.bg-destructive:not(.btn-full),
+    main a.w-full.bg-destructive:not(.btn-full),
+    main button.w-full.bg-foreground:not(.btn-full),
+    main button.w-full.gradient-hero:not(.btn-full),
+    main button[type="submit"].w-full:not(.btn-full),
+    form button[type="submit"].w-full:not(.btn-full),
+    .sheet-panel button.w-full.bg-primary:not(.btn-full),
+    .sheet-panel button.w-full.bg-destructive:not(.btn-full),
+    .sheet-panel button.w-full.bg-foreground:not(.btn-full),
+    .sheet-actions button.w-full:not(.btn-full) {
+      max-width: 22rem;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* Side-by-side action rows (cancel + confirm) keep their pairing: cap the
+       row instead of each button so they stay adjacent. */
+    .sheet-actions > .flex {
+      max-width: 28rem;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  }
 
 
   .hide-scrollbar {
