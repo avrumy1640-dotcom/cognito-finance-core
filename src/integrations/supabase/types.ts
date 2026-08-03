@@ -185,6 +185,90 @@ export type Database = {
         }
         Relationships: []
       }
+      business_profiles: {
+        Row: {
+          address_city: string | null
+          address_country: string | null
+          address_line2: string | null
+          address_postal_code: string | null
+          address_region: string | null
+          address_street: string | null
+          country_of_incorporation: string | null
+          created_at: string
+          date_of_incorporation: string | null
+          dba_name: string | null
+          description: string | null
+          ein: string | null
+          ein_pending: boolean
+          id: string
+          industry: string | null
+          legal_name: string | null
+          legal_type: string | null
+          owner_ownership_percentage: number | null
+          owner_title: string | null
+          person_entity_id: string | null
+          registration_id: string | null
+          state_of_incorporation: string | null
+          updated_at: string
+          user_id: string
+          website: string | null
+        }
+        Insert: {
+          address_city?: string | null
+          address_country?: string | null
+          address_line2?: string | null
+          address_postal_code?: string | null
+          address_region?: string | null
+          address_street?: string | null
+          country_of_incorporation?: string | null
+          created_at?: string
+          date_of_incorporation?: string | null
+          dba_name?: string | null
+          description?: string | null
+          ein?: string | null
+          ein_pending?: boolean
+          id?: string
+          industry?: string | null
+          legal_name?: string | null
+          legal_type?: string | null
+          owner_ownership_percentage?: number | null
+          owner_title?: string | null
+          person_entity_id?: string | null
+          registration_id?: string | null
+          state_of_incorporation?: string | null
+          updated_at?: string
+          user_id: string
+          website?: string | null
+        }
+        Update: {
+          address_city?: string | null
+          address_country?: string | null
+          address_line2?: string | null
+          address_postal_code?: string | null
+          address_region?: string | null
+          address_street?: string | null
+          country_of_incorporation?: string | null
+          created_at?: string
+          date_of_incorporation?: string | null
+          dba_name?: string | null
+          description?: string | null
+          ein?: string | null
+          ein_pending?: boolean
+          id?: string
+          industry?: string | null
+          legal_name?: string | null
+          legal_type?: string | null
+          owner_ownership_percentage?: number | null
+          owner_title?: string | null
+          person_entity_id?: string | null
+          registration_id?: string | null
+          state_of_incorporation?: string | null
+          updated_at?: string
+          user_id?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       column_bank_accounts: {
         Row: {
           account_number_id: string | null

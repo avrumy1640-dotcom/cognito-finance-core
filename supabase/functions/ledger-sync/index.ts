@@ -217,22 +217,26 @@ function accountStatus(acct: any): string {
 // ---------------------------------------------------------------------------
 // Core flows
 // ---------------------------------------------------------------------------
-async function ensureEntity(userId: string) {
-  const { data: existing } = await admin
-    .from("column_entities").select("*").eq("user_id", userId).maybeSingle();
-  if (existing) return existing;
+/** Column requires YYYY-MM-DD. Accept ISO or MM/DD/YYYY defensively. */
+function toIsoDate(v?: string | null, fallback = ""): string {
+  const s = String(v ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = /^(\d{2})[/-](\d{2})[/-](\d{4})$/.exec(s);
+  if (m) return `${m[3]}-${m[1]}-${m[2]}`;
+  return fallback;
+}
 
-  const [{ data: profile }, { data: kyc }] = await Promise.all([
-    admin.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
-    admin.from("kyc_profiles").select("*").eq("user_id", userId).maybeSingle(),
-  ]);
-
+/**
+ * Builds Column's `/entities/person` payload from our stored identity data.
+ * Shared by the personal flow and by the business flow, where the same person
+ * is created first and then linked to the business as its control person.
+ */
+function personPayload(profile: any, kyc: any): Record<string, unknown> {
   // `profiles` is the single source of truth for identity data — onboarding
   // collects it exactly once. The kyc row only ever refines the legal name.
   const profileName = String(profile?.preferred_name ?? "").trim().split(/\s+/);
   const first = kyc?.legal_first_name || profileName[0] || "Sandbox";
   const last = kyc?.legal_last_name || profileName.slice(1).join(" ") || "Tester";
-  const email = profile?.email || undefined;
 
   // Column's person `income` is an ARRAY of numbers (whole dollars) so a range
   // can be expressed — a bare number is rejected. We collect a single figure
@@ -240,29 +244,19 @@ async function ensureEntity(userId: string) {
   const incomeDigits = String(profile?.annual_income ?? "").replace(/[^0-9]/g, "");
   const income = incomeDigits ? [Number(incomeDigits)] : undefined;
 
-  // Column requires YYYY-MM-DD. Accept ISO or MM/DD/YYYY defensively.
-  const toIsoDob = (v?: string | null): string => {
-    const s = String(v ?? "").trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    const m = /^(\d{2})[/-](\d{2})[/-](\d{4})$/.exec(s);
-    if (m) return `${m[3]}-${m[1]}-${m[2]}`;
-    return "1990-01-01";
-  };
-
-
   // Sandbox entity. We deliberately do NOT forward a real SSN; the sandbox
   // accepts the documented test SSN and returns a verified person.
   // `pep_status` is required by Column's person payload; we do not ask the
   // customer a politically-exposed-person question yet, so "not_checked".
-  const payload: Record<string, unknown> = {
+  return {
     first_name: first,
     last_name: last,
-    email,
+    email: profile?.email || undefined,
     ssn: "123456789",
-    date_of_birth: toIsoDob(
+    date_of_birth: toIsoDate(
       (profile?.date_of_birth as string | undefined) ?? (kyc?.date_of_birth as string | undefined),
+      "1990-01-01",
     ),
-
     pep_status: "not_checked",
     ...(income ? { income } : {}),
     ...(profile?.occupation ? { occupation: String(profile.occupation).slice(0, 64) } : {}),
@@ -279,16 +273,104 @@ async function ensureEntity(userId: string) {
       country_code: (profile?.country || kyc?.country || "US").toUpperCase(),
     },
   };
+}
 
+/**
+ * Column's business entity payload. `ein` and `ein_pending` are mutually
+ * exclusive — sending both is rejected — and at least one form of business
+ * identification is required unless the EIN is pending.
+ */
+function businessPayload(biz: any, profile: any): Record<string, unknown> {
+  const ein = String(biz?.ein ?? "").replace(/\D/g, "");
+  const pending = !!biz?.ein_pending || !ein;
+  const country = String(biz?.address_country || profile?.country || "US").toUpperCase();
+  return {
+    business_name: String(biz?.legal_name ?? "").slice(0, 255),
+    ...(biz?.dba_name ? { dba_name: String(biz.dba_name).slice(0, 255) } : {}),
+    // Column takes `ein_pending` as the string "true"/"false".
+    ein_pending: pending ? "true" : "false",
+    ...(pending ? {} : { ein }),
+    ...(biz?.legal_type ? { legal_type: String(biz.legal_type) } : {}),
+    ...(biz?.industry ? { industry: String(biz.industry).slice(0, 128) } : {}),
+    ...(biz?.description ? { description: String(biz.description).slice(0, 1024) } : {}),
+    ...(biz?.website ? { website: String(biz.website).slice(0, 255) } : {}),
+    ...(biz?.date_of_incorporation
+      ? { date_of_incorporation: toIsoDate(biz.date_of_incorporation) }
+      : {}),
+    ...(biz?.state_of_incorporation
+      ? { state_of_incorporation: String(biz.state_of_incorporation).slice(0, 64) }
+      : {}),
+    country_of_incorporation: String(biz?.country_of_incorporation || country).toUpperCase(),
+    address: {
+      line_1: biz?.address_street || "1 Market St",
+      ...(String(biz?.address_line2 ?? "").trim()
+        ? { line_2: String(biz.address_line2).trim().slice(0, 255) }
+        : {}),
+      city: biz?.address_city || "San Francisco",
+      state: biz?.address_region || "CA",
+      postal_code: biz?.address_postal_code || "94105",
+      country_code: country,
+    },
+  };
+}
+
+async function ensureEntity(userId: string) {
+  const { data: existing } = await admin
+    .from("column_entities").select("*").eq("user_id", userId).maybeSingle();
+  if (existing) return existing;
+
+  const [{ data: profile }, { data: kyc }, { data: biz }] = await Promise.all([
+    admin.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
+    admin.from("kyc_profiles").select("*").eq("user_id", userId).maybeSingle(),
+    admin.from("business_profiles").select("*").eq("user_id", userId).maybeSingle(),
+  ]);
+
+  const isBusiness = String(profile?.account_type ?? "") === "business" && !!biz?.legal_name;
+
+  // The control person is created first in both flows: Column requires a real
+  // person entity before it can be linked to a business.
   // One entity per user, forever — the key is the user id.
-  const created = await column<any>("/entities/person", {
-    method: "POST", body: payload, idempotencyKey: `entity-person-${userId}`,
+  const person = await column<any>("/entities/person", {
+    method: "POST", body: personPayload(profile, kyc), idempotencyKey: `entity-person-${userId}`,
   });
+
+  let created = person;
+  let entityType = "person";
+
+  if (isBusiness) {
+    created = await column<any>("/entities/business", {
+      method: "POST",
+      body: businessPayload(biz, profile),
+      idempotencyKey: `entity-business-${userId}`,
+    });
+    entityType = "business";
+
+    // Roles: the signer is always the control person; 25%+ ownership also makes
+    // them a beneficial owner under Column's KYB requirements.
+    const pct = Number(biz?.owner_ownership_percentage ?? 0);
+    const roles = ["control_person", "account_opener"];
+    if (Number.isFinite(pct) && pct >= 25) roles.push("beneficial_owner");
+
+    await column<any>(`/entities/${created.id}/associated-persons`, {
+      method: "POST",
+      body: {
+        person_entity_id: person.id,
+        roles,
+        ...(Number.isFinite(pct) ? { ownership_percentage: Math.round(pct) } : {}),
+        ...(biz?.owner_title ? { title_in_business: String(biz.owner_title).slice(0, 128) } : {}),
+      },
+      idempotencyKey: `assoc-person-${userId}`,
+    });
+
+    await admin.from("business_profiles")
+      .update({ person_entity_id: person.id })
+      .eq("user_id", userId);
+  }
 
   const { data: row, error } = await admin.from("column_entities").insert({
     user_id: userId,
     entity_id: created.id,
-    entity_type: "person",
+    entity_type: entityType,
     // Column returns this UPPERCASE (VERIFIED / PENDING / MANUAL_REVIEW /
     // DENIED / UNVERIFIED). We normalise to lowercase on the way in so every
     // comparison in this app — and in the webhook handler — is case-stable.
@@ -303,6 +385,8 @@ async function ensureEntity(userId: string) {
   await syncKycStatus(userId, created.verification_status);
   return row;
 }
+
+
 
 /**
  * Column reports `verification_status` in UPPERCASE (`VERIFIED`, `PENDING`,
