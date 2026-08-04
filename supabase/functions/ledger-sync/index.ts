@@ -2453,7 +2453,7 @@ Deno.serve(async (req) => {
 
     // Rate limit per caller. Admin/mutating actions get a much tighter budget
     // than read-only status/sync polling.
-    const isMutating = isAdminAction || ["provision", "transfer", "submit_evidence", "joint_request", "joint_respond", "joint_cancel", "joint_remove", "sub_account_create", "reimburse_decide"].includes(action);
+    const isMutating = isAdminAction || ["provision", "transfer", "submit_evidence", "joint_request", "joint_respond", "joint_cancel", "joint_remove", "sub_account_create", "reimburse_decide", "approval_decide"].includes(action);
     const rl = rateLimit(`ledger:${user.id}:${isMutating ? "write" : "read"}`, isMutating ? 10 : 60);
     if (!rl.allowed) return tooManyRequests(rl.retryAfter, corsHeaders);
 
@@ -2477,6 +2477,10 @@ Deno.serve(async (req) => {
         return json({ ...await subAccountCreate(user.id, body), snapshot: await snapshot(user.id, { provision: false }) });
       case "reimburse_decide":
         return json(await reimburseDecide(user.id, body));
+      case "approvals_list":
+        return json(await approvalsList(user.id));
+      case "approval_decide":
+        return json(await approvalDecide(user.id, body));
 
       case "status": {
         const { data: entity } = await admin
