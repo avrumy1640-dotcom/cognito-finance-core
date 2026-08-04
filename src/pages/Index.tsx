@@ -121,6 +121,9 @@ const HomePage = () => {
     return { moneyIn: inSum, moneyOut: outSum, net: inSum - outSum };
   }, [transactions]);
 
+  if (businessLoading) return null;
+  if (isBusiness) return <Navigate to="/business" replace />;
+
   const kycMeta = (() => {
     if (kycLoading) return null;
     if (kycStatus === "verified")
