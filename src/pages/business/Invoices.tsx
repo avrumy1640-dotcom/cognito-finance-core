@@ -50,7 +50,16 @@ const Invoices = () => {
     const { data, error } = await supabase
       .from("invoices").select("*").order("created_at", { ascending: false });
     if (error) { toast.error(error.message); setRows([]); return; }
-    setRows((data ?? []) as Invoice[]);
+    const list = (data ?? []) as Invoice[];
+    // An invoice past its due date is overdue — computed on load and written
+    // back once so every screen (and the "you're owed" total) agrees.
+    const today = new Date(new Date().toDateString());
+    const stale = list.filter((r) => r.status === "sent" && r.due_date && new Date(r.due_date) < today);
+    if (stale.length) {
+      await supabase.from("invoices").update({ status: "overdue" }).in("id", stale.map((r) => r.id));
+      for (const r of stale) r.status = "overdue";
+    }
+    setRows(list);
   }, []);
 
   useEffect(() => { void load(); }, [load]);

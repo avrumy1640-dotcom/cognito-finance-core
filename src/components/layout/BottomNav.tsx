@@ -1,4 +1,4 @@
-import { Home, ArrowLeftRight, CreditCard, Activity, User, Landmark, Send, FileText } from "lucide-react";
+import { Home, ArrowLeftRight, CreditCard, Activity, User, Landmark, Send, FileText, Receipt } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useBusiness } from "@/hooks/useBusiness";
@@ -14,9 +14,9 @@ const tabs = [
 const businessTabs = [
   { path: "/business", label: "Home", icon: Landmark },
   { path: "/payments", label: "Pay", icon: Send },
+  { path: "/bills", label: "Bills", icon: Receipt },
   { path: "/invoices", label: "Invoices", icon: FileText },
   { path: "/activity", label: "Activity", icon: Activity },
-  { path: "/profile", label: "Profile", icon: User },
 ];
 
 const BottomNav = () => {

@@ -518,6 +518,15 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
       toast.loading(`${label}…`, { id });
       try {
         const res = await ledgerProvider.transfer(withRequestId);
+        if (res.status === "pending_approval") {
+          // Over the account's approval threshold — the money has NOT moved.
+          toast.info("Waiting for approval", {
+            id,
+            description: res.message ?? "This payment was sent to the account owner to approve.",
+          });
+          await refreshLedger({ silent: true });
+          return true;
+        }
         toast.success(`${label} submitted`, {
           id,
           description: successBody ? `${successBody} · ${res.status}` : `Status: ${res.status}`,

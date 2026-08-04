@@ -62,6 +62,9 @@ import BusinessPayments from "./pages/business/Payments";
 import Invoices from "./pages/business/Invoices";
 import Team from "./pages/business/Team";
 import Reimbursements from "./pages/business/Reimbursements";
+import Bills from "./pages/business/Bills";
+import Approvals from "./pages/business/Approvals";
+import Bookkeeping from "./pages/business/Bookkeeping";
 
 const queryClient = new QueryClient();
 
@@ -152,6 +155,9 @@ const App = () => (
               <Route path="/invoices" element={<Banking><Invoices /></Banking>} />
               <Route path="/team" element={<Banking><Team /></Banking>} />
               <Route path="/reimbursements" element={<Banking><Reimbursements /></Banking>} />
+              <Route path="/bills" element={<Banking><Bills /></Banking>} />
+              <Route path="/approvals" element={<Banking><Approvals /></Banking>} />
+              <Route path="/bookkeeping" element={<Banking><Bookkeeping /></Banking>} />
               <Route path="/scheduled" element={<Banking><ScheduledTransfers /></Banking>} />
               <Route path="/admin" element={<Guarded><RequireAdmin><AdminLayout /></RequireAdmin></Guarded>}>
                 <Route index element={<AdminProvider />} />
