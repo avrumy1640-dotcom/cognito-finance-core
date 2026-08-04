@@ -1113,6 +1113,7 @@ async function holdForApproval(
   // Tell every primary owner of the account that something is waiting.
   const { data: approvers } = await admin.from("account_owners")
     .select("user_id").eq("bank_account_id", from.bank_account_id).eq("role", "primary");
+  const requesterName = await displayName(userId);
   for (const a of approvers ?? []) {
     try {
       await admin.from("notifications").insert({
@@ -1123,7 +1124,15 @@ async function holdForApproval(
         data: { approvalId: row.id, bankAccountId: from.bank_account_id },
       });
     } catch { /* notification is best-effort */ }
+    await sendApprovalEmail(a.user_id, "payment-approval-request", `approval-req-${row.id}`, {
+      amount: usd(amountCents),
+      description: description || "Payment",
+      requestedBy: requesterName,
+      accountLabel: from.description || `Account ${String(from.bank_account_id).slice(-4)}`,
+      approvalsUrl: `${APP_URL}/approvals`,
+    });
   }
+
 
   return {
     transferId: null,
@@ -1292,6 +1301,13 @@ async function approvalDecide(userId: string, body: any) {
   if (!approve) {
     await admin.from("payment_approvals").update({ ...stamp, status: "denied" }).eq("id", id);
     await notifyRequester(req, "Payment denied", `${usd(Number(req.amount_cents))} was not approved.`);
+    await sendApprovalEmail(req.requested_by, "payment-approval-decision", `approval-dec-${id}`, {
+      amount: usd(Number(req.amount_cents)),
+      description: req.description || "Payment",
+      approved: false,
+      note: note ?? "",
+      approvalsUrl: `${APP_URL}/approvals`,
+    });
     return { status: "denied" };
   }
 
@@ -1304,6 +1320,13 @@ async function approvalDecide(userId: string, body: any) {
       ...stamp, status: "executed", transfer_id: result?.transferId ?? null,
     }).eq("id", id);
     await notifyRequester(req, "Payment approved", `${usd(Number(req.amount_cents))} has been sent.`);
+    await sendApprovalEmail(req.requested_by, "payment-approval-decision", `approval-dec-${id}`, {
+      amount: usd(Number(req.amount_cents)),
+      description: req.description || "Payment",
+      approved: true,
+      note: note ?? "",
+      approvalsUrl: `${APP_URL}/approvals`,
+    });
     return { status: "executed", transferId: result?.transferId ?? null };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Transfer failed";
@@ -1320,6 +1343,71 @@ async function notifyRequester(req: any, title: string, bodyText: string) {
     });
   } catch { /* best effort */ }
 }
+
+// ---------------------------------------------------------------------------
+// Approval email delivery.
+//
+// In-app notifications alone are easy to miss, and an over-threshold payment is
+// blocked until somebody acts. These helpers resolve the recipient's real email
+// address server-side (never from the client) and hand the message to the
+// transactional email pipeline, which owns suppression, retries and logging.
+// Delivery is strictly best-effort: an email failure must never roll back or
+// block the money movement itself.
+// ---------------------------------------------------------------------------
+const APP_URL = "https://cognito-finance-core.lovable.app";
+
+/** Resolve a friendly name for a user, falling back to something neutral. */
+async function displayName(userId: string): Promise<string> {
+  try {
+    const { data } = await admin.from("profiles")
+      .select("preferred_name, business_name, email").eq("user_id", userId).maybeSingle();
+    return data?.preferred_name || data?.business_name || data?.email || "A team member";
+  } catch {
+    return "A team member";
+  }
+}
+
+/** Look up a verified email address for a user (profile first, then auth). */
+async function emailFor(userId: string): Promise<string | null> {
+  try {
+    const { data } = await admin.from("profiles").select("email").eq("user_id", userId).maybeSingle();
+    if (data?.email) return String(data.email);
+  } catch { /* fall through to auth lookup */ }
+  try {
+    const { data } = await admin.auth.admin.getUserById(userId);
+    return data?.user?.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function sendApprovalEmail(
+  userId: string,
+  templateName: string,
+  idempotencyKey: string,
+  templateData: Record<string, unknown>,
+) {
+  try {
+    const to = await emailFor(userId);
+    if (!to) return;
+    await fetch(`${SUPABASE_URL}/functions/v1/send-transactional-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SERVICE_KEY}`,
+      },
+      body: JSON.stringify({
+        templateName,
+        recipientEmail: to,
+        idempotencyKey: `${idempotencyKey}-${userId}`,
+        templateData,
+      }),
+    });
+  } catch (err) {
+    console.warn("approval email delivery failed", err);
+  }
+}
+
 
 
 /**

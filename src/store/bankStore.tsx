@@ -424,8 +424,13 @@ export const BankProvider = ({ children }: { children: ReactNode }) => {
 
         // The banking partner is the ONLY source of truth for balances and
         // transactions. A failed call raises a real error state rather than
-        // quietly showing stale or simulated numbers.
-        const snap = await ledgerProvider.sync({ limit: liveTxWindowRef.current });
+        // quietly showing stale or simulated numbers. An explicit (non-silent)
+        // refresh always goes to the network; background syncs may be served
+        // from the short-lived shared snapshot.
+        const snap = opts?.silent
+          ? await ledgerProvider.sync({ limit: liveTxWindowRef.current })
+          : await ledgerProvider.syncFresh({ limit: liveTxWindowRef.current });
+
         // `sync` refreshes the mirror tables, so suppress the change events it
         // just generated — otherwise each sync immediately schedules another.
         selfWriteUntilRef.current = Date.now() + 8000;
