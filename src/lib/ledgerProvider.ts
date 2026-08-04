@@ -236,6 +236,29 @@ export interface JointOverview {
   }>;
 }
 
+/** One payment parked by the approval-threshold control. */
+export interface PendingApproval {
+  id: string;
+  bankAccountId: string;
+  accountName: string;
+  kind: string;
+  amountCents: number;
+  description: string | null;
+  status: "pending_approval" | "executed" | "denied" | "failed" | string;
+  requestedByMe: boolean;
+  createdAt: string;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  transferId: string | null;
+  error: string | null;
+}
+
+export interface ApprovalOverview {
+  approvals: PendingApproval[];
+  /** Accounts where the caller is the primary owner and may decide. */
+  canApprove: string[];
+}
+
 export const ledgerProvider = {
   status: () => call<{ sandbox: boolean; configured: boolean; entity: unknown }>({ action: "status" }),
   diagnose: () =>
@@ -246,7 +269,16 @@ export const ledgerProvider = {
   provision: (page: SyncPage = {}) => call<ProviderSnapshot>({ action: "provision", ...page }),
   sync: (page: SyncPage = {}) => call<ProviderSnapshot>({ action: "sync", ...page }),
   transfer: (args: TransferArgs) =>
-    call<{ transferId: string; status: string; snapshot: ProviderSnapshot }>({ action: "transfer", ...args }),
+    call<{
+      transferId: string | null; status: string; snapshot?: ProviderSnapshot;
+      /** Set when the payment was parked for owner approval instead of sent. */
+      approvalId?: string; message?: string;
+    }>({ action: "transfer", ...args }),
+  /** Payments held for owner approval on any account the caller can see. */
+  approvalsList: () => call<ApprovalOverview>({ action: "approvals_list" }),
+  /** Primary owner only: approve (executes the real transfer) or deny. */
+  approvalDecide: (id: string, approve: boolean, note?: string) =>
+    call<{ status: string; transferId?: string | null }>({ action: "approval_decide", id, approve, note }),
   /** Uploads a KYC document and links it to the entity as verification evidence. */
   submitEvidence: (args: { dataUrl: string; documentType: ColumnDocumentType; purposes?: ColumnEvidencePurpose[] }) =>
     call<{ documentId: string | null; entityId: string; status: string }>({ action: "submit_evidence", ...args }),
