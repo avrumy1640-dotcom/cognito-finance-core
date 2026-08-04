@@ -65,6 +65,9 @@ import Reimbursements from "./pages/business/Reimbursements";
 import Bills from "./pages/business/Bills";
 import Approvals from "./pages/business/Approvals";
 import Bookkeeping from "./pages/business/Bookkeeping";
+import Privacy from "./pages/legal/Privacy";
+import Terms from "./pages/legal/Terms";
+import PrivacyCenter from "./pages/PrivacyCenter";
 
 const queryClient = new QueryClient();
 
@@ -100,6 +103,9 @@ const App = () => (
               <Route path="/intro" element={<Intro />} />
               <Route path="/welcome" element={<Welcome />} />
               <Route path="/blog/early-direct-deposit-guide" element={<EarlyDirectDepositGuide />} />
+              {/* Legal pages stay public — they must be readable before sign-up. */}
+              <Route path="/legal/privacy" element={<Privacy />} />
+              <Route path="/legal/terms" element={<Terms />} />
               <Route path="/login" element={<SignIn />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/verify-email" element={<VerifyEmail />} />
@@ -140,6 +146,7 @@ const App = () => (
               <Route path="/settings" element={<Guarded><Settings /></Guarded>} />
               <Route path="/support" element={<Guarded><Support /></Guarded>} />
               <Route path="/support/:id" element={<Guarded><SupportTicket /></Guarded>} />
+              <Route path="/privacy-center" element={<Guarded><PrivacyCenter /></Guarded>} />
               <Route path="/joint-accounts" element={<Banking><JointAccounts /></Banking>} />
               <Route path="/beneficiaries" element={<Banking><Beneficiaries /></Banking>} />
               <Route path="/payment-requests" element={<Banking><PaymentRequests /></Banking>} />

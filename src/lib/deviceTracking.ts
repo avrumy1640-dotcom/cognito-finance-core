@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { recordAuditEvent } from "@/lib/audit";
 
 const DEVICE_KEY = "gb.device_id";
 
@@ -50,12 +51,23 @@ export async function recordSignIn(userId: string) {
 
   // Best-effort — never throw into the auth flow.
   try {
-    await supabase.from("login_history").insert({
+    const { error } = await supabase.from("login_history").insert({
       user_id: userId,
       user_agent: ua,
       device_label: label,
     });
-  } catch { /* ignore */ }
+    if (error) console.warn("login_history insert failed:", error.message);
+  } catch (e) { console.warn("login_history insert failed:", (e as Error).message); }
+
+  // Immutable, admin-readable audit record of the sign-in.
+  void recordAuditEvent("auth.sign_in", {
+    device: label,
+    deviceId,
+    newDevice: isNewDevice,
+    dormant,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? null,
+  });
+
 
   try {
     await supabase.from("trusted_devices").upsert(

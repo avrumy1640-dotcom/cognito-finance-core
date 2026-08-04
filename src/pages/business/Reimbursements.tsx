@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Receipt, Loader2, Plus, Check, X } from "lucide-react";
@@ -8,6 +8,14 @@ import Seo from "@/components/Seo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { ledgerProvider, friendlyProviderMessage, type ProviderSnapshot } from "@/lib/ledgerProvider";
+import {
+  FilterShell,
+  FilterChip,
+  DateRangeField,
+  AmountRangeField,
+  inDateWindow,
+  inAmountWindow,
+} from "@/components/filters/FilterBar";
 import { money } from "./BusinessHome";
 
 interface Reimb {
@@ -28,6 +36,8 @@ const STATUS_STYLE: Record<string, string> = {
   denied: "bg-destructive/10 text-destructive",
 };
 
+const STATUS_FILTERS = ["All", "pending", "approved", "paid", "denied"];
+
 /**
  * Team reimbursements. A member submits an expense with a receipt; an owner or
  * admin approves, which triggers a real book transfer into the requester's own
@@ -38,6 +48,14 @@ const Reimbursements = () => {
   const [rows, setRows] = useState<Reimb[] | null>(null);
   const [snap, setSnap] = useState<ProviderSnapshot | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+
 
   const [accountId, setAccountId] = useState("");
   const [amount, setAmount] = useState("");
@@ -114,6 +132,23 @@ const Reimbursements = () => {
     else toast.error("Receipt unavailable");
   };
 
+  const advancedCount = (dateFrom || dateTo ? 1 : 0) + (minAmount || maxAmount ? 1 : 0);
+  const clearAll = () => {
+    setSearch(""); setStatusFilter("All");
+    setDateFrom(""); setDateTo(""); setMinAmount(""); setMaxAmount("");
+  };
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (rows ?? []).filter((r) => {
+      if (statusFilter !== "All" && r.status !== statusFilter) return false;
+      if (q && !r.description.toLowerCase().includes(q)) return false;
+      if (!inDateWindow(r.created_at, dateFrom, dateTo)) return false;
+      if (!inAmountWindow(r.amount_cents / 100, minAmount, maxAmount)) return false;
+      return true;
+    });
+  }, [rows, search, statusFilter, dateFrom, dateTo, minAmount, maxAmount]);
+
   return (
     <AppLayout>
       <Seo title="Reimbursements | Glass Bank" description="Submit and approve team expense reimbursements." path="/reimbursements" noindex />
@@ -142,6 +177,30 @@ const Reimbursements = () => {
           </button>
         </GlassCard>
 
+        {!!rows?.length && (
+          <FilterShell
+            search={search}
+            onSearch={setSearch}
+            placeholder="Search expense description…"
+            activeCount={advancedCount}
+            onClear={clearAll}
+            chips={STATUS_FILTERS.map((s) => (
+              <FilterChip
+                key={s}
+                label={s === "All" ? "All" : s[0].toUpperCase() + s.slice(1)}
+                active={statusFilter === s}
+                onClick={() => setStatusFilter(s)}
+                count={s === "All" ? rows.length : rows.filter((r) => r.status === s).length}
+              />
+            ))}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DateRangeField label="Submitted" from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo} />
+              <AmountRangeField min={minAmount} max={maxAmount} onMin={setMinAmount} onMax={setMaxAmount} />
+            </div>
+          </FilterShell>
+        )}
+
         {!rows && <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary" /></div>}
         {rows?.length === 0 && (
           <GlassCard className="text-center py-10">
@@ -149,9 +208,16 @@ const Reimbursements = () => {
             <p className="text-sm font-semibold text-foreground">No requests yet</p>
           </GlassCard>
         )}
+        {!!rows?.length && visible.length === 0 && (
+          <GlassCard className="text-center py-8">
+            <p className="text-sm font-semibold text-foreground">No requests match these filters</p>
+            <button onClick={clearAll} className="text-xs font-semibold text-primary mt-2">Reset filters</button>
+          </GlassCard>
+        )}
 
         <div className="space-y-2">
-          {(rows ?? []).map((r) => (
+          {visible.map((r) => (
+
             <GlassCard key={r.id} className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">

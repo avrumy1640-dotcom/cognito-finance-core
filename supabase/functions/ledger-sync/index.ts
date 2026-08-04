@@ -2462,6 +2462,10 @@ Deno.serve(async (req) => {
       if (!isAdmin) return json({ error: "Forbidden" }, 403);
     }
 
+    // Every mutating and administrative call is recorded to the audit trail
+    // with the server-derived actor — an auditor needs a durable record of who
+    // moved money, who changed permissions, and who ran admin tooling.
+    const response = await (async () => {
     switch (action) {
       case "joint_list":
         return json(await jointList(user.id));
@@ -2566,6 +2570,33 @@ Deno.serve(async (req) => {
       default:
         return json({ error: `Unknown action "${action}"` }, 400);
     }
+    })();
+
+    if (isMutating) {
+      // Never log full payloads — they carry account and counterparty numbers.
+      try {
+        await admin.from("audit_logs").insert({
+          actor_id: user.id,
+          actor_email: user.email ?? null,
+          action: `ledger.${action}`,
+          entity_type: isAdminAction ? "admin" : "transfer",
+          entity_id: String(body?.bankAccountId ?? body?.id ?? "") || null,
+          metadata: {
+            ok: response.status < 400,
+            status: response.status,
+            amount: typeof body?.amount === "number" ? body.amount : undefined,
+            kind: body?.kind ?? body?.type ?? undefined,
+          },
+        });
+      } catch (auditError) {
+        // A failed audit write must not silently vanish, but it also must not
+        // roll back a completed money movement.
+        console.error("audit_logs write failed", (auditError as Error).message, action);
+      }
+    }
+
+    return response;
+
   } catch (e) {
     const err = e as ColumnError;
     console.error("ledger-sync error", err.message, err.code ?? "");

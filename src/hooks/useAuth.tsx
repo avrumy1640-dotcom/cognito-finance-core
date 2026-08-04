@@ -3,6 +3,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { recordSignIn } from "@/lib/deviceTracking";
 import { invalidateGateCache } from "@/lib/gateCache";
+import { recordAuditEvent } from "@/lib/audit";
 
 
 interface AuthContextValue {
@@ -62,6 +63,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error: error?.message };
     },
     signOut: async () => {
+      // Record before the token is invalidated — afterwards we can't authenticate the write.
+      await recordAuditEvent("auth.sign_out");
       await supabase.auth.signOut();
     },
     signOutOthers: async () => {
