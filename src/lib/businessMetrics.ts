@@ -109,7 +109,7 @@ export function topCategoriesThisMonth(txs: FlowTx[], limit = 5, now = new Date(
     if (t.status === "failed" || t.status === "returned" || t.status === "canceled") continue;
     const d = new Date(t.date);
     if (Number.isNaN(d.getTime()) || monthKey(d) !== key) continue;
-    const cat = t.category || categorize(t.merchant, t.amount).category;
+    const cat = t.category || categorize(t.merchant, "debit").category;
     totals.set(cat, (totals.get(cat) ?? 0) + Math.abs(t.amount));
   }
   return [...totals.entries()]
