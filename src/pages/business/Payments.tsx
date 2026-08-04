@@ -3,11 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowLeftRight, Building2, Globe, CalendarClock, Users2, Loader2, ArrowUpRight, ArrowDownLeft,
+  ShieldCheck,
 } from "lucide-react";
 import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import Seo from "@/components/Seo";
 import { ledgerProvider, friendlyProviderMessage, type ProviderSnapshot } from "@/lib/ledgerProvider";
+import { supabase } from "@/integrations/supabase/client";
 import { money } from "./BusinessHome";
 
 const methods = [
@@ -27,12 +29,29 @@ const Payments = () => {
   const navigate = useNavigate();
   const [snap, setSnap] = useState<ProviderSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [owed, setOwed] = useState<{ payable: number; receivable: number } | null>(null);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
 
   const load = useCallback(async () => {
     try { setSnap(await ledgerProvider.sync({ limit: 12 })); }
     catch (e) { setError(friendlyProviderMessage(e)); }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  const loadTotals = useCallback(async () => {
+    const [bills, invoices] = await Promise.all([
+      supabase.from("bills").select("amount_cents").in("status", ["unpaid", "scheduled"]),
+      supabase.from("invoices").select("amount_cents").in("status", ["sent", "overdue"]),
+    ]);
+    setOwed({
+      payable: (bills.data ?? []).reduce((s, r) => s + Number(r.amount_cents), 0) / 100,
+      receivable: (invoices.data ?? []).reduce((s, r) => s + Number(r.amount_cents), 0) / 100,
+    });
+    try {
+      const res = await ledgerProvider.approvalsList();
+      setPendingApprovals(res.approvals.filter((a) => a.status === "pending_approval").length);
+    } catch { /* non-blocking */ }
+  }, []);
+
+  useEffect(() => { void load(); void loadTotals(); }, [load, loadTotals]);
 
   const payments = (snap?.transactions ?? []).filter((t) => t.amount < 0).slice(0, 8);
 
@@ -45,6 +64,36 @@ const Payments = () => {
           <p className="text-sm text-muted-foreground mt-1">Pay vendors, run wires and schedule recurring bills.</p>
         </motion.div>
 
+        <GlassCard elevated className="flex items-stretch gap-4">
+          <button onClick={() => navigate("/bills")} className="flex-1 text-left">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">You owe</p>
+            <p className="text-2xl font-display font-bold text-foreground tabular-nums mt-0.5">
+              {owed ? money(owed.payable) : "—"}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Bills to pay</p>
+          </button>
+          <div className="w-px bg-border" />
+          <button onClick={() => navigate("/invoices")} className="flex-1 text-left">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">You're owed</p>
+            <p className="text-2xl font-display font-bold text-foreground tabular-nums mt-0.5">
+              {owed ? money(owed.receivable) : "—"}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Unpaid invoices</p>
+          </button>
+        </GlassCard>
+
+        {pendingApprovals > 0 && (
+          <button onClick={() => navigate("/approvals")} className="w-full text-left">
+            <GlassCard className="flex items-center gap-3">
+              <ShieldCheck size={20} className="text-primary shrink-0" />
+              <p className="text-sm text-foreground">
+                {pendingApprovals} payment{pendingApprovals === 1 ? "" : "s"} waiting for approval
+              </p>
+            </GlassCard>
+          </button>
+        )}
+
+        <h2 className="text-section-title px-1">Send money</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {methods.map((m) => (
             <button key={m.to} onClick={() => navigate(m.to)} className="text-left">

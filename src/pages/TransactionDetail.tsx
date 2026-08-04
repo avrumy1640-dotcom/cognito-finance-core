@@ -5,6 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import GlassCard from "@/components/glass/GlassCard";
 import { transferStatusInfo } from "@/lib/transferStatus";
 import { useBank } from "@/store/bankStore";
+import ReceiptAttach from "@/components/business/ReceiptAttach";
+import { useBusiness } from "@/hooks/useBusiness";
 import { disputeReasonLabel, type DisputeReason } from "@/lib/demoBank";
 import { toast } from "sonner";
 import {
@@ -26,6 +28,7 @@ const TransactionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { transactions, disputes, openDispute } = useBank();
+  const { isBusiness } = useBusiness();
   const tx = transactions.find((t) => t.id === id);
   const existingDispute = disputes.find((d) => d.transactionId === id);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -209,6 +212,12 @@ const TransactionDetail = () => {
             </div>
           )}
         </GlassCard>
+
+        {isBusiness && (
+          <GlassCard className="mb-2">
+            <ReceiptAttach transactionRef={tx.id} bankAccountId={tx.account} />
+          </GlassCard>
+        )}
 
         <div className="space-y-2">
           {[
