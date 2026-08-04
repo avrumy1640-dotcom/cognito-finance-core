@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { recordAuditEvent } from "@/lib/audit";
 
 const DEVICE_KEY = "gb.device_id";
 
