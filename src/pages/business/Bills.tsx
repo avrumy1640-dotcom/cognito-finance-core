@@ -11,6 +11,14 @@ import Seo from "@/components/Seo";
 import { supabase } from "@/integrations/supabase/client";
 import { ledgerProvider, type ProviderAccount } from "@/lib/ledgerProvider";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  FilterShell,
+  FilterChip,
+  DateRangeField,
+  AmountRangeField,
+  inDateWindow,
+  inAmountWindow,
+} from "@/components/filters/FilterBar";
 import { money } from "./BusinessHome";
 
 interface Bill {
