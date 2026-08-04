@@ -67,6 +67,7 @@ import Approvals from "./pages/business/Approvals";
 import Bookkeeping from "./pages/business/Bookkeeping";
 import Privacy from "./pages/legal/Privacy";
 import Terms from "./pages/legal/Terms";
+import Unsubscribe from "./pages/Unsubscribe";
 import PrivacyCenter from "./pages/PrivacyCenter";
 
 const queryClient = new QueryClient();
@@ -106,6 +107,7 @@ const App = () => (
               {/* Legal pages stay public — they must be readable before sign-up. */}
               <Route path="/legal/privacy" element={<Privacy />} />
               <Route path="/legal/terms" element={<Terms />} />
+              <Route path="/unsubscribe" element={<Unsubscribe />} />
               <Route path="/login" element={<SignIn />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/verify-email" element={<VerifyEmail />} />

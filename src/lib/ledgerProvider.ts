@@ -259,6 +259,70 @@ export interface ApprovalOverview {
   canApprove: string[];
 }
 
+// ---------------------------------------------------------------------------
+
+// Snapshot cache.
+//
+// Every business screen (`/business`, `/payments`, `/bills`, `/invoices`,
+// `/approvals`, `/bookkeeping`) opens by asking the provider for the same
+// account + transaction snapshot. Without a cache that is one full round-trip
+// through the edge function to Column on EVERY navigation, which is what made
+// moving between those tabs feel slow.
+//
+// So: one short-lived in-memory snapshot, shared by all callers.
+//   * Concurrent callers are deduplicated onto a single in-flight request.
+//   * A request for `limit` rows is served from a cached snapshot that already
+//     holds at least that many, so the dashboard's wide 500-row pull warms the
+//     narrower pulls the other screens make.
+//   * Anything that moves money or opens an account clears it immediately, so
+//     a stale balance can never survive a user action.
+// A paginated request (`offset`) always goes to the network — those are
+// explicit "load more" presses, never a page open.
+// ---------------------------------------------------------------------------
+const SNAPSHOT_TTL_MS = 30_000;
+
+let snapCache: { at: number; limit: number; value: ProviderSnapshot } | null = null;
+let snapInflight: { limit: number; promise: Promise<ProviderSnapshot> } | null = null;
+
+/** Drop the cached snapshot — call after anything that changes bank state. */
+export function invalidateLedgerSnapshot() {
+  snapCache = null;
+  snapInflight = null;
+}
+
+function cachedSync(page: SyncPage = {}): Promise<ProviderSnapshot> {
+  const limit = page.limit ?? 50;
+  if (page.offset) return call<ProviderSnapshot>({ action: "sync", ...page });
+
+  const fresh = snapCache && Date.now() - snapCache.at < SNAPSHOT_TTL_MS;
+  if (fresh && snapCache!.limit >= limit) return Promise.resolve(snapCache!.value);
+  if (snapInflight && snapInflight.limit >= limit) return snapInflight.promise;
+
+  const promise = call<ProviderSnapshot>({ action: "sync", ...page })
+    .then((value) => {
+      snapCache = { at: Date.now(), limit, value };
+      if (snapInflight?.promise === promise) snapInflight = null;
+      return value;
+    })
+    .catch((err) => {
+      if (snapInflight?.promise === promise) snapInflight = null;
+      throw err;
+    });
+  snapInflight = { limit, promise };
+  return promise;
+}
+
+/** Wrap a mutating provider call so the shared snapshot can't go stale. */
+function mutating<A extends unknown[], R>(fn: (...args: A) => Promise<R>) {
+  return async (...args: A): Promise<R> => {
+    try {
+      return await fn(...args);
+    } finally {
+      invalidateLedgerSnapshot();
+    }
+  };
+}
+
 export const ledgerProvider = {
   status: () => call<{ sandbox: boolean; configured: boolean; entity: unknown }>({ action: "status" }),
   diagnose: () =>
@@ -266,19 +330,26 @@ export const ledgerProvider = {
       action: "diagnose",
     }),
   /** Creates the sandbox entity + bank account if they don't exist yet. */
-  provision: (page: SyncPage = {}) => call<ProviderSnapshot>({ action: "provision", ...page }),
-  sync: (page: SyncPage = {}) => call<ProviderSnapshot>({ action: "sync", ...page }),
-  transfer: (args: TransferArgs) =>
+  provision: mutating((page: SyncPage = {}) => call<ProviderSnapshot>({ action: "provision", ...page })),
+  sync: (page: SyncPage = {}) => cachedSync(page),
+  /** Bypass the cache — for pull-to-refresh and post-webhook refreshes. */
+  syncFresh: (page: SyncPage = {}) => {
+    invalidateLedgerSnapshot();
+    return cachedSync(page);
+  },
+
+  transfer: mutating((args: TransferArgs) =>
     call<{
       transferId: string | null; status: string; snapshot?: ProviderSnapshot;
       /** Set when the payment was parked for owner approval instead of sent. */
       approvalId?: string; message?: string;
-    }>({ action: "transfer", ...args }),
+    }>({ action: "transfer", ...args })),
   /** Payments held for owner approval on any account the caller can see. */
   approvalsList: () => call<ApprovalOverview>({ action: "approvals_list" }),
   /** Primary owner only: approve (executes the real transfer) or deny. */
-  approvalDecide: (id: string, approve: boolean, note?: string) =>
-    call<{ status: string; transferId?: string | null }>({ action: "approval_decide", id, approve, note }),
+  approvalDecide: mutating((id: string, approve: boolean, note?: string) =>
+    call<{ status: string; transferId?: string | null }>({ action: "approval_decide", id, approve, note })),
+
   /** Uploads a KYC document and links it to the entity as verification evidence. */
   submitEvidence: (args: { dataUrl: string; documentType: ColumnDocumentType; purposes?: ColumnEvidencePurpose[] }) =>
     call<{ documentId: string | null; entityId: string; status: string }>({ action: "submit_evidence", ...args }),
@@ -300,22 +371,23 @@ export const ledgerProvider = {
   jointRequest: (bankAccountId: string, email: string, role: "joint" | "admin" | "viewer" = "joint") =>
     call<{ sent: boolean; message: string }>({ action: "joint_request", bankAccountId, email, role }),
   /** Opens an additional named account (business sub-accounts) on the same entity. */
-  subAccountCreate: (name: string) =>
+  subAccountCreate: mutating((name: string) =>
     call<{ created: boolean; bankAccountId: string; name: string; snapshot: ProviderSnapshot }>({
       action: "sub_account_create", name,
-    }),
+    })),
   /** Approve or deny a team reimbursement request (account owner/admin only). */
-  reimburseDecide: (id: string, approve: boolean, note?: string) =>
+  reimburseDecide: mutating((id: string, approve: boolean, note?: string) =>
     call<{ status: string; paid?: boolean; reason?: string; transferId?: string | null }>({
       action: "reimburse_decide", id, approve, note,
-    }),
-  jointRespond: (requestId: string, accept: boolean) =>
-    call<{ status: string; bankAccountId?: string }>({ action: "joint_respond", requestId, accept }),
+    })),
+  jointRespond: mutating((requestId: string, accept: boolean) =>
+    call<{ status: string; bankAccountId?: string }>({ action: "joint_respond", requestId, accept })),
   jointCancel: (requestId: string) => call<{ status: string }>({ action: "joint_cancel", requestId }),
-  jointRemove: (bankAccountId: string, userId?: string) =>
+  jointRemove: mutating((bankAccountId: string, userId?: string) =>
     call<{ removed: boolean; providerRemoved: boolean; providerNote: string | null }>({
       action: "joint_remove", bankAccountId, userId,
-    }),
+    })),
+
 
   adminList: () => call<Record<string, unknown>>({ action: "admin_list" }),
   adminLocal: () => call<Record<string, unknown>>({ action: "admin_local" }),
