@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Receipt, Loader2, Plus, Check, X } from "lucide-react";
@@ -8,6 +8,14 @@ import Seo from "@/components/Seo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { ledgerProvider, friendlyProviderMessage, type ProviderSnapshot } from "@/lib/ledgerProvider";
+import {
+  FilterShell,
+  FilterChip,
+  DateRangeField,
+  AmountRangeField,
+  inDateWindow,
+  inAmountWindow,
+} from "@/components/filters/FilterBar";
 import { money } from "./BusinessHome";
 
 interface Reimb {
