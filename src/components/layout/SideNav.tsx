@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useBusiness } from "@/hooks/useBusiness";
+import { Landmark, Send, Receipt as ReceiptIcon } from "lucide-react";
 
 const groups: { label: string; items: { to: string; label: string; icon: typeof Home }[] }[] = [
   {
@@ -55,17 +57,48 @@ const groups: { label: string; items: { to: string; label: string; icon: typeof 
   },
 ];
 
-const SideNav = () => (
+const businessGroups: typeof groups = [
+  {
+    label: "Business",
+    items: [
+      { to: "/business", label: "Overview", icon: Landmark },
+      { to: "/payments", label: "Payments", icon: Send },
+      { to: "/invoices", label: "Invoices", icon: FileText },
+      { to: "/reimbursements", label: "Reimbursements", icon: ReceiptIcon },
+      { to: "/team", label: "Team", icon: Users },
+      { to: "/activity", label: "Activity", icon: Activity },
+      { to: "/scheduled", label: "Scheduled", icon: CalendarClock },
+      { to: "/cards", label: "Cards", icon: CreditCard },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { to: "/profile/documents", label: "Documents", icon: FileText },
+      { to: "/disputes", label: "Disputes", icon: ShieldAlert },
+      { to: "/security", label: "Security", icon: ShieldCheck },
+      { to: "/settings", label: "Settings", icon: SettingsIcon },
+      { to: "/profile", label: "Profile", icon: User },
+    ],
+  },
+];
+
+const SideNav = () => {
+  const { isBusiness, businessName } = useBusiness();
+  const nav = isBusiness ? businessGroups : groups;
+  return (
   <aside
     className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-64 flex-col border-r border-border bg-card/60 backdrop-blur-xl"
     aria-label="Primary"
   >
     <div className="px-6 py-6">
       <p className="kicker text-primary">Glass Bank</p>
-      <p className="text-lg font-display font-bold text-foreground leading-tight">Your money</p>
+      <p className="text-lg font-display font-bold text-foreground leading-tight truncate">
+        {isBusiness ? businessName : "Your money"}
+      </p>
     </div>
     <nav className="flex-1 overflow-y-auto px-3 pb-6 space-y-5 hide-scrollbar">
-      {groups.map((group) => (
+      {nav.map((group) => (
         <div key={group.label}>
           <p className="text-section-title px-3 mb-1.5">{group.label}</p>
           <ul className="space-y-0.5">
@@ -94,6 +127,7 @@ const SideNav = () => (
       ))}
     </nav>
   </aside>
-);
+  );
+};
 
 export default SideNav;
