@@ -237,41 +237,35 @@ const ActivityPage = () => {
           </div>
         </motion.div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search transactions..."
-            className="w-full pl-10 pr-10 py-3 rounded-xl bg-secondary text-foreground text-sm border-0 outline-none placeholder:text-muted-foreground"
-          />
-          <button
-            onClick={() => navigate("/insights")}
-            className="absolute right-3 top-1/2 -translate-y-1/2"
-            title="Spending insights"
-          >
-            <SlidersHorizontal size={16} className="text-muted-foreground" />
-          </button>
-        </div>
-
-        {/* Filter Chips */}
-        <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
-          {filterChips.map((chip) => (
-            <button
+        {/* Search + quick chips + precise filters */}
+        <FilterShell
+          search={searchQuery}
+          onSearch={setSearchQuery}
+          placeholder="Search merchant, category or account…"
+          activeCount={advancedCount}
+          onClear={clearAll}
+          chips={filterChips.map((chip) => (
+            <FilterChip
               key={chip}
+              label={chip}
+              active={activeFilter === chip}
               onClick={() => setActiveFilter(chip)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                activeFilter === chip
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-muted-foreground"
-              }`}
-            >
-              {chip}
-            </button>
+            />
           ))}
-        </div>
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <DateRangeField from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo} />
+            <AmountRangeField min={minAmount} max={maxAmount} onMin={setMinAmount} onMax={setMaxAmount} />
+            <SelectField label="Rail" value={rail} onChange={setRail} options={RAIL_OPTIONS} />
+            <SelectField label="Status" value={status} onChange={setStatus} options={STATUS_OPTIONS} />
+            <SelectField label="Direction" value={direction} onChange={setDirection} options={DIRECTION_OPTIONS} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Showing <span className="font-semibold text-foreground tabular-nums">{filtered.length}</span> of{" "}
+            {transactions.length} loaded transactions.
+          </p>
+        </FilterShell>
+
 
         {/* Insights Shortcuts */}
         <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
