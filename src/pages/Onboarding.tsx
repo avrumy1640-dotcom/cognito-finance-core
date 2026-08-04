@@ -190,7 +190,20 @@ const EMPLOYMENT: { id: string; label: string }[] = [
   { id: "homemaker", label: "Homemaker" },
   { id: "unemployed", label: "Unemployed" },
 ];
+/**
+ * Business owners already told us their title and that they run a company, so
+ * we never ask them for "occupation" or "employment status" a second time —
+ * both are derived from the control-person answers instead.
+ */
+const derivedOccupation = (d: Data) =>
+  d.account_type === "business"
+    ? (d.owner_title.trim() || "Business owner")
+    : d.occupation.trim();
+const derivedEmployment = (d: Data) =>
+  d.account_type === "business" ? "self_employed" : d.employment_status;
+
 const ageFrom = (v: string) => {
+
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return NaN;
   return (Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000);
