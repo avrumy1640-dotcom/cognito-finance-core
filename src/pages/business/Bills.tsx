@@ -145,6 +145,34 @@ const Bills = () => {
           </button>
         </motion.div>
 
+        {!!rows?.length && (
+          <FilterShell
+            search={search}
+            onSearch={setSearch}
+            placeholder="Search vendor or memo…"
+            activeCount={advancedCount}
+            onClear={clearAll}
+            chips={STATUS_FILTERS.map((s) => (
+              <FilterChip
+                key={s}
+                label={s === "All" ? "All" : s[0].toUpperCase() + s.slice(1)}
+                active={statusFilter === s}
+                onClick={() => setStatusFilter(s)}
+                count={
+                  s === "All"
+                    ? rows.length
+                    : rows.filter((r) => (isOverdue(r) ? "overdue" : r.status) === s).length
+                }
+              />
+            ))}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DateRangeField label="Due date" from={dueFrom} to={dueTo} onFrom={setDueFrom} onTo={setDueTo} />
+              <AmountRangeField min={minAmount} max={maxAmount} onMin={setMinAmount} onMax={setMaxAmount} />
+            </div>
+          </FilterShell>
+        )}
+
         {!rows && <div className="flex justify-center py-10"><Loader2 className="animate-spin text-primary" /></div>}
         {rows?.length === 0 && (
           <GlassCard className="text-center py-10">
@@ -155,9 +183,16 @@ const Bills = () => {
             </p>
           </GlassCard>
         )}
+        {!!rows?.length && visible.length === 0 && (
+          <GlassCard className="text-center py-8">
+            <p className="text-sm font-semibold text-foreground">No bills match these filters</p>
+            <button onClick={clearAll} className="text-xs font-semibold text-primary mt-2">Reset filters</button>
+          </GlassCard>
+        )}
 
         <div className="space-y-2">
-          {(rows ?? []).map((b) => {
+          {visible.map((b) => {
+
             const status = isOverdue(b) ? "overdue" : b.status;
             return (
               <GlassCard key={b.id} className="space-y-3">
