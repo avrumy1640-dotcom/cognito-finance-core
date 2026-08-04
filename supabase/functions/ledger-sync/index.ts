@@ -1053,7 +1053,87 @@ async function assertWithinLimits(userId: string, kind: LimitKind, amountCents: 
   }
 }
 
-async function doTransfer(userId: string, body: any) {
+/**
+ * Per-account payment approval control.
+ *
+ * A business owner can set `account_settings.approval_threshold_cents`. Any
+ * outgoing payment above it, initiated by someone who is NOT the primary
+ * owner, is parked in `payment_approvals` instead of being sent. This is the
+ * authoritative check: it runs before any provider call and cannot be skipped
+ * from the client.
+ */
+async function holdForApproval(
+  userId: string,
+  from: any,
+  kind: string,
+  amountCents: number,
+  description: string,
+  body: any,
+) {
+  // Only outgoing money is gated — pulling funds in never needs sign-off.
+  if (kind === "ach_pull") return null;
+  if (from?.owner_role === "primary") return null;
+
+  const { data: settings } = await admin.from("account_settings")
+    .select("approval_threshold_cents")
+    .eq("bank_account_id", from.bank_account_id).maybeSingle();
+  const threshold = settings?.approval_threshold_cents;
+  if (threshold === null || threshold === undefined) return null;
+  if (amountCents <= Number(threshold)) return null;
+
+  // Store only the fields a replay needs — never the whole client body.
+  const payload = {
+    kind,
+    amount: Number(body.amount),
+    description,
+    from: from.bank_account_id,
+    to: body.to ?? null,
+    name: body.name ?? null,
+    routingNumber: body.routingNumber ?? null,
+    accountNumber: body.accountNumber ?? null,
+    counterpartyId: body.counterpartyId ?? null,
+    beneficiaryLine1: body.beneficiaryLine1 ?? null,
+    beneficiaryCity: body.beneficiaryCity ?? null,
+    beneficiaryState: body.beneficiaryState ?? null,
+    beneficiaryPostalCode: body.beneficiaryPostalCode ?? null,
+    beneficiaryCountry: body.beneficiaryCountry ?? null,
+  };
+
+  const { data: row, error } = await admin.from("payment_approvals").insert({
+    bank_account_id: from.bank_account_id,
+    requested_by: userId,
+    kind,
+    amount_cents: amountCents,
+    description,
+    payload,
+    status: "pending_approval",
+  }).select("id").single();
+  if (error) throw new Error(error.message);
+
+  // Tell every primary owner of the account that something is waiting.
+  const { data: approvers } = await admin.from("account_owners")
+    .select("user_id").eq("bank_account_id", from.bank_account_id).eq("role", "primary");
+  for (const a of approvers ?? []) {
+    try {
+      await admin.from("notifications").insert({
+        user_id: a.user_id,
+        type: "approval",
+        title: "Payment needs your approval",
+        body: `${usd(amountCents)} to ${description || "a vendor"} is waiting for approval.`,
+        data: { approvalId: row.id, bankAccountId: from.bank_account_id },
+      });
+    } catch { /* notification is best-effort */ }
+  }
+
+  return {
+    transferId: null,
+    status: "pending_approval",
+    approvalId: row.id,
+    message: `This payment is over the ${usd(Number(threshold))} approval limit and was sent to the account owner for approval.`,
+  };
+}
+
+async function doTransfer(userId: string, body: any, opts: { skipApproval?: boolean } = {}) {
   const rows = await accountsFor(userId);
   const kind = String(body.kind ?? "book");
   const amount = toCents(body.amount);
@@ -1064,10 +1144,18 @@ async function doTransfer(userId: string, body: any) {
   // actually protects the bank — it cannot be skipped by calling the API directly.
   await assertWithinLimits(userId, kind as LimitKind, amount);
 
+  // Resolve the debit source once, up front: the approval check needs to know
+  // which account is being drawn on before anything is sent to the provider.
+  const from = kind === "book"
+    ? pickSource(rows, body.from)
+    : pickSource(rows, body.from ?? "checking");
 
+  if (!opts.skipApproval) {
+    const held = await holdForApproval(userId, from, kind, amount, description, body);
+    if (held) return held;
+  }
 
   if (kind === "book") {
-    const from = pickSource(rows, body.from);
     const to = pickAccount(rows, body.to);
     if (!from || !to || from.bank_account_id === to.bank_account_id) {
       throw new Error("Choose two different accounts");
@@ -1089,7 +1177,6 @@ async function doTransfer(userId: string, body: any) {
   }
 
   if (kind === "ach" || kind === "ach_pull") {
-    const from = pickSource(rows, body.from ?? "checking");
     const counterpartyId = body.counterpartyId
       ? await assertOwnCounterparty(userId, String(body.counterpartyId))
       : await ensureCounterparty(userId, {
@@ -1125,7 +1212,6 @@ async function doTransfer(userId: string, body: any) {
   }
 
   if (kind === "wire") {
-    const from = pickSource(rows, body.from ?? "checking");
     const counterpartyId = body.counterpartyId
       ? await assertOwnCounterparty(userId, String(body.counterpartyId))
       : await ensureCounterparty(userId, {
@@ -1154,6 +1240,87 @@ async function doTransfer(userId: string, body: any) {
 
   throw new Error(`Unsupported transfer kind "${kind}"`);
 }
+
+/** Pending + recently decided approvals across every account the caller owns. */
+async function approvalsList(userId: string) {
+  const owned = await ownedAccountRows(userId);
+  const ids = owned.map((r) => r.bank_account_id);
+  if (!ids.length) return { approvals: [], canApprove: [] };
+  const { data } = await admin.from("payment_approvals")
+    .select("*").in("bank_account_id", ids)
+    .order("created_at", { ascending: false }).limit(100);
+  const names = new Map(owned.map((r) => [r.bank_account_id, r.description ?? "Account"]));
+  return {
+    approvals: (data ?? []).map((a: any) => ({
+      id: a.id,
+      bankAccountId: a.bank_account_id,
+      accountName: names.get(a.bank_account_id) ?? "Account",
+      kind: a.kind,
+      amountCents: Number(a.amount_cents),
+      description: a.description,
+      status: a.status,
+      requestedByMe: a.requested_by === userId,
+      createdAt: a.created_at,
+      decidedAt: a.decided_at,
+      decisionNote: a.decision_note,
+      transferId: a.transfer_id,
+      error: a.error,
+    })),
+    // Accounts where THIS caller is the approver.
+    canApprove: owned.filter((r) => r.owner_role === "primary").map((r) => r.bank_account_id),
+  };
+}
+
+/** Approve (executes the real transfer) or deny a held payment. */
+async function approvalDecide(userId: string, body: any) {
+  const id = String(body?.id ?? "");
+  const approve = !!body?.approve;
+  const note = String(body?.note ?? "").slice(0, 300) || null;
+
+  const { data: req } = await admin.from("payment_approvals").select("*").eq("id", id).maybeSingle();
+  if (!req || req.status !== "pending_approval") throw new Error("That payment is no longer awaiting approval");
+
+  const { data: me } = await admin.from("account_owners")
+    .select("role").eq("user_id", userId).eq("bank_account_id", req.bank_account_id).maybeSingle();
+  if (String(me?.role ?? "") !== "primary") {
+    throw new Error("Only the primary account owner can approve payments");
+  }
+  if (req.requested_by === userId) throw new Error("You can't approve your own payment");
+
+  const stamp = { decided_by: userId, decided_at: new Date().toISOString(), decision_note: note };
+
+  if (!approve) {
+    await admin.from("payment_approvals").update({ ...stamp, status: "denied" }).eq("id", id);
+    await notifyRequester(req, "Payment denied", `${usd(Number(req.amount_cents))} was not approved.`);
+    return { status: "denied" };
+  }
+
+  try {
+    const result: any = await doTransfer(req.requested_by, {
+      ...(req.payload ?? {}),
+      requestId: `approval-${id}`,
+    }, { skipApproval: true });
+    await admin.from("payment_approvals").update({
+      ...stamp, status: "executed", transfer_id: result?.transferId ?? null,
+    }).eq("id", id);
+    await notifyRequester(req, "Payment approved", `${usd(Number(req.amount_cents))} has been sent.`);
+    return { status: "executed", transferId: result?.transferId ?? null };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Transfer failed";
+    await admin.from("payment_approvals").update({ ...stamp, status: "failed", error: msg }).eq("id", id);
+    throw new Error(msg);
+  }
+}
+
+async function notifyRequester(req: any, title: string, bodyText: string) {
+  try {
+    await admin.from("notifications").insert({
+      user_id: req.requested_by, type: "approval", title, body: bodyText,
+      data: { approvalId: req.id },
+    });
+  } catch { /* best effort */ }
+}
+
 
 /**
  * Column's `document_type` and `purposes` are FIXED ENUMS — an arbitrary
