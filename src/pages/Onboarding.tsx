@@ -1086,8 +1086,9 @@ const Onboarding = () => {
           address_city: d.address_city || null,
           address_region: d.address_region || null,
           address_postal_code: d.address_postal_code || null,
-          occupation: d.occupation || null,
-          employment_status: d.employment_status || null,
+          occupation: derivedOccupation(d) || null,
+          employment_status: derivedEmployment(d) || null,
+
           annual_income: d.annual_income || null,
           source_of_funds: d.source_of_funds || null,
           tax_country: d.country || null,
