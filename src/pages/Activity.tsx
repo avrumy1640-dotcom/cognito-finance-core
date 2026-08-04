@@ -7,13 +7,57 @@ import EmptyState from "@/components/glass/EmptyState";
 import { Receipt } from "lucide-react";
 import { useBank } from "@/store/bankStore";
 import DataErrorState from "@/components/layout/DataErrorState";
-import { Search, Download, ChevronRight, SlidersHorizontal, FileText } from "lucide-react";
+import { Download, ChevronRight, FileText } from "lucide-react";
 import { buildCsv, buildPdf, type ExportResult } from "@/lib/exports";
 import ExportPreviewModal from "@/components/exports/ExportPreviewModal";
 import { formatTxDate, txGroupLabel } from "@/lib/dates";
 import { transferStatusInfo, toneClass } from "@/lib/transferStatus";
+import {
+  FilterShell,
+  FilterChip,
+  DateRangeField,
+  AmountRangeField,
+  SelectField,
+  inDateWindow,
+  inAmountWindow,
+} from "@/components/filters/FilterBar";
 
 const filterChips = ["All", "Card", "Transfers", "Deposits", "Bills", "P2P", "Pending", "Income", "Fees"];
+
+const RAIL_OPTIONS = [
+  { value: "all", label: "Any rail" },
+  { value: "ach", label: "ACH" },
+  { value: "wire", label: "Wire" },
+  { value: "book", label: "Internal (book)" },
+  { value: "card", label: "Card" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "all", label: "Any status" },
+  { value: "posted", label: "Posted" },
+  { value: "pending", label: "Pending" },
+  { value: "returned", label: "Returned / failed" },
+];
+
+const DIRECTION_OPTIONS = [
+  { value: "all", label: "Money in and out" },
+  { value: "in", label: "Money in only" },
+  { value: "out", label: "Money out only" },
+];
+
+/**
+ * Rail detection reads whatever the ledger row exposes — different sources
+ * populate paymentMethod, category or the provider status string.
+ */
+function matchesRail(tx: { paymentMethod?: string | null; category?: string | null; providerStatus?: string | null; merchant?: string | null }, rail: string) {
+  if (rail === "all") return true;
+  const haystack = `${tx.paymentMethod ?? ""} ${tx.category ?? ""} ${tx.providerStatus ?? ""} ${tx.merchant ?? ""}`.toLowerCase();
+  if (rail === "card") return haystack.includes("card");
+  if (rail === "ach") return haystack.includes("ach");
+  if (rail === "wire") return haystack.includes("wire");
+  if (rail === "book") return haystack.includes("book") || haystack.includes("internal");
+  return true;
+}
 
 const PAGE_SIZE = 50;
 
