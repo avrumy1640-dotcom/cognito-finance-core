@@ -95,7 +95,7 @@ const Invoices = () => {
   };
 
   const setStatus = async (inv: Invoice, status: string) => {
-    const patch: Record<string, unknown> = { status };
+    const patch: { status: string; sent_at?: string; paid_at?: string } = { status };
     if (status === "sent") patch.sent_at = new Date().toISOString();
     if (status === "paid") patch.paid_at = new Date().toISOString();
     const { error } = await supabase.from("invoices").update(patch).eq("id", inv.id);
