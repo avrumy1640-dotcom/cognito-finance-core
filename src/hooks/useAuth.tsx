@@ -62,6 +62,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error: error?.message };
     },
     signOut: async () => {
+      // Record before the token is invalidated — afterwards we can't authenticate the write.
+      await recordAuditEvent("auth.sign_out");
       await supabase.auth.signOut();
     },
     signOutOthers: async () => {
