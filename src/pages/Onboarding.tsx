@@ -190,7 +190,20 @@ const EMPLOYMENT: { id: string; label: string }[] = [
   { id: "homemaker", label: "Homemaker" },
   { id: "unemployed", label: "Unemployed" },
 ];
+/**
+ * Business owners already told us their title and that they run a company, so
+ * we never ask them for "occupation" or "employment status" a second time —
+ * both are derived from the control-person answers instead.
+ */
+const derivedOccupation = (d: Data) =>
+  d.account_type === "business"
+    ? (d.owner_title.trim() || "Business owner")
+    : d.occupation.trim();
+const derivedEmployment = (d: Data) =>
+  d.account_type === "business" ? "self_employed" : d.employment_status;
+
 const ageFrom = (v: string) => {
+
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return NaN;
   return (Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000);
@@ -472,12 +485,12 @@ function buildSteps(data: Data): Step[] {
 
     list.push({
       id: "owner_role",
-      kicker: kicker("Ownership"),
-      title: "Your role in the business",
+      kicker: kicker("Your role"),
+      title: "What's your role in the business?",
       subtitle:
-        "Our banking partner requires a control person — the individual who can bind the business — plus each owner of 25% or more.",
+        "Every business account needs one \"control person\" — plain English: the person with authority to run the business day to day and sign for it. That's you. We also have to note anyone who owns 25% or more (a \"beneficial owner\").",
       validate: (d) => {
-        if (d.owner_title.trim().length < 2) return "Enter your title in the business.";
+        if (d.owner_title.trim().length < 2) return "Enter your job title in the business.";
         const pct = Number(d.owner_ownership);
         if (!Number.isFinite(pct) || pct < 0 || pct > 100) return "Enter your ownership between 0 and 100%.";
         return null;
@@ -487,19 +500,20 @@ function buildSteps(data: Data): Step[] {
           <TextInput
             value={data.owner_title}
             onChange={(v) => setField("owner_title", v)}
-            placeholder="Chief Executive Officer"
+            placeholder="Your job title — e.g. Chief Executive Officer"
           />
           <TextInput
             value={data.owner_ownership}
             onChange={(v) => setField("owner_ownership", v.replace(/[^0-9]/g, "").slice(0, 3))}
             onEnter={submit}
-            placeholder="Ownership %"
+            placeholder="How much of the business do you own? (%)"
             inputMode="numeric"
             autoFocus={false}
           />
           <p className="text-xs text-muted-foreground px-1">
-            Next we'll collect your personal details — required for you to be verified as the
-            control person on the business account.
+            Enter 0 if you don't hold any ownership — plenty of control people don't.
+            Next we'll get a few personal details so we can verify you; we won't ask
+            for anything about the company again.
           </p>
         </div>
       ),
@@ -585,6 +599,9 @@ function buildSteps(data: Data): Step[] {
     id: "country",
     kicker: kicker("Country"),
     title: "Where do you live?",
+    subtitle: isBusiness
+      ? "Your own country of residence — we've pre-selected the one on the business address."
+      : undefined,
     validate: (d) => (d.country ? null : "Choose your country of residence."),
     render: ({ data, setField }) => (
       <ChoiceList
@@ -598,6 +615,7 @@ function buildSteps(data: Data): Step[] {
       />
     ),
   });
+
 
   list.push({
     id: "citizenship",
@@ -616,10 +634,10 @@ function buildSteps(data: Data): Step[] {
 
   list.push({
     id: "address",
-    kicker: kicker("Address"),
-    title: isBusiness ? "What's your home address?" : "What's your address?",
+    kicker: kicker(isBusiness ? "Home address" : "Address"),
+    title: isBusiness ? "And where do you live?" : "What's your address?",
     subtitle: isBusiness
-      ? "Your personal residential address — separate from the business address."
+      ? "Your own home address. If you run the business from home, tick the box and we'll copy it over."
       : "Where you receive mail today.",
 
     validate: (d) =>
@@ -629,8 +647,38 @@ function buildSteps(data: Data): Step[] {
       d.address_postal_code.trim().length > 2
         ? null
         : "Complete your street, city, state or region, and postal code.",
-    render: ({ data, setField, submit }) => (
+    render: ({ data, setField, submit }) => {
+      const sameAsBusiness =
+        isBusiness &&
+        !!data.business_address_street.trim() &&
+        data.address_street.trim() === data.business_address_street.trim() &&
+        data.address_city.trim() === data.business_address_city.trim() &&
+        data.address_postal_code.trim() === data.business_address_postal_code.trim();
+      return (
       <div className="space-y-3">
+        {isBusiness && data.business_address_street.trim() && (
+          <CheckRow
+            checked={sameAsBusiness}
+            onChange={(on) => {
+              if (on) {
+                setField("address_street", data.business_address_street);
+                setField("address_line2", data.business_address_line2);
+                setField("address_city", data.business_address_city);
+                setField("address_region", data.business_address_region);
+                setField("address_postal_code", data.business_address_postal_code);
+                if (data.business_address_country) setField("country", data.business_address_country);
+              } else {
+                setField("address_street", "");
+                setField("address_line2", "");
+                setField("address_city", "");
+                setField("address_region", "");
+                setField("address_postal_code", "");
+              }
+            }}
+            label="I live at the business address"
+            desc={`${data.business_address_street}, ${data.business_address_city}`}
+          />
+        )}
         <AddressAutocomplete
           label="Street address"
           value={data.address_street}
@@ -682,45 +730,53 @@ function buildSteps(data: Data): Step[] {
           />
         </div>
       </div>
-    ),
+      );
+    },
   });
 
-  list.push({
-    id: "employment",
-    kicker: kicker("Employment"),
-    title: "What's your employment status?",
-    validate: (d) => (d.employment_status ? null : "Choose your employment status."),
-    render: ({ data, setField }) => (
-      <ChoiceList
-        items={EMPLOYMENT}
-        value={data.employment_status}
-        onChange={(v) => setField("employment_status", v)}
-      />
-    ),
-  });
+  // Business owners already told us their title and that they run a company —
+  // asking for "employment status" and "occupation" again is the same question
+  // twice, so we derive both from the control-person step instead.
+  if (!isBusiness) {
+    list.push({
+      id: "employment",
+      kicker: kicker("Employment"),
+      title: "What's your employment status?",
+      validate: (d) => (d.employment_status ? null : "Choose your employment status."),
+      render: ({ data, setField }) => (
+        <ChoiceList
+          items={EMPLOYMENT}
+          value={data.employment_status}
+          onChange={(v) => setField("employment_status", v)}
+        />
+      ),
+    });
 
-  list.push({
-    id: "occupation",
-    kicker: kicker("Work"),
-    title: isBusiness ? "What's your role outside the business?" : "What do you do for work?",
-    subtitle: isBusiness ? "Your own occupation — we already have the company's industry." : undefined,
-    validate: (d) => (d.occupation.trim().length > 1 ? null : "Enter your occupation."),
-    render: ({ data, setField, submit }) => (
-      <TextInput
-        value={data.occupation}
-        onChange={(v) => setField("occupation", v)}
-        onEnter={submit}
-        placeholder={isBusiness ? "Founder & CEO" : "Software Engineer"}
-      />
-    ),
-  });
+    list.push({
+      id: "occupation",
+      kicker: kicker("Work"),
+      title: "What do you do for work?",
+      validate: (d) => (d.occupation.trim().length > 1 ? null : "Enter your occupation."),
+      render: ({ data, setField, submit }) => (
+        <TextInput
+          value={data.occupation}
+          onChange={(v) => setField("occupation", v)}
+          onEnter={submit}
+          placeholder="Software Engineer"
+        />
+      ),
+    });
+  }
+
 
 
   list.push({
     id: "income",
     kicker: kicker("Income"),
-    title: "Estimated annual income?",
-    subtitle: "Ballpark is fine — enter a whole number in USD.",
+    title: isBusiness ? "Your own estimated annual income?" : "Estimated annual income?",
+    subtitle: isBusiness
+      ? "What you personally earn — not the company's revenue. A ballpark whole number in USD is fine."
+      : "Ballpark is fine — enter a whole number in USD.",
     validate: (d) => {
       const n = Number(d.annual_income.replace(/[^0-9]/g, ""));
       return n > 0 ? null : "Enter your estimated annual income.";
@@ -740,7 +796,7 @@ function buildSteps(data: Data): Step[] {
   list.push({
     id: "source",
     kicker: kicker("Source of funds"),
-    title: "Where will your money come from?",
+    title: isBusiness ? "Where will the money in this account come from?" : "Where will your money come from?",
     subtitle: "Helps us keep everyone's accounts safe.",
     validate: (d) => (d.source_of_funds ? null : "Choose your source of funds."),
     render: ({ data, setField }) => (
@@ -758,8 +814,11 @@ function buildSteps(data: Data): Step[] {
       id: "tax_id",
       kicker: kicker(isUs ? "SSN" : "Tax ID"),
       title: isUs ? "What's your SSN or ITIN?" : "What's your tax ID number?",
-      subtitle: "Encrypted end-to-end. Used only for regulatory reporting.",
+      subtitle: isBusiness
+        ? "This is your personal number — different from the business EIN you gave us earlier. Encrypted end-to-end and used only for regulatory reporting."
+        : "Encrypted end-to-end. Used only for regulatory reporting.",
       validate: (d) => (d.tax_id_number.trim().length > 3 ? null : "Enter your tax ID number."),
+
       render: ({ data, setField, submit }) => (
         <TextInput
           value={data.tax_id_number}
@@ -1040,8 +1099,9 @@ const Onboarding = () => {
           address_city: d.address_city || null,
           address_region: d.address_region || null,
           address_postal_code: d.address_postal_code || null,
-          occupation: d.occupation || null,
-          employment_status: d.employment_status || null,
+          occupation: derivedOccupation(d) || null,
+          employment_status: derivedEmployment(d) || null,
+
           annual_income: d.annual_income || null,
           source_of_funds: d.source_of_funds || null,
           tax_country: d.country || null,
@@ -1076,8 +1136,9 @@ const Onboarding = () => {
         address_city: d.address_city,
         address_region: d.address_region,
         address_postal_code: d.address_postal_code,
-        occupation: d.occupation,
-        employment_status: d.employment_status,
+        occupation: derivedOccupation(d),
+        employment_status: derivedEmployment(d),
+
         annual_income: d.annual_income,
         source_of_funds: d.source_of_funds,
         tax_country: d.country || null,
