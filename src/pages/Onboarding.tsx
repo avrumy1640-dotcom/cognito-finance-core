@@ -472,12 +472,12 @@ function buildSteps(data: Data): Step[] {
 
     list.push({
       id: "owner_role",
-      kicker: kicker("Ownership"),
-      title: "Your role in the business",
+      kicker: kicker("Your role"),
+      title: "What's your role in the business?",
       subtitle:
-        "Our banking partner requires a control person — the individual who can bind the business — plus each owner of 25% or more.",
+        "Every business account needs one \"control person\" — plain English: the person with authority to run the business day to day and sign for it. That's you. We also have to note anyone who owns 25% or more (a \"beneficial owner\").",
       validate: (d) => {
-        if (d.owner_title.trim().length < 2) return "Enter your title in the business.";
+        if (d.owner_title.trim().length < 2) return "Enter your job title in the business.";
         const pct = Number(d.owner_ownership);
         if (!Number.isFinite(pct) || pct < 0 || pct > 100) return "Enter your ownership between 0 and 100%.";
         return null;
@@ -487,24 +487,25 @@ function buildSteps(data: Data): Step[] {
           <TextInput
             value={data.owner_title}
             onChange={(v) => setField("owner_title", v)}
-            placeholder="Chief Executive Officer"
+            placeholder="Your job title — e.g. Chief Executive Officer"
           />
           <TextInput
             value={data.owner_ownership}
             onChange={(v) => setField("owner_ownership", v.replace(/[^0-9]/g, "").slice(0, 3))}
             onEnter={submit}
-            placeholder="Ownership %"
+            placeholder="How much of the business do you own? (%)"
             inputMode="numeric"
             autoFocus={false}
           />
           <p className="text-xs text-muted-foreground px-1">
-            Next we'll collect your personal details — required for you to be verified as the
-            control person on the business account.
+            Enter 0 if you don't hold any ownership — plenty of control people don't.
+            Next we'll get a few personal details so we can verify you; we won't ask
+            for anything about the company again.
           </p>
         </div>
       ),
     });
-  }
+
 
 
   list.push({
