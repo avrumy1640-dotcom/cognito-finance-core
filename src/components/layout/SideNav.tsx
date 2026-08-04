@@ -20,7 +20,7 @@ import {
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useBusiness } from "@/hooks/useBusiness";
-import { Landmark, Send, Receipt as ReceiptIcon } from "lucide-react";
+import { Landmark, Send, Receipt as ReceiptIcon, BookOpen } from "lucide-react";
 
 const groups: { label: string; items: { to: string; label: string; icon: typeof Home }[] }[] = [
   {
@@ -63,7 +63,10 @@ const businessGroups: typeof groups = [
     items: [
       { to: "/business", label: "Overview", icon: Landmark },
       { to: "/payments", label: "Payments", icon: Send },
+      { to: "/bills", label: "Bills to pay", icon: ReceiptIcon },
       { to: "/invoices", label: "Invoices", icon: FileText },
+      { to: "/approvals", label: "Approvals", icon: ShieldCheck },
+      { to: "/bookkeeping", label: "Bookkeeping", icon: BookOpen },
       { to: "/reimbursements", label: "Reimbursements", icon: ReceiptIcon },
       { to: "/team", label: "Team", icon: Users },
       { to: "/activity", label: "Activity", icon: Activity },
