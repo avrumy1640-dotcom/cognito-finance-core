@@ -48,12 +48,22 @@ const isOverdue = (b: Bill) =>
  * off to the real ACH/wire flow, which is the only thing that can actually
  * move money.
  */
+const STATUS_FILTERS = ["All", "unpaid", "overdue", "scheduled", "paid", "void"];
+
 const Bills = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [rows, setRows] = useState<Bill[] | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [dueFrom, setDueFrom] = useState("");
+  const [dueTo, setDueTo] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+
 
   const [vendor, setVendor] = useState("");
   const [amount, setAmount] = useState("");
