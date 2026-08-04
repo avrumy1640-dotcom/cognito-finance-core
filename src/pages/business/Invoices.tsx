@@ -142,6 +142,25 @@ const Invoices = () => {
     .filter((r) => ["sent", "overdue"].includes(r.status))
     .reduce((s, r) => s + r.amount_cents, 0);
 
+  const advancedCount =
+    (issuedFrom || issuedTo ? 1 : 0) + (minAmount || maxAmount ? 1 : 0);
+
+  const clearAll = () => {
+    setSearch(""); setStatusFilter("All");
+    setIssuedFrom(""); setIssuedTo(""); setMinAmount(""); setMaxAmount("");
+  };
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (rows ?? []).filter((inv) => {
+      if (statusFilter !== "All" && inv.status !== statusFilter) return false;
+      if (q && !`${inv.client_name} ${inv.invoice_number} ${inv.client_email ?? ""}`.toLowerCase().includes(q)) return false;
+      if (!inDateWindow(inv.issue_date, issuedFrom, issuedTo)) return false;
+      if (!inAmountWindow(inv.amount_cents / 100, minAmount, maxAmount)) return false;
+      return true;
+    });
+  }, [rows, search, statusFilter, issuedFrom, issuedTo, minAmount, maxAmount]);
+
   return (
     <AppLayout>
       <Seo title="Invoices | Glass Bank" description="Create, send and track business invoices." path="/invoices" noindex />
@@ -161,6 +180,30 @@ const Invoices = () => {
           </button>
         </motion.div>
 
+        {!!rows?.length && (
+          <FilterShell
+            search={search}
+            onSearch={setSearch}
+            placeholder="Search client, invoice number or email…"
+            activeCount={advancedCount}
+            onClear={clearAll}
+            chips={STATUS_FILTERS.map((s) => (
+              <FilterChip
+                key={s}
+                label={s === "All" ? "All" : s[0].toUpperCase() + s.slice(1)}
+                active={statusFilter === s}
+                onClick={() => setStatusFilter(s)}
+                count={s === "All" ? rows.length : rows.filter((r) => r.status === s).length}
+              />
+            ))}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DateRangeField label="Issue date" from={issuedFrom} to={issuedTo} onFrom={setIssuedFrom} onTo={setIssuedTo} />
+              <AmountRangeField min={minAmount} max={maxAmount} onMin={setMinAmount} onMax={setMaxAmount} />
+            </div>
+          </FilterShell>
+        )}
+
         {!rows && <div className="flex justify-center py-10"><Loader2 className="animate-spin text-primary" /></div>}
         {rows?.length === 0 && (
           <GlassCard className="text-center py-10">
@@ -169,9 +212,16 @@ const Invoices = () => {
             <p className="text-xs text-muted-foreground mt-1">Bill a client and track it through to payment.</p>
           </GlassCard>
         )}
+        {!!rows?.length && visible.length === 0 && (
+          <GlassCard className="text-center py-8">
+            <p className="text-sm font-semibold text-foreground">No invoices match these filters</p>
+            <button onClick={clearAll} className="text-xs font-semibold text-primary mt-2">Reset filters</button>
+          </GlassCard>
+        )}
 
         <div className="space-y-2">
-          {(rows ?? []).map((inv) => (
+          {visible.map((inv) => (
+
             <GlassCard key={inv.id} className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
