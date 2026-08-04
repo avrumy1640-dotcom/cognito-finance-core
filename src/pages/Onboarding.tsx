@@ -505,7 +505,7 @@ function buildSteps(data: Data): Step[] {
         </div>
       ),
     });
-
+  }
 
 
   list.push({
