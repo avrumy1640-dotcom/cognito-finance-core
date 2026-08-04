@@ -380,11 +380,20 @@ const Settings = () => {
             <LinkRow label="Identity & verification" onClick={() => navigate("/profile/verify")} />
             <LinkRow label="Statements & documents" onClick={() => navigate("/profile/documents")} />
             <LinkRow label="Joint accounts" onClick={() => navigate("/joint-accounts")} />
+          </GlassCard>
+        </Section>
 
+        {/* Data & privacy rights */}
+        <Section title="Data & privacy">
+          <GlassCard className="divide-y divide-border p-0 overflow-hidden">
+            <LinkRow label="Privacy Center — export or delete my data" onClick={() => navigate("/privacy-center")} />
+            <LinkRow label="Privacy Policy" onClick={() => navigate("/legal/privacy")} />
+            <LinkRow label="Terms of Service" onClick={() => navigate("/legal/terms")} />
           </GlassCard>
         </Section>
 
         <p className="pt-2 text-center text-xs text-muted-foreground select-none">Glass Bank v2.1.0 · Build 2026.03</p>
+
 
       </div>
     </AppLayout>

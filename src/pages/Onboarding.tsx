@@ -782,8 +782,8 @@ function buildSteps(data: Data): Step[] {
     render: ({ data, setField }) => (
       <div className="space-y-3">
         {[
-          { key: "tos" as const, label: "Terms of Service", desc: "How Glass Bank works and what to expect from us." },
-          { key: "privacy" as const, label: "Privacy Policy", desc: "How we collect, store, and protect your data." },
+          { key: "tos" as const, label: "Terms of Service", href: "/legal/terms", desc: "How Glass Bank works and what to expect from us." },
+          { key: "privacy" as const, label: "Privacy Policy", href: "/legal/privacy", desc: "How we collect, store, and protect your data." },
         ].map((it) => {
           const active = data[it.key];
           return (
@@ -806,6 +806,16 @@ function buildSteps(data: Data): Step[] {
               <span className="flex-1">
                 <span className="block text-sm font-semibold text-foreground">I agree to the {it.label}</span>
                 <span className="block text-xs text-muted-foreground mt-0.5">{it.desc}</span>
+                {/* Consent isn't meaningful if the document can't be read first. */}
+                <a
+                  href={it.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="mt-1.5 inline-block text-xs font-semibold text-primary underline underline-offset-2"
+                >
+                  Read the {it.label}
+                </a>
               </span>
             </label>
           );
@@ -813,6 +823,7 @@ function buildSteps(data: Data): Step[] {
         <div className="pt-2 flex items-center gap-2 text-xs text-muted-foreground">
           <Shield size={13} /> Bank-grade encryption. Your data stays yours.
         </div>
+
       </div>
     ),
   });
