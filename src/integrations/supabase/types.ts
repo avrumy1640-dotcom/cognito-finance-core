@@ -44,6 +44,36 @@ export type Database = {
         }
         Relationships: []
       }
+      account_settings: {
+        Row: {
+          approval_threshold_cents: number | null
+          bank_account_id: string
+          created_at: string
+          id: string
+          receipt_required_cents: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          approval_threshold_cents?: number | null
+          bank_account_id: string
+          created_at?: string
+          id?: string
+          receipt_required_cents?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          approval_threshold_cents?: number | null
+          bank_account_id?: string
+          created_at?: string
+          id?: string
+          receipt_required_cents?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       account_statements: {
         Row: {
           bank_account_id: string
@@ -182,6 +212,57 @@ export type Database = {
           swift_bic?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      bills: {
+        Row: {
+          amount_cents: number
+          bank_account_id: string
+          created_at: string
+          currency: string
+          due_date: string | null
+          id: string
+          memo: string | null
+          paid_at: string | null
+          scheduled_transfer_id: string | null
+          status: string
+          transfer_id: string | null
+          updated_at: string
+          user_id: string
+          vendor_name: string
+        }
+        Insert: {
+          amount_cents: number
+          bank_account_id: string
+          created_at?: string
+          currency?: string
+          due_date?: string | null
+          id?: string
+          memo?: string | null
+          paid_at?: string | null
+          scheduled_transfer_id?: string | null
+          status?: string
+          transfer_id?: string | null
+          updated_at?: string
+          user_id: string
+          vendor_name: string
+        }
+        Update: {
+          amount_cents?: number
+          bank_account_id?: string
+          created_at?: string
+          currency?: string
+          due_date?: string | null
+          id?: string
+          memo?: string | null
+          paid_at?: string | null
+          scheduled_transfer_id?: string | null
+          status?: string
+          transfer_id?: string | null
+          updated_at?: string
+          user_id?: string
+          vendor_name?: string
         }
         Relationships: []
       }
@@ -854,6 +935,60 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_approvals: {
+        Row: {
+          amount_cents: number
+          bank_account_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          description: string | null
+          error: string | null
+          id: string
+          kind: string
+          payload: Json
+          requested_by: string
+          status: string
+          transfer_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          bank_account_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          description?: string | null
+          error?: string | null
+          id?: string
+          kind: string
+          payload?: Json
+          requested_by: string
+          status?: string
+          transfer_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          bank_account_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          description?: string | null
+          error?: string | null
+          id?: string
+          kind?: string
+          payload?: Json
+          requested_by?: string
+          status?: string
+          transfer_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payment_requests: {
         Row: {
           amount_cents: number
@@ -1326,6 +1461,45 @@ export type Database = {
           pattern?: string
           priority?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      transaction_receipts: {
+        Row: {
+          bank_account_id: string
+          content_type: string | null
+          created_at: string
+          filename: string | null
+          id: string
+          note: string | null
+          path: string
+          transaction_ref: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bank_account_id: string
+          content_type?: string | null
+          created_at?: string
+          filename?: string | null
+          id?: string
+          note?: string | null
+          path: string
+          transaction_ref: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bank_account_id?: string
+          content_type?: string | null
+          created_at?: string
+          filename?: string | null
+          id?: string
+          note?: string | null
+          path?: string
+          transaction_ref?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
