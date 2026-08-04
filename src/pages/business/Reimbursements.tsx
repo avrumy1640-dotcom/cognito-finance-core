@@ -36,6 +36,8 @@ const STATUS_STYLE: Record<string, string> = {
   denied: "bg-destructive/10 text-destructive",
 };
 
+const STATUS_FILTERS = ["All", "pending", "approved", "paid", "denied"];
+
 /**
  * Team reimbursements. A member submits an expense with a receipt; an owner or
  * admin approves, which triggers a real book transfer into the requester's own
@@ -46,6 +48,14 @@ const Reimbursements = () => {
   const [rows, setRows] = useState<Reimb[] | null>(null);
   const [snap, setSnap] = useState<ProviderSnapshot | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+
 
   const [accountId, setAccountId] = useState("");
   const [amount, setAmount] = useState("");
