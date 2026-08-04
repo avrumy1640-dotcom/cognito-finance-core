@@ -29,11 +29,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
-      // Session-scoped gate caches (onboarding / KYC / MFA) must not survive a
-      // sign-in, sign-out or user switch.
+      // Session-scoped gate caches (onboarding / KYC / MFA) and the shared
+      // provider snapshot must not survive a sign-in, sign-out or user switch.
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
         invalidateGateCache();
+        invalidateLedgerSnapshot();
       }
+
       if (event === "SIGNED_IN" && next?.user?.id) {
         // Defer to avoid blocking the auth callback.
         setTimeout(() => { void recordSignIn(next.user.id); }, 0);
