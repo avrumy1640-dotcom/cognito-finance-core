@@ -760,8 +760,10 @@ function buildSteps(data: Data): Step[] {
   list.push({
     id: "income",
     kicker: kicker("Income"),
-    title: "Estimated annual income?",
-    subtitle: "Ballpark is fine — enter a whole number in USD.",
+    title: isBusiness ? "Your own estimated annual income?" : "Estimated annual income?",
+    subtitle: isBusiness
+      ? "What you personally earn — not the company's revenue. A ballpark whole number in USD is fine."
+      : "Ballpark is fine — enter a whole number in USD.",
     validate: (d) => {
       const n = Number(d.annual_income.replace(/[^0-9]/g, ""));
       return n > 0 ? null : "Enter your estimated annual income.";
@@ -781,7 +783,7 @@ function buildSteps(data: Data): Step[] {
   list.push({
     id: "source",
     kicker: kicker("Source of funds"),
-    title: "Where will your money come from?",
+    title: isBusiness ? "Where will the money in this account come from?" : "Where will your money come from?",
     subtitle: "Helps us keep everyone's accounts safe.",
     validate: (d) => (d.source_of_funds ? null : "Choose your source of funds."),
     render: ({ data, setField }) => (
@@ -799,8 +801,11 @@ function buildSteps(data: Data): Step[] {
       id: "tax_id",
       kicker: kicker(isUs ? "SSN" : "Tax ID"),
       title: isUs ? "What's your SSN or ITIN?" : "What's your tax ID number?",
-      subtitle: "Encrypted end-to-end. Used only for regulatory reporting.",
+      subtitle: isBusiness
+        ? "This is your personal number — different from the business EIN you gave us earlier. Encrypted end-to-end and used only for regulatory reporting."
+        : "Encrypted end-to-end. Used only for regulatory reporting.",
       validate: (d) => (d.tax_id_number.trim().length > 3 ? null : "Enter your tax ID number."),
+
       render: ({ data, setField, submit }) => (
         <TextInput
           value={data.tax_id_number}
