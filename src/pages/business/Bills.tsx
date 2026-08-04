@@ -9,6 +9,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import GlassCard from "@/components/glass/GlassCard";
 import Seo from "@/components/Seo";
 import { supabase } from "@/integrations/supabase/client";
+import { ledgerProvider, type ProviderAccount } from "@/lib/ledgerProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { money } from "./BusinessHome";
 
@@ -50,6 +51,8 @@ const Bills = () => {
   const [amount, setAmount] = useState("");
   const [due, setDue] = useState("");
   const [memo, setMemo] = useState("");
+  const [accounts, setAccounts] = useState<ProviderAccount[]>([]);
+  const [accountId, setAccountId] = useState("");
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -59,6 +62,18 @@ const Bills = () => {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Bills are owed *by* a specific account, so the payer is chosen up front.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const snap = await ledgerProvider.sync({ limit: 1 });
+        const usable = snap.accounts.filter((a) => a.myRole !== "viewer");
+        setAccounts(usable);
+        setAccountId((prev) => prev || usable[0]?.id || "");
+      } catch { /* the list still works without it */ }
+    })();
+  }, []);
 
   const outstanding = useMemo(
     () => (rows ?? []).filter((r) => ["unpaid", "scheduled"].includes(r.status))
@@ -77,9 +92,11 @@ const Bills = () => {
     const cents = Math.round(Number(amount) * 100);
     if (vendor.trim().length < 2) return toast.error("Who is this bill from?");
     if (!cents || cents <= 0) return toast.error("Enter the amount owed");
+    if (!accountId) return toast.error("Choose which account this is paid from");
     setBusy(true);
     const { error } = await supabase.from("bills").insert({
       user_id: user.id,
+      bank_account_id: accountId,
       vendor_name: vendor.trim(),
       amount_cents: cents,
       due_date: due || null,
@@ -211,6 +228,14 @@ const Bills = () => {
             </div>
             <input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="Vendor or supplier"
               className="w-full px-4 py-3 rounded-2xl bg-secondary border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+            <label className="block">
+              <span className="text-xs text-muted-foreground">Paid from</span>
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)}
+                className="mt-1 w-full px-4 py-3 rounded-2xl bg-secondary border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+                {accounts.length === 0 && <option value="">Loading accounts…</option>}
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </label>
             <input value={amount} onChange={(e) => setAmount(e.target.value)} type="number" min="0" step="0.01" placeholder="Amount owed"
               className="w-full px-4 py-3 rounded-2xl bg-secondary border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
             <label className="block">
