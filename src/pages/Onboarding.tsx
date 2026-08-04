@@ -586,6 +586,9 @@ function buildSteps(data: Data): Step[] {
     id: "country",
     kicker: kicker("Country"),
     title: "Where do you live?",
+    subtitle: isBusiness
+      ? "Your own country of residence — we've pre-selected the one on the business address."
+      : undefined,
     validate: (d) => (d.country ? null : "Choose your country of residence."),
     render: ({ data, setField }) => (
       <ChoiceList
@@ -599,6 +602,7 @@ function buildSteps(data: Data): Step[] {
       />
     ),
   });
+
 
   list.push({
     id: "citizenship",
