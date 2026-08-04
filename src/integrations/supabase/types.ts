@@ -566,6 +566,66 @@ export type Database = {
         }
         Relationships: []
       }
+      invoices: {
+        Row: {
+          amount_cents: number
+          bank_account_id: string | null
+          client_email: string | null
+          client_name: string
+          created_at: string
+          currency: string
+          due_date: string | null
+          id: string
+          invoice_number: string
+          issue_date: string
+          line_items: Json
+          notes: string | null
+          paid_at: string | null
+          sent_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents?: number
+          bank_account_id?: string | null
+          client_email?: string | null
+          client_name: string
+          created_at?: string
+          currency?: string
+          due_date?: string | null
+          id?: string
+          invoice_number: string
+          issue_date?: string
+          line_items?: Json
+          notes?: string | null
+          paid_at?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          bank_account_id?: string | null
+          client_email?: string | null
+          client_name?: string
+          created_at?: string
+          currency?: string
+          due_date?: string | null
+          id?: string
+          invoice_number?: string
+          issue_date?: string
+          line_items?: Json
+          notes?: string | null
+          paid_at?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       joint_owner_requests: {
         Row: {
           bank_account_id: string
@@ -574,6 +634,7 @@ export type Database = {
           invitee_user_id: string
           requester_user_id: string
           responded_at: string | null
+          role: string
           status: string
           updated_at: string
         }
@@ -584,6 +645,7 @@ export type Database = {
           invitee_user_id: string
           requester_user_id: string
           responded_at?: string | null
+          role?: string
           status?: string
           updated_at?: string
         }
@@ -594,6 +656,7 @@ export type Database = {
           invitee_user_id?: string
           requester_user_id?: string
           responded_at?: string | null
+          role?: string
           status?: string
           updated_at?: string
         }
@@ -929,6 +992,57 @@ export type Database = {
           tos_accepted_at?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      reimbursements: {
+        Row: {
+          amount_cents: number
+          bank_account_id: string
+          created_at: string
+          decision_note: string | null
+          description: string
+          id: string
+          paid_at: string | null
+          receipt_path: string | null
+          requester_user_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          transfer_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          bank_account_id: string
+          created_at?: string
+          decision_note?: string | null
+          description: string
+          id?: string
+          paid_at?: string | null
+          receipt_path?: string | null
+          requester_user_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          transfer_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          bank_account_id?: string
+          created_at?: string
+          decision_note?: string | null
+          description?: string
+          id?: string
+          paid_at?: string | null
+          receipt_path?: string | null
+          requester_user_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          transfer_id?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

@@ -18,7 +18,7 @@ import type { DemoAccount, DemoLedger, DemoTransaction } from "@/lib/demoBank";
 export interface AccountOwner {
   userId: string;
   name: string;
-  role: "primary" | "joint";
+  role: "primary" | "joint" | "admin" | "viewer";
   isMe: boolean;
 }
 
@@ -46,7 +46,7 @@ export interface ProviderAccount {
   } | null;
   /** True when more than one entity owns the account at the provider. */
   isJoint?: boolean;
-  myRole?: "primary" | "joint";
+  myRole?: "primary" | "joint" | "admin" | "viewer";
   owners?: AccountOwner[];
 }
 
@@ -231,7 +231,7 @@ export interface JointOverview {
   }>;
   accounts: Array<{
     id: string; name: string; type: string;
-    myRole: "primary" | "joint";
+    myRole: "primary" | "joint" | "admin" | "viewer";
     owners: AccountOwner[];
   }>;
 }
@@ -265,8 +265,18 @@ export const ledgerProvider = {
 
   /** Joint ownership: pending requests in both directions + owner rosters. */
   jointList: () => call<JointOverview>({ action: "joint_list" }),
-  jointRequest: (bankAccountId: string, email: string) =>
-    call<{ sent: boolean; message: string }>({ action: "joint_request", bankAccountId, email }),
+  jointRequest: (bankAccountId: string, email: string, role: "joint" | "admin" | "viewer" = "joint") =>
+    call<{ sent: boolean; message: string }>({ action: "joint_request", bankAccountId, email, role }),
+  /** Opens an additional named account (business sub-accounts) on the same entity. */
+  subAccountCreate: (name: string) =>
+    call<{ created: boolean; bankAccountId: string; name: string; snapshot: ProviderSnapshot }>({
+      action: "sub_account_create", name,
+    }),
+  /** Approve or deny a team reimbursement request (account owner/admin only). */
+  reimburseDecide: (id: string, approve: boolean, note?: string) =>
+    call<{ status: string; paid?: boolean; reason?: string; transferId?: string | null }>({
+      action: "reimburse_decide", id, approve, note,
+    }),
   jointRespond: (requestId: string, accept: boolean) =>
     call<{ status: string; bankAccountId?: string }>({ action: "joint_respond", requestId, accept }),
   jointCancel: (requestId: string) => call<{ status: string }>({ action: "joint_cancel", requestId }),
