@@ -7,6 +7,14 @@ import GlassCard from "@/components/glass/GlassCard";
 import Seo from "@/components/Seo";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  FilterShell,
+  FilterChip,
+  DateRangeField,
+  AmountRangeField,
+  inDateWindow,
+  inAmountWindow,
+} from "@/components/filters/FilterBar";
 import { money } from "./BusinessHome";
 
 type LineItem = { description: string; qty: number; unit: number };
@@ -34,17 +42,27 @@ const STATUS_STYLE: Record<string, string> = {
 
 const emptyItem = (): LineItem => ({ description: "", qty: 1, unit: 0 });
 
+const STATUS_FILTERS = ["All", "draft", "sent", "overdue", "paid", "void"];
+
 const Invoices = () => {
   const { user } = useAuth();
   const [rows, setRows] = useState<Invoice[] | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [issuedFrom, setIssuedFrom] = useState("");
+  const [issuedTo, setIssuedTo] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+
   const [client, setClient] = useState("");
   const [email, setEmail] = useState("");
   const [due, setDue] = useState("");
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<LineItem[]>([emptyItem()]);
+
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
