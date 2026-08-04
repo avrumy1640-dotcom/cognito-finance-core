@@ -3,6 +3,8 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { recordSignIn } from "@/lib/deviceTracking";
 import { invalidateGateCache } from "@/lib/gateCache";
+import { invalidateLedgerSnapshot } from "@/lib/ledgerProvider";
+
 import { recordAuditEvent } from "@/lib/audit";
 
 
