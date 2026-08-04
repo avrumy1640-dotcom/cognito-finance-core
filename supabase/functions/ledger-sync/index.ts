@@ -412,13 +412,19 @@ async function syncKycStatus(userId: string, verification?: string) {
   await admin.from("kyc_profiles").update({ status }).eq("user_id", userId);
 }
 
-async function createAccount(userId: string, entityId: string, kind: "checking" | "savings") {
-  const description = kind === "checking" ? "Everyday Checking" : "Savings";
+async function createAccount(
+  userId: string,
+  entityId: string,
+  kind: "checking" | "savings" | "business",
+  opts: { description?: string; idemKey?: string } = {},
+) {
+  const description = opts.description
+    ?? (kind === "checking" ? "Everyday Checking" : kind === "savings" ? "Savings" : "Business Account");
   // Keyed on user + kind: a retry can never open a second checking account.
   const acct = await column<any>("/bank-accounts", {
     method: "POST",
     body: { entity_id: entityId, description },
-    idempotencyKey: `bank-account-${userId}-${kind}`,
+    idempotencyKey: opts.idemKey ?? `bank-account-${userId}-${kind}`,
   });
 
   // The default account number is created with the account; fall back to
@@ -471,7 +477,12 @@ async function createAccount(userId: string, entityId: string, kind: "checking" 
 // alone — that column is only the creator, not the access list.
 // ---------------------------------------------------------------------------
 export interface OwnedAccount extends Record<string, any> {
-  owner_role: "primary" | "joint";
+  /**
+   * "primary" / "joint" are legal owners on Column. "admin" / "viewer" are
+   * app-level business team members: they can see the account, and only an
+   * admin may debit it.
+   */
+  owner_role: "primary" | "joint" | "admin" | "viewer";
 }
 
 async function ownedAccountRows(userId: string): Promise<OwnedAccount[]> {
@@ -818,6 +829,19 @@ function pickAccount(rows: any[], which?: string) {
 }
 
 /**
+ * Resolve a DEBIT source. Team members added with the "viewer" role can read
+ * an account but must never be able to move money out of it — this is the
+ * server-side half of that rule (the UI hides the controls, this enforces it).
+ */
+function pickSource(rows: any[], which?: string) {
+  const row = pickAccount(rows, which);
+  if (row?.owner_role === "viewer") {
+    throw new Error("Your access to this account is view-only — ask an admin to make the transfer.");
+  }
+  return row;
+}
+
+/**
  * A counterparty id supplied by the client is only usable if the caller
  * created it. Without this check, a tampered request body could wire money to
  * another user's saved recipient.
@@ -1043,7 +1067,7 @@ async function doTransfer(userId: string, body: any) {
 
 
   if (kind === "book") {
-    const from = pickAccount(rows, body.from);
+    const from = pickSource(rows, body.from);
     const to = pickAccount(rows, body.to);
     if (!from || !to || from.bank_account_id === to.bank_account_id) {
       throw new Error("Choose two different accounts");
@@ -1065,7 +1089,7 @@ async function doTransfer(userId: string, body: any) {
   }
 
   if (kind === "ach" || kind === "ach_pull") {
-    const from = pickAccount(rows, body.from ?? "checking");
+    const from = pickSource(rows, body.from ?? "checking");
     const counterpartyId = body.counterpartyId
       ? await assertOwnCounterparty(userId, String(body.counterpartyId))
       : await ensureCounterparty(userId, {
@@ -1101,7 +1125,7 @@ async function doTransfer(userId: string, body: any) {
   }
 
   if (kind === "wire") {
-    const from = pickAccount(rows, body.from ?? "checking");
+    const from = pickSource(rows, body.from ?? "checking");
     const counterpartyId = body.counterpartyId
       ? await assertOwnCounterparty(userId, String(body.counterpartyId))
       : await ensureCounterparty(userId, {
@@ -1846,9 +1870,12 @@ async function jointList(userId: string) {
   };
 }
 
+const TEAM_ROLES = ["joint", "admin", "viewer"] as const;
+
 async function jointRequest(userId: string, body: any) {
   const bankAccountId = String(body?.bankAccountId ?? "");
   const email = String(body?.email ?? "").trim().toLowerCase();
+  const role = TEAM_ROLES.includes(body?.role) ? String(body.role) : "joint";
   if (!bankAccountId) throw new Error("Choose an account");
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Enter a valid email address");
   await assertPrimaryOwner(userId, bankAccountId);
@@ -1883,14 +1910,17 @@ async function jointRequest(userId: string, body: any) {
     requester_user_id: userId,
     invitee_user_id: inviteeId,
     status: "pending",
+    role,
   });
   if (insErr && !/duplicate key/i.test(insErr.message)) throw new Error(insErr.message);
 
   try {
     await admin.from("notifications").insert({
       user_id: inviteeId,
-      title: "Joint account request",
-      body: "Someone invited you to become a joint owner of their account.",
+      title: role === "joint" ? "Joint account request" : "Team access invitation",
+      body: role === "joint"
+        ? "Someone invited you to become a joint owner of their account."
+        : `You've been invited to an account as ${role === "admin" ? "an admin" : "a viewer"}.`,
       type: "security",
     });
   } catch { /* notifications table is optional */ }
@@ -1915,19 +1945,24 @@ async function jointRespond(userId: string, body: any) {
   const entityId = await verifiedEntityFor(userId);
   if (!entityId) throw new Error("Finish your identity verification before joining an account");
 
-  // Column is the source of truth for ownership — it must accept the new owner
-  // before we grant anyone access on our side.
-  await column<any>(`/bank-accounts/${reqRow.bank_account_id}/owner`, {
-    method: "POST",
-    body: { entity_id: entityId },
-    idempotencyKey: `joint-${reqRow.id}`,
-  });
+  const grantedRole = TEAM_ROLES.includes((reqRow as any).role) ? String((reqRow as any).role) : "joint";
+
+  // A JOINT owner is a legal owner, so Column is the source of truth and must
+  // accept them before we grant access. Admin/viewer team access is an
+  // app-level permission only — it never changes ownership at the bank.
+  if (grantedRole === "joint") {
+    await column<any>(`/bank-accounts/${reqRow.bank_account_id}/owner`, {
+      method: "POST",
+      body: { entity_id: entityId },
+      idempotencyKey: `joint-${reqRow.id}`,
+    });
+  }
 
   await admin.from("account_owners").upsert({
     bank_account_id: reqRow.bank_account_id,
     user_id: userId,
     entity_id: entityId,
-    role: "joint",
+    role: grantedRole,
   }, { onConflict: "bank_account_id,user_id" });
 
   await admin.from("joint_owner_requests")
@@ -1979,6 +2014,111 @@ async function jointRemove(userId: string, body: any) {
   await admin.from("account_owners").delete().eq("id", target.id);
   return { removed: true, providerRemoved, providerNote };
 }
+
+// ---------------------------------------------------------------------------
+// Business banking: named sub-accounts + reimbursement payouts.
+// ---------------------------------------------------------------------------
+
+/**
+ * Opens an additional, user-named bank account on the caller's existing
+ * (already verified) Column entity. Business customers use these as real
+ * segregated pots — Payroll, Taxes, Operating — not as UI labels.
+ */
+async function subAccountCreate(userId: string, body: any) {
+  const name = String(body?.name ?? "").trim().replace(/\s+/g, " ").slice(0, 48);
+  if (name.length < 2) throw new Error("Give the account a name");
+
+  const entityId = await verifiedEntityFor(userId);
+  if (!entityId) throw new Error("Finish verification before opening another account");
+
+  const rows = await ownedAccountRows(userId);
+  const mine = rows.filter((r) => r.owner_role === "primary");
+  if (mine.length >= 10) throw new Error("You've reached the maximum of 10 accounts");
+  if (mine.some((r) => String(r.description ?? "").trim().toLowerCase() === name.toLowerCase())) {
+    throw new Error("You already have an account with that name");
+  }
+
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32);
+  const row = await createAccount(userId, entityId, "business", {
+    description: name,
+    idemKey: `bank-account-${userId}-sub-${slug}`,
+  });
+  return { created: true, bankAccountId: (row as any).bank_account_id, name };
+}
+
+/** True when the caller may approve spending on this account. */
+async function assertAccountManager(userId: string, bankAccountId: string) {
+  const { data } = await admin.from("account_owners")
+    .select("role").eq("user_id", userId).eq("bank_account_id", bankAccountId).maybeSingle();
+  if (!data || !["primary", "joint", "admin"].includes(String(data.role))) {
+    throw new Error("Only the account owner or an admin can decide reimbursements");
+  }
+  return String(data.role);
+}
+
+/**
+ * Approve / deny a reimbursement. On approval we attempt a real book transfer
+ * from the business account into the requester's own primary account; when the
+ * requester has no account with us the request is marked "approved" and the
+ * payout is left to be made manually — we never fake a payment.
+ */
+async function reimburseDecide(userId: string, body: any) {
+  const id = String(body?.id ?? "");
+  const approve = !!body?.approve;
+  const note = String(body?.note ?? "").slice(0, 300) || null;
+
+  const { data: req } = await admin.from("reimbursements").select("*").eq("id", id).maybeSingle();
+  if (!req || req.status !== "pending") throw new Error("That request is no longer pending");
+  await assertAccountManager(userId, req.bank_account_id);
+
+  const stamp = { reviewed_by: userId, reviewed_at: new Date().toISOString(), decision_note: note };
+
+  if (!approve) {
+    await admin.from("reimbursements").update({ ...stamp, status: "denied" }).eq("id", id);
+    return { status: "denied" };
+  }
+
+  // Requester's own primary account, if they have one on the platform.
+  const payeeRows = (await ownedAccountRows(req.requester_user_id))
+    .filter((r) => r.owner_role === "primary" && r.bank_account_id !== req.bank_account_id);
+  const payee = payeeRows[0];
+
+  if (!payee) {
+    await admin.from("reimbursements").update({ ...stamp, status: "approved" }).eq("id", id);
+    return { status: "approved", paid: false, reason: "No Glass Bank account on file for this teammate" };
+  }
+
+  const transfer = await column<any>("/transfers/book", {
+    method: "POST",
+    body: {
+      amount: Number(req.amount_cents),
+      currency_code: "USD",
+      sender_bank_account_id: req.bank_account_id,
+      receiver_bank_account_id: payee.bank_account_id,
+      description: `Reimbursement — ${String(req.description).slice(0, 60)}`,
+    },
+    idempotencyKey: `reimburse-${id}`,
+  });
+
+  await admin.from("reimbursements").update({
+    ...stamp,
+    status: "paid",
+    transfer_id: transfer?.id ?? null,
+    paid_at: new Date().toISOString(),
+  }).eq("id", id);
+
+  try {
+    await admin.from("notifications").insert({
+      user_id: req.requester_user_id,
+      title: "Reimbursement paid",
+      body: `${(Number(req.amount_cents) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} is on its way to your account.`,
+      type: "transfer",
+    });
+  } catch { /* optional */ }
+
+  return { status: "paid", transferId: transfer?.id ?? null };
+}
+
 
 // ---------------------------------------------------------------------------
 // Statements.
@@ -2146,7 +2286,7 @@ Deno.serve(async (req) => {
 
     // Rate limit per caller. Admin/mutating actions get a much tighter budget
     // than read-only status/sync polling.
-    const isMutating = isAdminAction || ["provision", "transfer", "submit_evidence", "joint_request", "joint_respond", "joint_cancel", "joint_remove"].includes(action);
+    const isMutating = isAdminAction || ["provision", "transfer", "submit_evidence", "joint_request", "joint_respond", "joint_cancel", "joint_remove", "sub_account_create", "reimburse_decide"].includes(action);
     const rl = rateLimit(`ledger:${user.id}:${isMutating ? "write" : "read"}`, isMutating ? 10 : 60);
     if (!rl.allowed) return tooManyRequests(rl.retryAfter, corsHeaders);
 
@@ -2166,6 +2306,10 @@ Deno.serve(async (req) => {
         return json(await jointCancel(user.id, body));
       case "joint_remove":
         return json(await jointRemove(user.id, body));
+      case "sub_account_create":
+        return json({ ...await subAccountCreate(user.id, body), snapshot: await snapshot(user.id, { provision: false }) });
+      case "reimburse_decide":
+        return json(await reimburseDecide(user.id, body));
 
       case "status": {
         const { data: entity } = await admin

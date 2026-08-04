@@ -1,6 +1,7 @@
-import { Home, ArrowLeftRight, CreditCard, Activity, User } from "lucide-react";
+import { Home, ArrowLeftRight, CreditCard, Activity, User, Landmark, Send, FileText } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useBusiness } from "@/hooks/useBusiness";
 
 const tabs = [
   { path: "/", label: "Home", icon: Home },
@@ -10,9 +11,19 @@ const tabs = [
   { path: "/profile", label: "Profile", icon: User },
 ];
 
+const businessTabs = [
+  { path: "/business", label: "Home", icon: Landmark },
+  { path: "/payments", label: "Pay", icon: Send },
+  { path: "/invoices", label: "Invoices", icon: FileText },
+  { path: "/activity", label: "Activity", icon: Activity },
+  { path: "/profile", label: "Profile", icon: User },
+];
+
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isBusiness } = useBusiness();
+  const items = isBusiness ? businessTabs : tabs;
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -25,7 +36,7 @@ const BottomNav = () => {
       aria-label="Primary"
     >
       <div className="flex items-center justify-around gap-0.5 min-w-[320px] max-w-[92vw]">
-        {tabs.map((tab) => {
+        {items.map((tab) => {
           const active = isActive(tab.path);
           return (
             <button

@@ -39,8 +39,8 @@ export interface DemoAccount {
   openedDate: string;
   /** Set when the provider reports more than one owning entity. */
   isJoint?: boolean;
-  myRole?: "primary" | "joint";
-  owners?: { userId: string; name: string; role: "primary" | "joint"; isMe: boolean }[];
+  myRole?: "primary" | "joint" | "admin" | "viewer";
+  owners?: { userId: string; name: string; role: "primary" | "joint" | "admin" | "viewer"; isMe: boolean }[];
   apy?: number;
   interestEarned?: number;
   depositDetails: {

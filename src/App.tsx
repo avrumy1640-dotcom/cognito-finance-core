@@ -57,6 +57,11 @@ import AdminLayout from "./pages/admin/AdminLayout";
 import AdminProvider from "./pages/admin/AdminProvider";
 import EarlyDirectDepositGuide from "./pages/blog/EarlyDirectDepositGuide";
 import RouteSeo from "@/components/RouteSeo";
+import BusinessHome from "./pages/business/BusinessHome";
+import BusinessPayments from "./pages/business/Payments";
+import Invoices from "./pages/business/Invoices";
+import Team from "./pages/business/Team";
+import Reimbursements from "./pages/business/Reimbursements";
 
 const queryClient = new QueryClient();
 
@@ -142,6 +147,11 @@ const App = () => (
               <Route path="/referrals" element={<Banking><Referrals /></Banking>} />
               <Route path="/rewards" element={<Banking><Rewards /></Banking>} />
               <Route path="/credit" element={<Banking><Credit /></Banking>} />
+              <Route path="/business" element={<Banking><BusinessHome /></Banking>} />
+              <Route path="/payments" element={<Banking><BusinessPayments /></Banking>} />
+              <Route path="/invoices" element={<Banking><Invoices /></Banking>} />
+              <Route path="/team" element={<Banking><Team /></Banking>} />
+              <Route path="/reimbursements" element={<Banking><Reimbursements /></Banking>} />
               <Route path="/scheduled" element={<Banking><ScheduledTransfers /></Banking>} />
               <Route path="/admin" element={<Guarded><RequireAdmin><AdminLayout /></RequireAdmin></Guarded>}>
                 <Route index element={<AdminProvider />} />

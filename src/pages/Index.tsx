@@ -1,7 +1,7 @@
 import { formatTxDate, txGroupLabel } from "@/lib/dates";
 import { Bell, Search, Eye, EyeOff, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import AppLayout from "@/components/layout/AppLayout";
@@ -11,6 +11,7 @@ import { useUnreadCount } from "@/hooks/useNotifications";
 import DataErrorState from "@/components/layout/DataErrorState";
 import { useKyc } from "@/hooks/useKyc";
 import { useProfile } from "@/hooks/useProfile";
+import { useBusiness } from "@/hooks/useBusiness";
 import Seo from "@/components/Seo";
 import {
   ArrowUpRight,
@@ -51,6 +52,7 @@ const Skeleton = ({ className = "" }: { className?: string }) => (
 );
 
 const HomePage = () => {
+  const { isBusiness, loading: businessLoading } = useBusiness();
   const [balanceVisible, setBalanceVisible] = useState(true);
   const navigate = useNavigate();
   const { accounts, totalBalance, transactions, dataStatus, dataError, retry, payroll } = useBank();
@@ -118,6 +120,9 @@ const HomePage = () => {
     }
     return { moneyIn: inSum, moneyOut: outSum, net: inSum - outSum };
   }, [transactions]);
+
+  if (businessLoading) return null;
+  if (isBusiness) return <Navigate to="/business" replace />;
 
   const kycMeta = (() => {
     if (kycLoading) return null;
