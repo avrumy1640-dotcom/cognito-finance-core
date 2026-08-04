@@ -621,10 +621,10 @@ function buildSteps(data: Data): Step[] {
 
   list.push({
     id: "address",
-    kicker: kicker("Address"),
-    title: isBusiness ? "What's your home address?" : "What's your address?",
+    kicker: kicker(isBusiness ? "Home address" : "Address"),
+    title: isBusiness ? "And where do you live?" : "What's your address?",
     subtitle: isBusiness
-      ? "Your personal residential address — separate from the business address."
+      ? "Your own home address. If you run the business from home, tick the box and we'll copy it over."
       : "Where you receive mail today.",
 
     validate: (d) =>
@@ -634,8 +634,38 @@ function buildSteps(data: Data): Step[] {
       d.address_postal_code.trim().length > 2
         ? null
         : "Complete your street, city, state or region, and postal code.",
-    render: ({ data, setField, submit }) => (
+    render: ({ data, setField, submit }) => {
+      const sameAsBusiness =
+        isBusiness &&
+        !!data.business_address_street.trim() &&
+        data.address_street.trim() === data.business_address_street.trim() &&
+        data.address_city.trim() === data.business_address_city.trim() &&
+        data.address_postal_code.trim() === data.business_address_postal_code.trim();
+      return (
       <div className="space-y-3">
+        {isBusiness && data.business_address_street.trim() && (
+          <CheckRow
+            checked={sameAsBusiness}
+            onChange={(on) => {
+              if (on) {
+                setField("address_street", data.business_address_street);
+                setField("address_line2", data.business_address_line2);
+                setField("address_city", data.business_address_city);
+                setField("address_region", data.business_address_region);
+                setField("address_postal_code", data.business_address_postal_code);
+                if (data.business_address_country) setField("country", data.business_address_country);
+              } else {
+                setField("address_street", "");
+                setField("address_line2", "");
+                setField("address_city", "");
+                setField("address_region", "");
+                setField("address_postal_code", "");
+              }
+            }}
+            label="I live at the business address"
+            desc={`${data.business_address_street}, ${data.business_address_city}`}
+          />
+        )}
         <AddressAutocomplete
           label="Street address"
           value={data.address_street}
@@ -687,38 +717,44 @@ function buildSteps(data: Data): Step[] {
           />
         </div>
       </div>
-    ),
+      );
+    },
   });
 
-  list.push({
-    id: "employment",
-    kicker: kicker("Employment"),
-    title: "What's your employment status?",
-    validate: (d) => (d.employment_status ? null : "Choose your employment status."),
-    render: ({ data, setField }) => (
-      <ChoiceList
-        items={EMPLOYMENT}
-        value={data.employment_status}
-        onChange={(v) => setField("employment_status", v)}
-      />
-    ),
-  });
+  // Business owners already told us their title and that they run a company —
+  // asking for "employment status" and "occupation" again is the same question
+  // twice, so we derive both from the control-person step instead.
+  if (!isBusiness) {
+    list.push({
+      id: "employment",
+      kicker: kicker("Employment"),
+      title: "What's your employment status?",
+      validate: (d) => (d.employment_status ? null : "Choose your employment status."),
+      render: ({ data, setField }) => (
+        <ChoiceList
+          items={EMPLOYMENT}
+          value={data.employment_status}
+          onChange={(v) => setField("employment_status", v)}
+        />
+      ),
+    });
 
-  list.push({
-    id: "occupation",
-    kicker: kicker("Work"),
-    title: isBusiness ? "What's your role outside the business?" : "What do you do for work?",
-    subtitle: isBusiness ? "Your own occupation — we already have the company's industry." : undefined,
-    validate: (d) => (d.occupation.trim().length > 1 ? null : "Enter your occupation."),
-    render: ({ data, setField, submit }) => (
-      <TextInput
-        value={data.occupation}
-        onChange={(v) => setField("occupation", v)}
-        onEnter={submit}
-        placeholder={isBusiness ? "Founder & CEO" : "Software Engineer"}
-      />
-    ),
-  });
+    list.push({
+      id: "occupation",
+      kicker: kicker("Work"),
+      title: "What do you do for work?",
+      validate: (d) => (d.occupation.trim().length > 1 ? null : "Enter your occupation."),
+      render: ({ data, setField, submit }) => (
+        <TextInput
+          value={data.occupation}
+          onChange={(v) => setField("occupation", v)}
+          onEnter={submit}
+          placeholder="Software Engineer"
+        />
+      ),
+    });
+  }
+
 
 
   list.push({
