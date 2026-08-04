@@ -66,33 +66,78 @@ const ActivityPage = () => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  const [rail, setRail] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [direction, setDirection] = useState("all");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const navigate = useNavigate();
   const { transactions, dataStatus, dataError, retry, hasMoreTransactions, loadingMoreTransactions, loadMoreTransactions } = useBank();
+
+  const advancedCount =
+    (dateFrom || dateTo ? 1 : 0) +
+    (minAmount || maxAmount ? 1 : 0) +
+    (rail !== "all" ? 1 : 0) +
+    (status !== "all" ? 1 : 0) +
+    (direction !== "all" ? 1 : 0);
+
+  const clearAll = () => {
+    setSearchQuery("");
+    setActiveFilter("All");
+    setDateFrom("");
+    setDateTo("");
+    setMinAmount("");
+    setMaxAmount("");
+    setRail("all");
+    setStatus("all");
+    setDirection("all");
+  };
 
   // Filtering is memoised so a 10k-row ledger doesn't re-scan on every render.
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return transactions.filter((tx) => {
-      const matchesSearch =
-        !q ||
-        tx.merchant.toLowerCase().includes(q) ||
-        tx.category.toLowerCase().includes(q);
+      // Text search spans merchant, category and account so a bookkeeper can
+      // find a row by whatever they remember about it.
+      if (
+        q &&
+        !`${tx.merchant ?? ""} ${tx.category ?? ""} ${tx.account ?? ""}`.toLowerCase().includes(q)
+      ) {
+        return false;
+      }
 
-      if (activeFilter === "All") return matchesSearch;
-      if (activeFilter === "Pending") return matchesSearch && tx.status === "pending";
-      if (activeFilter === "Income") return matchesSearch && tx.type === "credit";
-      if (activeFilter === "Card") return matchesSearch && tx.paymentMethod === "Debit Card";
-      if (activeFilter === "Transfers") return matchesSearch && tx.category === "Transfer";
-      if (activeFilter === "Deposits") return matchesSearch && tx.category === "Income";
-      if (activeFilter === "Bills") return matchesSearch && tx.category === "Bills";
-      if (activeFilter === "P2P") return matchesSearch && tx.category === "P2P";
-      return matchesSearch;
+      if (!inDateWindow(tx.date, dateFrom, dateTo)) return false;
+      if (!inAmountWindow(tx.amount, minAmount, maxAmount)) return false;
+      if (!matchesRail(tx, rail)) return false;
+
+      if (direction === "in" && tx.amount <= 0) return false;
+      if (direction === "out" && tx.amount >= 0) return false;
+
+      if (status !== "all") {
+        const info = transferStatusInfo(tx.providerStatus, tx.status);
+        if (status === "posted" && !(tx.status === "posted" && info.tone !== "danger")) return false;
+        if (status === "pending" && tx.status !== "pending") return false;
+        if (status === "returned" && info.tone !== "danger") return false;
+      }
+
+      if (activeFilter === "Pending") return tx.status === "pending";
+      if (activeFilter === "Income") return tx.type === "credit";
+      if (activeFilter === "Card") return tx.paymentMethod === "Debit Card";
+      if (activeFilter === "Transfers") return tx.category === "Transfer";
+      if (activeFilter === "Deposits") return tx.category === "Income";
+      if (activeFilter === "Bills") return tx.category === "Bills";
+      if (activeFilter === "P2P") return tx.category === "P2P";
+      if (activeFilter === "Fees") return tx.category === "Fees";
+      return true;
     });
-  }, [transactions, searchQuery, activeFilter]);
+  }, [transactions, searchQuery, activeFilter, dateFrom, dateTo, minAmount, maxAmount, rail, status, direction]);
 
   // Reset the window whenever the result set changes.
-  useEffect(() => { setVisible(PAGE_SIZE); }, [searchQuery, activeFilter]);
+  useEffect(() => { setVisible(PAGE_SIZE); }, [searchQuery, activeFilter, dateFrom, dateTo, minAmount, maxAmount, rail, status, direction]);
+
 
   const page = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
 
