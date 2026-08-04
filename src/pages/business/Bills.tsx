@@ -93,6 +93,26 @@ const Bills = () => {
     })();
   }, []);
 
+  const advancedCount = (dueFrom || dueTo ? 1 : 0) + (minAmount || maxAmount ? 1 : 0);
+  const clearAll = () => {
+    setSearch(""); setStatusFilter("All");
+    setDueFrom(""); setDueTo(""); setMinAmount(""); setMaxAmount("");
+  };
+
+  // "overdue" is derived, not stored, so filtering has to use the same
+  // derivation the row badge uses.
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (rows ?? []).filter((b) => {
+      const effective = isOverdue(b) ? "overdue" : b.status;
+      if (statusFilter !== "All" && effective !== statusFilter) return false;
+      if (q && !`${b.vendor_name} ${b.memo ?? ""}`.toLowerCase().includes(q)) return false;
+      if ((dueFrom || dueTo) && !inDateWindow(b.due_date, dueFrom, dueTo)) return false;
+      if (!inAmountWindow(b.amount_cents / 100, minAmount, maxAmount)) return false;
+      return true;
+    });
+  }, [rows, search, statusFilter, dueFrom, dueTo, minAmount, maxAmount]);
+
   const outstanding = useMemo(
     () => (rows ?? []).filter((r) => ["unpaid", "scheduled"].includes(r.status))
       .reduce((s, r) => s + r.amount_cents, 0) / 100,
